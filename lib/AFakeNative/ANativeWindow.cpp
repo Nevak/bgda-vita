@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cstdio>
 #include "ANativeWindow.h"
+#include "utils/logger.h"
 
 typedef struct nativeWindow {
     int dummy;
@@ -30,5 +31,6 @@ int32_t ANativeWindow_getFormat(ANativeWindow* window) {
 
 int32_t ANativeWindow_setBuffersGeometry(ANativeWindow* window,
                                          int32_t width, int32_t height, int32_t format) {
+    logv_error("unimpl: ANativeWindow_setBuffersGeometry %d %d %d", width, height, format);
     return 0;
 }

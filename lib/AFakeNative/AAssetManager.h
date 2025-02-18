@@ -68,6 +68,8 @@ AAssetManager * AAssetManager_create();
  */
 AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename, int mode);
 
+//AAssetDir* AAssetManager_openDir();
+
 /**
  * Close the asset, freeing all associated resources.
  */

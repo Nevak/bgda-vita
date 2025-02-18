@@ -20,12 +20,12 @@ set(VITA_VERSION "01.00")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
-set(PSVITAIP "192.168.0.198" CACHE STRING "PSVita IP (for FTP access)")
-set(PARSECOREPATH "$ENV{PARSECOREPATH}" CACHE STRING "vita-parse-core main.py")
+set(PSVITAIP "192.168.110.16" CACHE STRING "PSVita IP (for FTP access)")
+set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
 # Game-specific definitions
-set(DATA_PATH "ux0:data/soulcalibur/" CACHE STRING "Path to data (with trailing /)")
-set(SO_PATH "${DATA_PATH}lib/armeabi-v7a/libsoul.so" CACHE STRING "Path to .so")
+set(DATA_PATH "ux0:data/bgda/" CACHE STRING "Path to data (with trailing /)")
+set(SO_PATH "${DATA_PATH}lib/armeabi-v7a/libdarkalliance.so" CACHE STRING "Path to .so")
 
 option(USE_SCELIBC_IO "Use SceLibcBridge for IO and some other std functions" ON)
 if (USE_SCELIBC_IO)
@@ -42,12 +42,13 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   add_definitions(-DDEBUG_SOLOADER)
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--allow-multiple-definition -O3 -g -ffast-math -mfloat-abi=softfp -Wno-deprecated")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--allow-multiple-definition -O0 -fno-inline -g -ffast-math -mfloat-abi=softfp -Wno-deprecated")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -O0 -fno-inline -g")
 
 add_executable(${CMAKE_PROJECT_NAME}
 			   source/main.c
 			   source/dynlib.c
+			   source/dll_psp2.c
 			   source/falso_jni_impl.c
 			   source/patch.c
 			   source/reimpl/ctype_patch.c
@@ -73,6 +74,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   lib/AFakeNative/polling/pseudo_pipe.cpp
 			   lib/AFakeNative/PseudoEpoll.cpp
 			   lib/AFakeNative/AAssetManager.cpp
+			   lib/AFakeNative/AStorageManager.cpp
 			   lib/AFakeNative/AFakeNative_Utils.cpp
 			   lib/AFakeNative/ANativeWindow.cpp
 			   lib/AFakeNative/ASensor.cpp
@@ -169,7 +171,7 @@ add_custom_target(send_kvdb
 
 add_custom_target(dump
 				  COMMAND ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump.sh ${PSVITAIP}
-				  COMMAND python3 ${PARSECOREPATH} coredump ${CMAKE_PROJECT_NAME}
+				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/soulcalibur -s 24
 				  )
 
 add_custom_target(reboot

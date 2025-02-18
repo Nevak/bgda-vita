@@ -52,3 +52,8 @@ int setenv_soloader(const char *name, const char *value, int overwrite) {
     logv_debug("Requested setenv(\"%s\", \"%s\", %i)", name, value, overwrite);
     return 0;
 }
+
+int unsetenv_soloader(const char *name) {
+    logv_debug("Requested unsetenv(\"%s\")", name);
+    return 0;
+}

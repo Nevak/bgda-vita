@@ -290,7 +290,24 @@ jmethodID GetMethodID(JNIEnv* env, jclass clazz, const char* _name, const char* 
     ret = getMethodIdByName(name);
 
     if (ret != NULL) {
-        fjni_logv_dbg("[JNI] GetMethodID(env, 0x%x, \"%s\", \"%s\"): %i", (int)clazz, name, sig, (int)ret);
+        if (name == NULL) {
+            fjni_log_err("Cannot find method ID for class NULL");
+        }
+        if (sig == NULL) {
+            fjni_log_err("Cannot find method ID for signature NULL");
+        }
+        if (ret == NULL) {
+            fjni_log_err("Cannot find method ID for method name ret is null");
+        }
+        if (env == NULL) {
+            fjni_log_err("Cannot find method ID for env is null");
+        }
+        if (clazz == NULL) {
+            fjni_logv_err("Cannot find method ID for clazz \"%s\" is null", name);
+        }
+        else {
+            fjni_logv_dbg("[JNI] GetMethodID(env, 0x%x, \"%s\", \"%s\"): %i", (int)clazz, name, sig, (int)ret);        
+        }
     } else {
         fjni_logv_err("[JNI] GetMethodID(env, 0x%x, \"%s\", \"%s\"): not found", (int)clazz, name, sig, (int)ret);
     }

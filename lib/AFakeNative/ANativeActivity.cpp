@@ -2,6 +2,8 @@
 #include "ANativeActivity.h"
 
 #include <falso_jni/FalsoJNI.h>
+#include "native_app_glue.h"
+#include "AConfiguration.h"
 
 ANativeActivity * ANativeActivity_create() {
     auto * ret = (ANativeActivity *) malloc(sizeof(ANativeActivity));
@@ -12,7 +14,17 @@ ANativeActivity * ANativeActivity_create() {
     ret->internalDataPath = DATA_PATH"assets/";
     ret->externalDataPath = DATA_PATH"assets/";
     ret->sdkVersion = 14;
-    ret->instance = nullptr;
+    // Create a fake android_app instance
+    android_app * app = (android_app *) malloc(sizeof(android_app));
+    app->activity = (ANativeActivity *) ret;
+    app->config = AConfiguration_new();
+    app->savedState = nullptr;
+    app->savedStateSize = 0;
+    app->userData = nullptr;
+    app->onAppCmd = nullptr;
+    app->onInputEvent = nullptr;
+
+    ret->instance = app;
 
     return ret;
 }

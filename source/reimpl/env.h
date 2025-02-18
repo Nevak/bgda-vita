@@ -14,5 +14,6 @@
 
 char *getenv_soloader(const char *name);
 int setenv_soloader(const char *name, const char *value, int overwrite);
+int unsetenv_soloader(const char *name);
 
 #endif // SOLOADER_ENV_H

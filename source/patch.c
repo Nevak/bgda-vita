@@ -29,7 +29,8 @@ extern so_module so_mod;
 #include "utils/logger.h"
 #include <stdbool.h>
 
-so_hook achieve_hook, stage_hook, takamatsu_hook, takamatsu2_hook;
+so_hook achieve_hook, stage_hook, takamatsu_hook, takamatsu2_hook, lumpLoad_hook, memPrintFree_hook, listInit_hook;
+
 
 int setAchieve(void *this, int id, int unlock) {
 	printf("setAchieve(%i, %i)\n", id, unlock);
@@ -62,6 +63,16 @@ int S_CheckUsefulStage(int stage) {
 	}
 }
 
+so_hook _machInit_hook;
+so_hook _padInit_hook;
+so_hook _cdInit_hook;
+so_hook _emathInit_hook;
+so_hook _queryPerformanceFrequency_hook;
+so_hook _createFile_hook;
+so_hook _direct3DCreate8_hook;
+so_hook _openFile_hook;
+so_hook _isES31_hook;
+
 void exit_process() {
 	sceKernelExitProcess(0);
 }
@@ -76,42 +87,147 @@ int TakamatsuWinter() {
 	return SO_CONTINUE(int, takamatsu2_hook);
 }
 
-void so_patch(void) {
-	// Trophies support
-	achieve_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN7Achieve10setAchieveEii"), (uintptr_t)&setAchieve);
-	
-	// Disable anything stage related for Takamatsu Castle to not tank framerate
-	I_HeapKaraLoop = so_symbol(&so_mod, "I_HeapKaraLoop");
-	takamatsu_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z17I_TakamatsuSummerv"), (uintptr_t)&TakamatsuSummer);
-	takamatsu2_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z17I_TakamatsuWinterv"), (uintptr_t)&TakamatsuWinter);
-	
-	// Kill "PertBoss" spawning in Money Pit. No idea what this is but seems to help with framerate tanking
-	uint16_t instr16 = 0xd0c9; // beq #0xffffff96
-	kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10eb7c), &instr16, 2);
-	
-	// Killing S/N-Fire elements in Money Pit. Seems to help framerate with little changes to the actual stage
-	uint32_t instr32 = 0xaf41f43f;
-	kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10e55e), &instr32, 4);
-	instr32 = 0xaf35f43f;
-	kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10e702), &instr32, 4);
-	instr32 = 0xaf3df43f;
-	kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10e90e), &instr32, 4);
-	instr32 = 0xaf3ff43f;
-	kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10eaf6), &instr32, 4);
-	instr32 = 0xaf4ef47f;
-	kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10ed64), &instr32, 4);
-	instr32 = 0xaf54f47f;
-	kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10ef6c), &instr32, 4);
-	
-	// Paralyze mice in Money Pit to save on framerate taxing
-	hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11I_ObjMouse0v"), (uintptr_t)&ret0);
-	
-	// Kill ring edge particles spawning. Seems to not affect graphics in any way but helps in Money Pit.
-	hook_addr((uintptr_t)so_symbol(&so_mod, "_Z24I_CreateRingEdgeParticleP7FVECTORS0_S0_P7FMATRIX"), (uintptr_t)&ret0);
-	
-	// Unlock stages that aren't unlockable on Android port
-	stage_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z18S_CheckUsefulStagei"), (uintptr_t)&S_CheckUsefulStage);
-	
-	// Prevent game from crashing when attempting to exit it
-	hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN11SoundOpenSL8shutdownEv"), (uintptr_t)&exit_process);
+int lumpLoad(char *param_1) {
+	printf("lumpLoad(%s)\n", param_1);
+	return SO_CONTINUE(int, lumpLoad_hook, param_1);
 }
+
+void memPrintFree() {
+	printf("memPrintFree()\n");
+	return SO_CONTINUE(void *, memPrintFree_hook);
+}
+
+void listInit() {
+	printf("listInit()\n");
+	return SO_CONTINUE(void *, listInit_hook);
+}
+
+void machInit() {
+	printf("machInit()\n");
+	return SO_CONTINUE(void *, _machInit_hook);
+}
+
+int queryPerformanceFrequency() {
+	printf("queryPerformanceFrequency()\n");
+	return SO_CONTINUE(int, _queryPerformanceFrequency_hook);
+}
+
+void direct3DCreate8() {
+	printf("direct3DCreate8()\n");
+	return SO_CONTINUE(void *, _direct3DCreate8_hook);
+}
+
+// void createFile(char* param_1, int param_2) {
+// 	printf("createFile()\n");
+// 	return SO_CONTINUE(void *, _createFile_hook, param_1, param_2);
+// }
+
+void padInit() {
+	printf("padInit()\n");
+	return SO_CONTINUE(void *, _padInit_hook);
+}
+
+void cdInit() {
+	printf("cdInit()\n");
+	return SO_CONTINUE(void *, _cdInit_hook);
+}
+
+void emathInit() {
+	printf("emathInit()\n");
+	return SO_CONTINUE(void *, _emathInit_hook);
+}
+
+void openFile(void * thisptr, char * param_1, int param_2) {
+	printf("openFile()\n");
+	return SO_CONTINUE(void *, _openFile_hook, thisptr, param_1, param_2);
+}
+
+bool isES31() {
+	printf("isES31()\n");
+	return SO_CONTINUE(bool, _isES31_hook);
+}
+
+
+
+void so_patch(void) {
+
+	printf("Patching .so functions");
+
+	//lumpLoad_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8lumpLoadPKc"), (uintptr_t)&lumpLoad);
+	// memPrintFree_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z12memPrintFreev"), (uintptr_t)&memPrintFree);
+	// // "_Z8listInitv"
+	// listInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8listInitv"), (uintptr_t)&listInit);
+	// // _Z8machInitv
+	// _machInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8machInitv"), (uintptr_t)&machInit);
+	// // undefined4 QueryPerformanceFrequency(undefined4 *param_1)
+	// _queryPerformanceFrequency_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "QueryPerformanceFrequency"), (uintptr_t)&queryPerformanceFrequency);
+
+	
+	// // void Direct3DCreate8(void)
+	// uintptr_t addr = (uintptr_t)so_symbol(&so_mod, "Direct3DCreate8");
+	// if (addr == NULL) {
+	// 	printf("Direct3DCreate8 not found\n");
+	// } else {
+	// 	printf("Direct3DCreate8 found at %p\n", addr);
+	// 	_direct3DCreate8_hook = hook_addr(addr, (uintptr_t)&direct3DCreate8);
+	// }
+
+
+
+	// void CreateFileA(byte *param_1,int param_2)
+	// _createFile_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "CreateFileA"), (uintptr_t)&createFile);
+	// //_ZN3JBE4File4OpenEPKcNS0_4ModeE
+	// // undefined4 __thiscall JBE::File::Open(File *this,char *param_1,Mode param_2)
+	// _openFile_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE4File4OpenEPKcNS0_4ModeE"), (uintptr_t)&openFile);
+
+	// //_ZN3EXT6IsES31Ev
+	// //undefined4 EXT::IsES31(void)
+	// _isES31_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3EXT6IsES31Ev"), (uintptr_t)&isES31);
+
+	// // padInit
+	// _padInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z7padInitv"), (uintptr_t)&padInit);
+	// // cdInit
+	// _cdInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z6cdInitv"), (uintptr_t)&cdInit);
+	// // emathInit
+	// _emathInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z9emathInitv"), (uintptr_t)&emathInit);
+	
+
+	// // Trophies support
+	// achieve_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN7Achieve10setAchieveEii"), (uintptr_t)&setAchieve);
+	
+	// // Disable anything stage related for Takamatsu Castle to not tank framerate
+	// I_HeapKaraLoop = so_symbol(&so_mod, "I_HeapKaraLoop");
+	// takamatsu_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z17I_TakamatsuSummerv"), (uintptr_t)&TakamatsuSummer);
+	// takamatsu2_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z17I_TakamatsuWinterv"), (uintptr_t)&TakamatsuWinter);
+	
+	// // Kill "PertBoss" spawning in Money Pit. No idea what this is but seems to help with framerate tanking
+	// uint16_t instr16 = 0xd0c9; // beq #0xffffff96
+	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10eb7c), &instr16, 2);
+	
+	// // Killing S/N-Fire elements in Money Pit. Seems to help framerate with little changes to the actual stage
+	// uint32_t instr32 = 0xaf41f43f;
+	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10e55e), &instr32, 4);
+	// instr32 = 0xaf35f43f;
+	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10e702), &instr32, 4);
+	// instr32 = 0xaf3df43f;
+	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10e90e), &instr32, 4);
+	// instr32 = 0xaf3ff43f;
+	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10eaf6), &instr32, 4);
+	// instr32 = 0xaf4ef47f;
+	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10ed64), &instr32, 4);
+	// instr32 = 0xaf54f47f;
+	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10ef6c), &instr32, 4);
+	
+	// // Paralyze mice in Money Pit to save on framerate taxing
+	// hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11I_ObjMouse0v"), (uintptr_t)&ret0);
+	
+	// // Kill ring edge particles spawning. Seems to not affect graphics in any way but helps in Money Pit.
+	// hook_addr((uintptr_t)so_symbol(&so_mod, "_Z24I_CreateRingEdgeParticleP7FVECTORS0_S0_P7FMATRIX"), (uintptr_t)&ret0);
+	
+	// // Unlock stages that aren't unlockable on Android port
+	// stage_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z18S_CheckUsefulStagei"), (uintptr_t)&S_CheckUsefulStage);
+	
+	// // Prevent game from crashing when attempting to exit it
+	// hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN11SoundOpenSL8shutdownEv"), (uintptr_t)&exit_process);
+}
+

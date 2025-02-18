@@ -56,6 +56,29 @@ AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename, int mode) {
     return (AAsset *) a;
 }
 
+// AAssetDir* AAssetManager_openDir() {
+//     std::string realp = std::string(DATA_PATH) + std::string("assets/");
+
+//     auto * a = (aAssetDir *) malloc(sizeof(aAssetDir));
+//     a->filename = (char *) malloc(realp.length() + 1);
+//     strcpy(a->filename, realp.c_str());
+
+// #ifdef USE_SCELIBC_IO
+//     a->f = sceLibcBridge_opendir((const char *)a->filename);
+// #else
+//     a->f = opendir((cost char *)a->filename);
+// #endif
+    
+//         if (!a->f) {
+//             free(a->filename);
+//             free(a);
+//             a = nullptr;
+//         }
+    
+//         ALOGD("[AAssetManager] AAssetManager_openDir(%s): %p", realp.c_str(), a);
+//         return (AAssetDir *) a;
+// }
+
 void AAsset_close(AAsset* asset) {
     //ALOGD("AAsset_close(%p)", asset);
 

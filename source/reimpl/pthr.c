@@ -351,6 +351,19 @@ int pthread_attr_setstacksize_soloader(pthread_attr_t_bionic *attr, size_t stack
     return pthread_attr_setstacksize(attr->real_ptr, stacksize);
 }
 
+int pthread_attr_setstack_soloader(pthread_attr_t **attr, void *stackaddr, size_t stacksize) {
+    return pthread_attr_setstack(*attr, stackaddr, stacksize);
+}
+
+int pthread_attr_getstack_soloader(const pthread_attr_t **attr,void **stackaddr, size_t *stacksize) {
+    return pthread_attr_getstack(*attr, stackaddr, stacksize);
+}
+
+int pthread_getattr_np_soloader(pthread_t* thread, pthread_attr_t *attr) {
+    log_error("[WARNING!] Not implemented: pthread_getattr_np");
+    return 0;
+}
+
 int pthread_setschedparam_soloader(pthread_t thread, int policy,
                                    const struct sched_param *param)
 {

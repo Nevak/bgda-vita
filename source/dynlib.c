@@ -36,6 +36,8 @@
 #include <dirent.h>
 #include <locale.h>
 #include <poll.h>
+#include "dll_psp2.h"
+
 
 #include <SLES/OpenSLES.h>
 
@@ -72,6 +74,11 @@
 #include <AFakeNative/polling/pseudo_pipe.h>
 #include <AFakeNative/PseudoEpoll.h>
 #include <AFakeNative/AFakeNative.h>
+#include <AFakeNative/AStorageManager.h>
+
+// include openal
+#include <AL/al.h>
+#include <AL/alc.h>
 
 extern void * _ZNSt9exceptionD2Ev;
 extern void * _ZSt17__throw_bad_allocv;
@@ -185,6 +192,7 @@ int AAssetManager_openDir() {
 	log_error("unimpl: AAssetManager_openDir");
 	return 0;
 }
+
 int AInputEvent_getDeviceId() {
 	//log_error("unimpl: AInputEvent_getDeviceId");
 	return 0;
@@ -237,17 +245,276 @@ void exit_soloader(int status) {
 	exit(status);
 }
 
-void *dlsym_fake(void *restrict handle, const char *restrict symbol) {
-	if (strcmp("AMotionEvent_getAxisValue", symbol) == 0) {
-		return &AMotionEvent_getAxisValue;
-	} else if (strcmp("AMotionEvent_getHistoricalAxisValue", symbol) == 0) {
-		return &AMotionEvent_getHistoricalAxisValue;
+void *dlopen_hook(const char *restrict filename, int flags) {
+	logv_info("dlopen(%s, %i) called", filename, flags);
+
+	void* res = dlopen("ux0:/data/bgda/lib/armeabi-v7a/libdarkalliance.so", flags);
+
+	if (!res) {
+		// Check dlerror()
+		char* err = dlerror();
+		logv_error("dlopen error: %s", err);
 	}
 
-	logv_error("symbol %s not found", symbol);
-	return NULL;
+	return res;
 }
 
+void *dlsym_fake(void *restrict handle, const char *restrict symbol) {
+	logv_info("dlsym(%p, %s) called", handle, symbol);
+
+	return dlsym(handle, symbol);
+
+	// if (strcmp("AMotionEvent_getAxisValue", symbol) == 0) {
+	// 	return &AMotionEvent_getAxisValue;
+	// } else if (strcmp("AMotionEvent_getHistoricalAxisValue", symbol) == 0) {
+	// 	return &AMotionEvent_getHistoricalAxisValue;
+	// }
+
+	// logv_error("symbol %s not found", symbol);
+	// return NULL;
+}
+
+// glCreateProgram_wrapper
+GLuint glCreateProgram_wrapper(void) {
+	GLuint res = glCreateProgram();
+	logv_info("glCreateProgram() called, returning %i", res);
+	return res;
+}
+
+//glCreateShader_wrapper
+GLuint glCreateShader_wrapper(GLenum type) {
+	GLuint res = glCreateShader(type);
+	logv_info("glCreateShader(%i) called, returning %i", type, res);
+	// Check for errors
+	if (res == 0) {
+		log_error("glCreateShader failed");
+	}
+	log_info("glCreateShader successful");
+	return res;
+}
+
+// glBindAttribLocation_wrapper
+void glBindAttribLocation_wrapper(GLuint program, GLuint index, const GLchar *name) {
+	logv_info("glBindAttribLocation(%i, %i, %s) called", program, index, name);
+	glBindAttribLocation(program, index, "_position_");
+}
+
+// glCompileShader_wrapper
+void glCompileShader_wrapper(GLuint shader) {
+	logv_info("glCompileShader(%i) called", shader);
+	glCompileShader(shader);
+	// Check for errors
+	GLint status = 0;
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+	if (status == GL_FALSE) {
+		GLint log_length = 0;
+		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
+		if (log_length > 0) {
+			char *log = malloc(log_length);
+			glGetShaderInfoLog(shader, log_length, NULL, log);
+			logv_error("Shader compilation failed: %s", log);
+			free(log);
+		}
+	}
+	else {
+		log_info("Shader compilation successful");
+	}
+}
+
+// glAttachShader_wrapper
+void glAttachShader_wrapper(GLuint program, GLuint shader) {
+	logv_info("glAttachShader(%i, %i) called", program, shader);
+	glAttachShader(program, shader);
+}
+
+// glShaderSource_wrapper
+void glShaderSource_wrapper(GLuint shader, GLsizei count, const GLchar **string, const GLint *length) {
+	logv_info("glShaderSource(%i, %i, %p, %p) called", shader, count, string, length);
+	// // Debug the address of the shader
+	// logv_info("shader address: %p", *string);
+	// // Also log the shader source
+	// for (int i = 0; i < count; i++) {
+	// 	logv_info("shader source: %s", string[i]);
+	// }
+	glShaderSource(shader, count, string, length);
+}
+
+void JBE_CRC_ctor(void *this, char *param_1) {
+    *(uint32_t *)this = 0;  // Set CRC value to 0 (or any static value)
+    return;
+}
+
+struct NvSysCaps {
+    uint8_t unknown_header[8];  // New field for the missing bytes (0x1b0c0 - 0x1b0c8)
+
+    // GPU Information
+    char gl_vendor[256];      // 0x1b0c8 - GPU Vendor String
+    char gl_version[256];     // 0x1b1c8 - OpenGL Version String
+    char gl_renderer[256];    // 0x1b2c8 - GPU Renderer String
+
+    // Feature Flags
+    uint8_t has_system_time;             // 0x1b3c8 - System time support (1 if available)
+    uint8_t has_s3tc_texture_compression; // 0x1b3c9 - S3TC texture compression
+    uint8_t has_astc_texture_compression; // 0x1b3ca - ASTC texture compression
+    uint8_t has_pvrtc_texture_compression;// 0x1b3cb - PVRTC support (used on Vita)
+    uint8_t has_atc_texture_compression;  // 0x1b3cc - ATC texture compression (AMD/ATI)
+    uint8_t has_nv_depth_nonlinear;       // 0x1b3ce - NVIDIA Depth Nonlinear
+    uint8_t has_nv_shader_framebuffer_fetch; // 0x1b3cf - NVIDIA Shader Framebuffer Fetch
+    uint8_t has_nv_coverage_sample;       // 0x1b3d0 - NVIDIA Coverage Sample
+    uint8_t has_nv_multisample_framebuffer; // 0x1b3d2 - NVIDIA Multisample Framebuffer
+    uint8_t has_nv_bindless_texture;      // 0x1b3d3 - NVIDIA Bindless Texture
+    uint8_t has_nv_path_rendering;        // 0x1b3d4 - NVIDIA Path Rendering
+    uint8_t supports_egl_pbuffer;         // 0x1b3d5 - EGL PBuffer support
+    uint8_t supports_egl_window;          // 0x1b3d6 - EGL Window support
+    uint8_t supports_egl_surface;         // 0x1b3d7 - EGL Surface support
+    uint8_t supports_egl_multisample;     // 0x1b3d8 - EGL Multisample support
+    uint8_t supports_egl_vsync;           // 0x1b3d9 - EGL VSync support
+    uint8_t supports_egl_stencil_8;       // 0x1b3da - EGL Stencil 8-bit support
+
+    // CPU Information
+    uint32_t cpu_core_count;  // 0x1b3e0 - Number of CPU cores
+    uint32_t cpu_max_freq_mhz;// 0x1b3e4 - Maximum CPU frequency in MHz
+    uint32_t total_ram_mb;    // 0x1b3dc - Total system RAM in MB
+    uint32_t cpu_arch;        // 0x1b3f0 - CPU Architecture (e.g., ARMv7 = 7, ARM64 = 8)
+    uint8_t supports_neon;    // 0x1b3f4 - NEON support (1 = supported)
+    uint8_t supports_vfpv3;   // 0x1b3e8 - VFPv3 support
+    uint8_t supports_vfpv4;   // 0x1b3e9 - VFPv4 support
+    uint16_t cpu_part;        // 0x1b3ec - CPU Part ID (e.g., Cortex-A9 = 0xc09)
+
+    // System Classification
+    int32_t gpu_tier;         // 0x1b3fc - GPU classification (-1 = unknown, 0 = low-end, 2 = high-end)
+    int32_t cpu_tier;         // 0x1b400 - CPU classification (similar scale as GPU tier)
+    uint8_t supports_advanced_graphics; // 0x1b3fa - 1 if system supports advanced graphics features
+};
+
+struct NvSysCaps capabilities = {
+    {0},  // unknown_header[8] - Likely padding or reserved memory, setting to zero
+
+    // GPU Information
+    "Imagination Technologies",  // gl_vendor - The PS Vita uses a PowerVR SGX543MP4+
+    "OpenGL ES 2.0",             // gl_version - VitaGL supports OpenGL ES 2.0
+    "PowerVR SGX543MP4+",        // gl_renderer - The actual GPU model in the Vita
+
+    // Feature Flags (1 = supported, 0 = not supported)
+    0,  // has_system_time (PS Vita does not have NV System Time)
+    0,  // has_s3tc_texture_compression (PS Vita does NOT support S3TC)
+    0,  // has_astc_texture_compression (PS Vita does NOT support ASTC)
+    1,  // has_pvrtc_texture_compression (PS Vita supports PVRTC, required for VitaGL)
+    0,  // has_atc_texture_compression (PS Vita does NOT support ATC)
+    0,  // has_nv_depth_nonlinear (PS Vita does NOT support NVIDIA depth nonlinear)
+    0,  // has_nv_shader_framebuffer_fetch (PS Vita does NOT support this)
+    0,  // has_nv_coverage_sample (PS Vita does NOT support this)
+    0,  // has_nv_multisample_framebuffer (PS Vita does NOT support this)
+    0,  // has_nv_bindless_texture (PS Vita does NOT support this)
+    0,  // has_nv_path_rendering (PS Vita does NOT support this)
+    1,  // supports_egl_pbuffer (VitaGL uses PBuffer for some operations)
+    1,  // supports_egl_window (VitaGL can create EGL Windows)
+    1,  // supports_egl_surface (VitaGL uses EGL Surfaces)
+    0,  // supports_egl_multisample (PS Vita does NOT support MSAA in hardware)
+    1,  // supports_egl_vsync (VitaGL supports vsync)
+    1,  // supports_egl_stencil_8 (VitaGL supports 8-bit stencil buffers)
+
+    // CPU Information
+    4,    // cpu_core_count (PS Vita has a quad-core ARM Cortex-A9 CPU)
+    500,  // cpu_max_freq_mhz (500 MHz when boosted, normally ~333 MHz)
+    512,  // total_ram_mb (512MB system RAM)
+    7,    // cpu_arch (ARMv7-A, as Vita uses Cortex-A9)
+    1,    // supports_neon (PS Vita supports NEON SIMD instructions)
+    1,    // supports_vfpv3 (PS Vita supports VFPv3)
+    0,    // supports_vfpv4 (PS Vita does NOT support VFPv4)
+    0xc09,// cpu_part (0xC09 corresponds to Cortex-A9 CPU)
+
+    // System Classification
+    2,    // gpu_tier (2 = high-end for a handheld, comparable to a Tegra 3)
+    5,    // cpu_tier (5 = decent, but below modern ARM CPUs)
+    1     // supports_advanced_graphics (1 = Yes, as VitaGL enables full OpenGL ES 2.0)
+};
+
+
+struct NvSysCaps* GetNvSysCaps() {
+	log_error("unimpl: GetNvSysCaps");
+	return &capabilities;
+}
+
+/* JBE::InputPF::ProcessDeviceChanges(void (*)(void*, int, int), void (*)(void*, int), void*) */
+void ProcessDeviceChanges(void *param_1, void *param_2, void *param_3) {
+	log_error("unimpl: JBE_InputPF_ProcessDeviceChanges");
+}
+
+// XMVCreateDecoder
+// XMVCloseDecoder
+// XMVGetVideoDescriptor
+// XMVGetAudioDescriptor
+// XMVEnableAudioStream
+// XMVGetAudioStream
+// XMVGetNextFrame
+
+int XMVCreateDecoder(char *szFileName, void **ppDecoder) {
+	log_error("unimpl: XMVCreateDecoder");
+	return 0;
+}
+
+int XMVCloseDecoder(void *pDecoder)	{
+	log_error("unimpl: XMVCloseDecoder");
+	return 0;
+}
+
+void XMVGetVideoDescriptor(void *pDecoder, void *pVideoDescriptor) {
+	log_error("unimpl: XMVGetVideoDescriptor");
+}
+
+void XMVGetAudioDescriptor(void *pDecoder, int AudioStream, void *pAudioDescriptor) {
+	log_error("unimpl: XMVGetAudioDescriptor");
+}
+
+int XMVGetAudioStream(int param_1,int param_2) {
+	log_error("unimpl: XMVGetAudioStream");
+	return 0;
+}
+
+int XMVEnableAudioStream(void *pDecoder, int AudioStream, int Flags, void *pMixBins, void **ppStream) {
+	log_error("unimpl: XMVEnableAudioStream");
+	return 0;
+}
+
+int XMVGetNextFrame(void *pDecoder, int *pSurface) {
+	log_error("unimpl: XMVGetNextFrame");
+	return 0;
+}
+
+
+
+enum {
+    ANDROID_CPU_ARM_FEATURE_ARMv7       = (1 << 0),
+    ANDROID_CPU_ARM_FEATURE_VFPv3       = (1 << 1),
+    ANDROID_CPU_ARM_FEATURE_NEON        = (1 << 2),
+    ANDROID_CPU_ARM_FEATURE_LDREX_STREX = (1 << 3),
+    ANDROID_CPU_ARM_FEATURE_VFPv2       = (1 << 4),
+    ANDROID_CPU_ARM_FEATURE_VFP_D32     = (1 << 5),
+    ANDROID_CPU_ARM_FEATURE_VFP_FP16    = (1 << 6),
+    ANDROID_CPU_ARM_FEATURE_VFP_FMA     = (1 << 7),
+    ANDROID_CPU_ARM_FEATURE_NEON_FMA    = (1 << 8),
+    ANDROID_CPU_ARM_FEATURE_IDIV_ARM    = (1 << 9),
+    ANDROID_CPU_ARM_FEATURE_IDIV_THUMB2 = (1 << 10),
+    ANDROID_CPU_ARM_FEATURE_iWMMXt      = (1 << 11),
+    ANDROID_CPU_ARM_FEATURE_AES         = (1 << 12),
+    ANDROID_CPU_ARM_FEATURE_PMULL       = (1 << 13),
+    ANDROID_CPU_ARM_FEATURE_SHA1        = (1 << 14),
+    ANDROID_CPU_ARM_FEATURE_SHA2        = (1 << 15),
+    ANDROID_CPU_ARM_FEATURE_CRC32       = (1 << 16),
+};
+
+// https://android.googlesource.com/platform/bionic/+/master/libc/private/bionic_cpu-features.c
+// https://www.copetti.org/writings/consoles/playstation-vita/
+uint64_t android_getCpuFeatures(void) {
+	// Hardcoded for PSVita
+	return ANDROID_CPU_ARM_FEATURE_ARMv7 | ANDROID_CPU_ARM_FEATURE_VFPv3 | ANDROID_CPU_ARM_FEATURE_NEON | ANDROID_CPU_ARM_FEATURE_VFPv2 | ANDROID_CPU_ARM_FEATURE_VFP_D32 | ANDROID_CPU_ARM_FEATURE_VFP_FP16 | ANDROID_CPU_ARM_FEATURE_VFP_FMA | ANDROID_CPU_ARM_FEATURE_NEON_FMA | ANDROID_CPU_ARM_FEATURE_IDIV_ARM | ANDROID_CPU_ARM_FEATURE_IDIV_THUMB2;
+}
+
+void app_dummy(void)
+{
+  return;
+}
 
 so_default_dynlib default_dynlib[] = {
 		// OpenSLES
@@ -335,6 +602,9 @@ so_default_dynlib default_dynlib[] = {
 		{ "__swbuf", (uintptr_t)&__swbuf },
 		{ "__system_property_get", (uintptr_t)&__system_property_get },
 
+			// AAssetManager_openDir
+	// AAssetDir_getNextFileName
+	// AAssetDir_close
 
 		// ANative
 		{ "AAssetDir_close", (uintptr_t)&AAssetDir_close },
@@ -390,7 +660,10 @@ so_default_dynlib default_dynlib[] = {
 		{ "ASensorManager_createEventQueue", (uintptr_t)&ASensorManager_createEventQueue },
 		{ "ASensorManager_getDefaultSensor", (uintptr_t)&ASensorManager_getDefaultSensor },
 		{ "ASensorManager_getInstance", (uintptr_t)&ASensorManager_getInstance },
-
+		
+		{ "AStorageManager_new", (uintptr_t)&AStorageManager_new },
+		{ "AStorageManager_getMountedObbPath", (uintptr_t)&AStorageManager_getMountedObbPath },
+		{ "AStorageManager_delete", (uintptr_t)&AStorageManager_delete },
 
 		// ctype
 		{ "_ctype_", (uintptr_t)&BIONIC_ctype_ },
@@ -526,12 +799,15 @@ so_default_dynlib default_dynlib[] = {
 		{ "fcntl", (uintptr_t)&fcntl_soloader },
 		{ "fopen", (uintptr_t)&fopen_soloader },
 		{ "fstat", (uintptr_t)&fstat_soloader },
+		{ "fsync", (uintptr_t)&fsync_soloader },
 		{ "ioctl", (uintptr_t)&ioctl_soloader },
 		{ "open", (uintptr_t)&open_soloader },
 		{ "opendir", (uintptr_t)&opendir_soloader },
 		{ "readdir", (uintptr_t)&readdir_soloader },
 		{ "readdir_r", (uintptr_t)&readdir_r_soloader },
 		{ "stat", (uintptr_t)&stat_soloader },
+		{ "rewinddir", (uintptr_t)&rewinddir },
+
 
 		#ifdef USE_SCELIBC_IO
 			{ "fdopen", (uintptr_t)&sceLibcBridge_fdopen },
@@ -636,8 +912,8 @@ so_default_dynlib default_dynlib[] = {
 		// OpenGL
 		{ "glActiveTexture", (uintptr_t)&glActiveTexture },
 		{ "glAlphaFuncx", (uintptr_t)&glAlphaFuncx },
-		{ "glAttachShader", (uintptr_t)&glAttachShader },
-		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation },
+		{ "glAttachShader", (uintptr_t)&glAttachShader_wrapper },
+		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation_wrapper },
 		{ "glBindBuffer", (uintptr_t)&glBindBuffer },
 		{ "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
 		{ "glBindRenderbuffer", (uintptr_t)&glBindRenderbuffer },
@@ -658,13 +934,13 @@ so_default_dynlib default_dynlib[] = {
 		{ "glColor4x", (uintptr_t)&glColor4x },
 		{ "glColorMask", (uintptr_t)&glColorMask },
 		{ "glColorPointer", (uintptr_t)&glColorPointer },
-		{ "glCompileShader", (uintptr_t)&glCompileShader },
+		{ "glCompileShader", (uintptr_t)&glCompileShader_wrapper },
 		{ "glCompressedTexImage2D", (uintptr_t)&glCompressedTexImage2D },
 		{ "glCompressedTexSubImage2D", (uintptr_t)&ret0 },
 		{ "glCopyTexImage2D", (uintptr_t)&glCopyTexImage2D },
 		{ "glCopyTexSubImage2D", (uintptr_t)&glCopyTexSubImage2D },
-		{ "glCreateProgram", (uintptr_t)&glCreateProgram },
-		{ "glCreateShader", (uintptr_t)&glCreateShader },
+		{ "glCreateProgram", (uintptr_t)&glCreateProgram_wrapper },
+		{ "glCreateShader", (uintptr_t)&glCreateShader_wrapper },
 		{ "glCullFace", (uintptr_t)&glCullFace },
 		{ "glDeleteBuffers", (uintptr_t)&glDeleteBuffers },
 		{ "glDeleteFramebuffers", (uintptr_t)&glDeleteFramebuffers },
@@ -725,7 +1001,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glRenderbufferStorage", (uintptr_t)&glRenderbufferStorage },
 		{ "glScissor", (uintptr_t)&glScissor },
 		{ "glShadeModel", (uintptr_t)&glShadeModel },
-		{ "glShaderSource", (uintptr_t)&glShaderSource },
+		{ "glShaderSource", (uintptr_t)&glShaderSource_wrapper },
 		{ "glStencilFunc", (uintptr_t)&glStencilFunc },
 		{ "glStencilFuncSeparate", (uintptr_t)&glStencilFuncSeparate },
 		{ "glStencilMask", (uintptr_t)&glStencilMask },
@@ -760,6 +1036,20 @@ so_default_dynlib default_dynlib[] = {
 		{ "glVertexPointer", (uintptr_t)&glVertexPointer },
 		{ "glViewport", (uintptr_t)&glViewport },
 
+		// By Raul
+		{ "glGetShaderPrecisionFormat", (uintptr_t)&ret0 },
+		// TODO: see (https://github.com/Rinnegatamante/mc3-vita/blob/fa877861195538b525cdd618f81b72f94ad2c319/source/dynlib.c#L150) 
+		// { "glBlendColor", (uintptr_t)&glBlendColor_wrap },
+		{ "glColor4ub", (uintptr_t)&glColor4ub },
+		{ "glGetBufferParameteriv", (uintptr_t)&glGetBufferParameteriv },
+		{ "glLoadIdentity", (uintptr_t)&glLoadIdentity },
+		{ "glOrthof", (uintptr_t)&glOrthof },
+		{ "glReleaseShaderCompiler", (uintptr_t)&glReleaseShaderCompiler },
+		{ "glScalef", (uintptr_t)&glScalef },
+		{ "glTexParameterfv", (uintptr_t)&ret0 },
+		{ "glTranslatef", (uintptr_t)&glTranslatef },
+		{ "glVertexAttrib4fv", (uintptr_t)&glVertexAttrib4fv },
+
 
 		// EGL
 		{ "eglBindAPI", (uintptr_t)&eglBindAPI },
@@ -777,6 +1067,9 @@ so_default_dynlib default_dynlib[] = {
 		{ "eglQuerySurface", (uintptr_t)&eglQuerySurface },
 		{ "eglSwapBuffers", (uintptr_t)&eglSwapBuffers },
 		{ "eglTerminate", (uintptr_t)&eglTerminate },
+		// By Raul
+		{ "eglGetConfigs", (uintptr_t)&eglGetConfigs },
+		{ "eglGetCurrentContext", (uintptr_t)&eglGetCurrentContext },
 
 
 		// Pthread
@@ -814,6 +1107,9 @@ so_default_dynlib default_dynlib[] = {
 		{ "pthread_setschedparam", (uintptr_t) &pthread_setschedparam_soloader },
 		{ "pthread_setspecific", (uintptr_t)&pthread_setspecific },
 		{ "pthread_sigmask", (uintptr_t)&ret0 },
+		{ "pthread_attr_setstack", (uintptr_t) &pthread_attr_setstack_soloader },
+		{ "pthread_getattr_np", (uintptr_t) &pthread_getattr_np_soloader },
+		{ "pthread_attr_getstack", (uintptr_t) &pthread_attr_getstack_soloader },
 
 		{ "sem_destroy", (uintptr_t) &sem_destroy_soloader },
 		{ "sem_getvalue", (uintptr_t) &sem_getvalue_soloader },
@@ -868,7 +1164,7 @@ so_default_dynlib default_dynlib[] = {
 		// libdl
 		{ "dlclose", (uintptr_t)&ret0 },
 		{ "dlerror", (uintptr_t)&ret0 },
-		{ "dlopen", (uintptr_t)&ret1 },
+		{ "dlopen", (uintptr_t)&dlopen_hook },
 		{ "dlsym", (uintptr_t)&dlsym_fake },
 
 
@@ -927,6 +1223,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "strftime", (uintptr_t)&strftime },
 		{ "time", (uintptr_t)&time },
 		{ "tzset", (uintptr_t)&tzset },
+		{ "utimes", (uintptr_t)&utimes },
 
 
 		// Temp
@@ -957,6 +1254,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "strtoull", (uintptr_t)&strtoull },
 		{ "strtoumax", (uintptr_t)&strtoumax },
 		{ "usleep", (uintptr_t)&usleep },
+		{ "perror", (uintptr_t)&perror },
 
 		#ifdef USE_SCELIBC_IO
 			{ "qsort", (uintptr_t)&sceLibcBridge_qsort },
@@ -972,6 +1270,7 @@ so_default_dynlib default_dynlib[] = {
 		// Env
 		{ "getenv", (uintptr_t)&getenv_soloader },
 		{ "setenv", (uintptr_t)&setenv_soloader },
+		{ "unsetenv", (uintptr_t)&unsetenv_soloader },
 
 
 		// Jmp
@@ -1004,6 +1303,70 @@ so_default_dynlib default_dynlib[] = {
 		{ "inflate", (uintptr_t)&inflate },
 		{ "inflateEnd", (uintptr_t)&inflateEnd },
 		{ "inflateInit2_", (uintptr_t)&inflateInit2_ },
+		{ "inflateReset", (uintptr_t)&inflateReset },
+
+		// Android cpu features
+		{ "android_getCpuFeatures", (uintptr_t)&android_getCpuFeatures },
+
+		// Misc
+		{ "app_dummy", (uintptr_t)&app_dummy },
+
+		// Audio
+		{ "alBufferData", (uintptr_t)&alBufferData },
+		{ "alIsExtensionPresent", (uintptr_t)&alIsExtensionPresent },
+		{ "alGetProcAddress", (uintptr_t)&alGetProcAddress },
+		{ "alcGetProcAddress", (uintptr_t)&alcGetProcAddress },
+		{ "alGenSources", (uintptr_t)&alGenSources },
+		{ "alSourcei", (uintptr_t)&alSourcei },
+		{ "alDeleteBuffers", (uintptr_t)&alDeleteBuffers },
+		{ "alGenBuffers", (uintptr_t)&alGenBuffers },
+		{ "alBufferData", (uintptr_t)&alBufferData },
+		{ "alSource3f", (uintptr_t)&alSource3f },
+		{ "alSourcef", (uintptr_t)&alSourcef },
+		{ "alGetSourcei", (uintptr_t)&alGetSourcei },
+		{ "alDeleteSources", (uintptr_t)&alDeleteSources },
+		{ "alSourcefv", (uintptr_t)&alSourcefv },
+		{ "alSourcePlay", (uintptr_t)&alSourcePlay },
+		{ "alSourcePause", (uintptr_t)&alSourcePause },
+		{ "alSourceStop", (uintptr_t)&alSourceStop },
+		{ "alGetBufferi", (uintptr_t)&alGetBufferi },
+		{ "alGetSourcef", (uintptr_t)&alGetSourcef },
+		{ "alSourceUnqueueBuffers", (uintptr_t)&alSourceUnqueueBuffers },
+		{ "alSourceQueueBuffers", (uintptr_t)&alSourceQueueBuffers },
+		{ "alListenerfv", (uintptr_t)&alListenerfv },
+		{ "alListener3f", (uintptr_t)&alListener3f },
+		{ "alDopplerFactor", (uintptr_t)&alDopplerFactor },
+		{ "alcSuspendContext", (uintptr_t)&alcSuspendContext },
+		{ "alcMakeContextCurrent", (uintptr_t)&alcMakeContextCurrent },
+		{ "alcProcessContext", (uintptr_t)&alcProcessContext },
+		{ "alcOpenDevice", (uintptr_t)&alcOpenDevice },
+		{ "alcCreateContext", (uintptr_t)&alcCreateContext },
+		{ "alcGetError", (uintptr_t)&alcGetError },
+		{ "alcCloseDevice", (uintptr_t)&alcCloseDevice },
+
+
+		// XMV library dummy functions
+		// XMVCreateDecoder
+		// XMVCloseDecoder
+		// XMVGetVideoDescriptor
+		// XMVGetAudioDescriptor
+		// XMVEnableAudioStream
+		// XMVGetAudioStream
+		// XMVGetNextFrame
+		{ "XMVCreateDecoder", (uintptr_t)&XMVCreateDecoder },
+		{ "XMVCloseDecoder", (uintptr_t)&XMVCloseDecoder },
+		{ "XMVGetVideoDescriptor", (uintptr_t)&XMVGetVideoDescriptor },
+		{ "XMVGetAudioDescriptor", (uintptr_t)&XMVGetAudioDescriptor },
+		{ "XMVEnableAudioStream", (uintptr_t)&XMVEnableAudioStream },
+		{ "XMVGetAudioStream", (uintptr_t)&XMVGetAudioStream },
+		{ "XMVGetNextFrame", (uintptr_t)&XMVGetNextFrame },
+
+
+
+		// JBE namespace stuff
+		{ "_ZN3JBE3CRCC1EPKc", (uintptr_t)&JBE_CRC_ctor },
+		{ "_ZN3JBE4Util6Render12GetNvSysCapsEv", (uintptr_t)&GetNvSysCaps },
+		{ "_ZN3JBE7InputPF20ProcessDeviceChangesEPFvPviiEPFvS1_iES1_", (uintptr_t)&ProcessDeviceChanges }
 };
 
 void resolve_imports(so_module* mod) {

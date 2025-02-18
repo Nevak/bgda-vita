@@ -11,10 +11,10 @@
     } while (_rc == -1 && errno == EINTR); \
     _rc; })
 
-//#define DEBUG_EPOLL 1
-//#define DEBUG_PIPEFD 1
-//#define DEBUG_CALLBACKS 1
-//#define DEBUG_POLL_AND_WAKE 1
+#define DEBUG_EPOLL 1
+#define DEBUG_PIPEFD 1
+#define DEBUG_CALLBACKS 1
+#define DEBUG_POLL_AND_WAKE 1
 
 uint64_t AFN_timeMillis();
 

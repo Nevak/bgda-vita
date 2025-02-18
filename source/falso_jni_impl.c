@@ -42,6 +42,28 @@ NameToMethodID nameToMethodId[] = {
 	{ 26, "getPubLink", METHOD_TYPE_OBJECT },
 	{ 27, "playGameSignInReq", METHOD_TYPE_VOID },
 	{ 28, "webToMoreApp", METHOD_TYPE_VOID },
+	{ 29, "getSubLibPath", METHOD_TYPE_OBJECT },
+	{ 30, "getStore", METHOD_TYPE_INT },
+	{ 31, "isPhone", METHOD_TYPE_BOOLEAN },
+	{ 32, "getCacheDir", METHOD_TYPE_OBJECT },
+	{ 33, "getExternalCacheDir", METHOD_TYPE_OBJECT },
+	{ 34, "mountAPKExpansion", METHOD_TYPE_OBJECT },
+	{ 35, "getAPKExpansionFileName", METHOD_TYPE_OBJECT },
+	{ 36, "mountAPKPatch", METHOD_TYPE_OBJECT },
+	{ 37, "getAPKPatchFileName", METHOD_TYPE_OBJECT },
+	{ 38, "getAssetPackCount", METHOD_TYPE_INT },
+	{ 39, "getAssetPackPath", METHOD_TYPE_OBJECT },
+	{ 40, "loadClass", METHOD_TYPE_OBJECT },
+	{ 41, "getFilesDir", METHOD_TYPE_OBJECT },
+	{ 42, "getCacheDir", METHOD_TYPE_OBJECT },
+	{ 43, "isAAB", METHOD_TYPE_BOOLEAN },
+	{ 44, "getOrientation", METHOD_TYPE_INT },
+	{ 45, "getNaturalOrientation", METHOD_TYPE_INT },
+	{ 46, "getDisplayRealWorldSize", METHOD_TYPE_FLOAT },
+	{ 47, "getAbsolutePath", METHOD_TYPE_OBJECT },
+	{ 48, "getMaxTouchPoints", METHOD_TYPE_INT },
+	{ 49, "isPVRTraceActive", METHOD_TYPE_BOOLEAN },
+	{ 50, "initCloud", METHOD_TYPE_OBJECT },
 };
 
 void stringCatcher(jmethodID id, va_list args) {
@@ -64,6 +86,30 @@ jint getTouchScreenNum(jmethodID id, va_list args) {
 
 jint getConfirmResult(jmethodID id, va_list args) {
 	return 1;
+}
+
+jint getStore(jmethodID id, va_list args) {
+	return 0;
+}
+
+jint getAssetPackCount(jmethodID id, va_list args) {
+	return 1;
+}
+
+jint getOrientation(jmethodID id, va_list args) {
+	return 1;
+}
+
+jint getNaturalOrientation(jmethodID id, va_list args) {
+	return 1;
+}
+
+jfloat getDisplayRealWorldSize(jmethodID id, va_list args) {
+	return 1.0f;
+}
+
+jint getMaxTouchPoints(jmethodID id, va_list args) {
+	return 4;
 }
 
 /*
@@ -110,6 +156,18 @@ jboolean playGameIsSignedIn(jmethodID id, va_list args) {
     return JNI_FALSE;
 }
 
+jboolean isPhone(jmethodID id, va_list args) {
+	return JNI_FALSE;
+}
+
+jboolean isAAB(jmethodID id, va_list args) {
+	return JNI_FALSE;
+}
+
+jboolean isPVRTraceActive(jmethodID id, va_list args) {
+	return JNI_FALSE;
+}
+
 jboolean hasJoyStickMethods(jmethodID id, va_list args) {
     return JNI_TRUE;
 }
@@ -119,9 +177,9 @@ jboolean isJoyStick(jmethodID id, va_list args) {
 }
 
 jobject getExpansionPath(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/soulcalibur") + 1, FIELD_TYPE_BYTE);
+	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
     char *arr = ret->array;
-	strcpy(arr, "ux0:data/soulcalibur");
+	strcpy(arr, "ux0:data/bgda");
     return (jobject)ret;
 }
 
@@ -133,9 +191,9 @@ jobject getVersionName(jmethodID id, va_list args) {
 }
 
 jobject getDataPath(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/soulcalibur") + 1, FIELD_TYPE_BYTE);
+	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
     char *arr = ret->array;
-	strcpy(arr, "ux0:data/soulcalibur");
+	strcpy(arr, "ux0:data/bgda");
     return (jobject)ret;
 }
 
@@ -180,18 +238,134 @@ jobject getLocale(jmethodID id, va_list args) {
     return (jobject)ret;
 }
 
+jobject getSubLibPath(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "ux0:data/bgda");
+	return (jobject)ret;
+}
+
+jobject getCacheDir(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "ux0:data/bgda");
+	return (jobject)ret;
+}
+
+jobject getAbsolutePath(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "ux0:data/bgda");
+	return (jobject)ret;
+}
+
+jobject getExternalCacheDir(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "ux0:data/bgda");
+	return (jobject)ret;
+}
+
+jobject mountAPKExpansion(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "ux0:data/bgda");
+	return (jobject)ret;
+}
+
+jobject getAPKExpansionFileName(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("bgda") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "bgda");
+	return (jobject)ret;
+}
+
+jobject mountAPKPatch(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "ux0:data/bgda");
+	return (jobject)ret;
+}
+
+jobject getAPKPatchFileName(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("bgda") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "bgda");
+	return (jobject)ret;
+}
+
+jobject getAssetPackPath(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "ux0:data/bgda");
+	return (jobject)ret;
+}
+
+jobject loadClass(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("com.rinnegatamante.bgda.BGDA") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "com.rinnegatamante.bgda.BGDA");
+	return (jobject)ret;
+}
+
+jobject getFilesDir(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	strcpy(arr, "ux0:data/bgda");
+	return (jobject)ret;
+}
+
+
+/*
+public abstract class Cloud {
+    protected static native void readback(byte[] bArr, long j);
+
+    public abstract boolean isAvailable();
+
+    public abstract void update();
+
+    public abstract void write(byte[] bArr);
+
+    public static Cloud init(String filename) {
+        if (!Util.getMetaData(Activity.Get()).getBoolean("com.jbe.cloud") || Activity.Get().getStore() != Activity.Store.GOOGLEPLAY.ordinal()) {
+            return null;
+        }
+        return new GooglePlay(filename);
+    }
+}
+*/
+
+jobject initCloud(jmethodID id, va_list args) {
+	// log
+	fjni_log_err("initCloud");
+	//jstring arg2 = va_arg(args, jstring);
+	//fjni_logv_err("initCloud with %s", arg2);
+    // Create a minimal, non-null "object" to keep the code happy.
+    // For example, a 1-byte array or a small "dummy" object:
+   // JavaDynArray * dummy = jda_alloc(1, FIELD_TYPE_OBJECT);
+    // or if you have a jdo_alloc for objects, do that instead.
+    // Just ensure it's not NULL and won't break if the code calls methods on it.
+    
+    return NULL;
+}
+
 MethodsBoolean methodsBoolean[] = {
 	{ 4, expansionIsValid }, 
 	{ 10, hasJoyStickMethods }, 
 	{ 17, hasStartButton },
 	{ 20, isJoyStick },
 	{ 24, playGameIsSignedIn },
+	{ 31, isPhone },
+	{ 43, isAAB },
+	{ 49, isPVRTraceActive },
 };
 
 MethodsByte methodsByte[] = {};
 MethodsChar methodsChar[] = {};
 MethodsDouble methodsDouble[] = {};
-MethodsFloat methodsFloat[] = {};
+MethodsFloat methodsFloat[] = {
+	{ 46, getDisplayRealWorldSize }
+};
 MethodsLong methodsLong[] = {};
 MethodsShort methodsShort[] = {};
 
@@ -202,6 +376,11 @@ MethodsInt methodsInt[] = {
 	{ 13, getPadNum },
 	{ 21, getButtonList },
 	{ 22, getConfirmResult },
+	{ 30, getStore },
+	{ 38, getAssetPackCount },
+	{ 44, getOrientation },
+	{ 45, getNaturalOrientation },
+	{ 48, getMaxTouchPoints },
 };
 
 MethodsObject methodsObject[] = {
@@ -211,6 +390,19 @@ MethodsObject methodsObject[] = {
 	{ 18, getVersionName },
 	{ 25, getPubData },
 	{ 26, getPubLink },
+	{ 29, getSubLibPath },
+	{ 32, getCacheDir },
+	{ 33, getExternalCacheDir },
+	{ 34, mountAPKExpansion },
+	{ 35, getAPKExpansionFileName },
+	{ 36, mountAPKPatch },
+	{ 37, getAPKPatchFileName },
+	{ 39, getAssetPackPath },
+	{ 40, loadClass },
+	{ 41, getFilesDir },
+	{ 42, getCacheDir },
+	{ 47, getAbsolutePath },
+	{ 50, initCloud },
 };
 
 MethodsVoid methodsVoid[] = {

@@ -81,4 +81,6 @@ int closedir_soloader(DIR* dir);
 
 int fcntl_soloader(int fd, int cmd, ...);
 
+int fsync_soloader(int fd);
+
 #endif // SOLOADER_IO_H

@@ -141,3 +141,9 @@ int fcntl_soloader(int fd, int cmd, ...) {
     logv_debug("[io] fcntl(fd#%i, cmd#%i)", fd, cmd);
     return 0;
 }
+
+int fsync_soloader(int fd) {
+    int ret = fsync(fd);
+    logv_debug("[io] fsync(%i): %i", fd, ret);
+    return ret;
+}
