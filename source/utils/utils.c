@@ -33,6 +33,234 @@
 #pragma ide diagnostic ignored "OCUnusedGlobalDeclarationInspection"
 #pragma ide diagnostic ignored "bugprone-reserved-identifier"
 
+
+uint64_t current_timestamp_ms() {
+    struct timeval te;
+    gettimeofday(&te, NULL);
+    return (te.tv_sec * 1000LL + te.tv_usec / 1000);
+}
+
+bool file_copy(const char * path, const char * destination) {
+    if (!file_exists(path)) {
+        logv_error("file_copy: Specified source path \"%s\" "
+                "does not exist.", path);
+        return false;
+    }
+
+    if (!file_mkpath(destination, 0755)) {
+        logv_error("file_copy: Could not create parent directories for the "
+                "specified destination path \"%s\".", destination);
+        return false;
+    }
+
+    uint8_t * buffer;
+    size_t    size;
+
+    if (!file_load(path, &buffer, &size)) {
+        logv_error("file_copy: Failed to read data from "
+                "the source path \"%s\".", path);
+        return false;
+    }
+
+    if (!file_save(destination, buffer, size)) {
+        logv_error("file_copy: Failed to write data to the specified "
+                "destination path \"%s\".", destination);
+        return false;
+    }
+
+    free(buffer);
+    return true;
+}
+
+bool file_exists(const char * path) {
+    SceIoStat stat;
+    return sceIoGetstat(path, &stat) >= 0;
+}
+
+bool file_load(const char * path, uint8_t ** buffer, size_t * size) {
+    logv_debug("file_load: Loading data from \"%s\".", path);
+    if (!buffer || !size) {
+        log_error("file_load: Invalid argument(s).");
+        return false;
+    }
+
+    if (!file_exists(path)) {
+        logv_error("file_load: Specified source path \"%s\" "
+                "does not exist.", path);
+        return false;
+    }
+
+#ifdef USE_SCELIBC_IO
+    FILE * f = sceLibcBridge_fopen(path, "rb");
+#else
+    FILE * f = fopen(path, "rb");
+#endif
+
+    if (!f) {
+        logv_error("file_load: Could not open the specified "
+                "source path \"%s\".", path);
+        return false;
+    }
+
+#ifdef USE_SCELIBC_IO
+    sceLibcBridge_fseek(f, 0, SEEK_END);
+    *size = sceLibcBridge_ftell(f);
+    sceLibcBridge_fseek(f, 0, SEEK_SET);
+#else
+    fseek(f, 0, SEEK_END);
+    *size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+#endif
+
+    if (*size <= 0) {
+        logv_error("file_load: The specified source file \"%s\" is empty.", path);
+    #ifdef USE_SCELIBC_IO
+        sceLibcBridge_fclose(f);
+    #else
+        fclose(f);
+    #endif
+        return false;
+    }
+
+    *buffer = malloc(*size);
+
+    if (!*buffer) {
+        logv_error("file_load: Unable to allocate %d bytes of memory to load "
+                "the specified source file \"%s\".", path);
+    #ifdef USE_SCELIBC_IO
+        sceLibcBridge_fclose(f);
+    #else
+        fclose(f);
+    #endif
+        return false;
+    }
+
+#ifdef USE_SCELIBC_IO
+    sceLibcBridge_fread(*buffer, 1, *size, f);
+    sceLibcBridge_fclose(f);
+#else
+    fread(*buffer, 1, *size, f);
+    fclose(f);
+#endif
+
+    return true;
+}
+
+bool file_mkpath(const char * path, mode_t mode) {
+    logv_debug("file_mkpath: Creating directories leading to \"%s\".", path);
+    if (!path || !*path) {
+        log_error("file_mkpath: Invalid argument.");
+        return false;
+    }
+
+    char * file_path = strdup(path);
+    for (char* p = strchr(file_path + 1, '/'); p; p = strchr(p + 1, '/')) {
+        *p = '\0';
+        if (mkdir(file_path, mode) == -1) {
+            if (errno != EEXIST) {
+                logv_error("file_mkpath: Unable to create a directory \"%s\", "
+                        "mkdir error code is %s.", file_path, strerror(errno));
+                free(file_path);
+                return false;
+            }
+        }
+        *p = '/';
+    }
+
+    free(file_path);
+    return true;
+}
+
+bool file_save(const char * path, const uint8_t * buffer, size_t size) {
+    logv_debug("file_save: Saving %d bytes to \"%s\".", size, path);
+#ifdef USE_SCELIBC_IO
+    FILE * f = sceLibcBridge_fopen(path, "wb");
+#else
+    FILE * f = fopen(path, "wb");
+#endif
+
+    if (!f) {
+        logv_error("[Thread:%d]file_save: Could not open the specified "
+                "target path \"%s\".",sceKernelGetThreadId(), path);
+        return false;
+    }
+
+#ifdef USE_SCELIBC_IO
+    sceLibcBridge_fwrite(buffer, size, 1, f);
+    sceLibcBridge_fclose(f);
+#else
+    fwrite(buffer, size, 1, f);
+    fclose(f);
+#endif
+
+    return true;
+}
+
+size_t file_size(const char * path) {
+    size_t ret = -1;
+
+    if (!file_exists(path)) {
+        logv_error("size_t: Specified source path \"%s\" "
+                "does not exist.", path);
+        return ret;
+    }
+
+#ifdef USE_SCELIBC_IO
+    FILE * f = sceLibcBridge_fopen(path, "rb");
+#else
+    FILE * f = fopen(path, "rb");
+#endif
+
+    if (!f) {
+        logv_error("size_t: Could not open the specified "
+                "source path \"%s\".", path);
+        return ret;
+    }
+
+#ifdef USE_SCELIBC_IO
+    sceLibcBridge_fseek(f, 0, SEEK_END);
+    ret = sceLibcBridge_ftell(f);
+    sceLibcBridge_fseek(f, 0, SEEK_SET);
+    sceLibcBridge_fclose(f);
+#else
+    fseek(f, 0, SEEK_END);
+    ret = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    fclose(f);
+#endif
+
+    return ret;
+}
+
+char * file_sha1sum(const char * path) {
+    uint8_t * buffer;
+    size_t    size;
+
+    if (!file_load(path, &buffer, &size)) {
+        logv_error("file_sha1sum: Failed to read data from "
+                "the source path \"%s\".", path);
+        return NULL;
+    }
+
+    char * ret = str_sha1sum((const char *) buffer, size);
+
+    free(buffer);
+    return ret;
+}
+
+bool is_dir(const char * path) {
+    DIR* d = opendir(path);
+
+    if (d != NULL) {
+        closedir(d);
+        return true;
+    }
+
+    return false;
+}
+
+
+
 int ret0(void) {
     return 0;
 }
@@ -52,11 +280,6 @@ bool module_loaded(const char * name) {
     return _vshKernelSearchModuleByName(name, search_unk) >= 0;
 }
 
-bool file_exists(const char *path) {
-    SceIoStat stat;
-    return sceIoGetstat(path, &stat) >= 0;
-}
-
 bool string_ends_with(const char * str, const char * suffix) {
     int str_len = (int)strlen(str);
     int suffix_len = (int)strlen(suffix);
@@ -64,12 +287,6 @@ bool string_ends_with(const char * str, const char * suffix) {
     return
             (str_len >= suffix_len) &&
             (0 == strcmp(str + (str_len-suffix_len), suffix));
-}
-
-uint64_t current_timestamp_ms() {
-    struct timeval te;
-    gettimeofday(&te, NULL);
-    return (te.tv_sec*1000LL + te.tv_usec/1000);
 }
 
 void str_remove(char *str, const char *sub) {
@@ -84,6 +301,30 @@ void str_remove(char *str, const char *sub) {
         while ((*q++ = *p++) != '\0')
             continue;
     }
+}
+
+char * str_sha1sum(const char * str, size_t size) {
+    if (size == 0) {
+        size = strlen(str);
+    }
+
+    uint8_t sha1[20];
+    SHA1_CTX ctx;
+    sha1_init(&ctx);
+    sha1_update(&ctx, (uint8_t *)str, size);
+    sha1_final(&ctx, (uint8_t *)sha1);
+
+    char hash[42];
+    memset(hash, 0, sizeof(hash));
+
+    for (int i = 0; i < 20; i++) {
+        char string[4];
+        sprintf(string, "%02X", sha1[i]);
+        strcat(hash, string);
+    }
+
+    hash[41] = '\0';
+    return strdup(hash);
 }
 
 void str_replace(char *target, const char *needle, const char *replacement) {
@@ -117,92 +358,4 @@ void str_prepend(char* s, const char* t) {
     size_t len = strlen(t);
     memmove(s + len, s, strlen(s) + 1);
     memcpy(s, t, len);
-}
-
-bool is_dir(char* path) {
-    DIR* filetest = opendir(path);
-    if (filetest != NULL) {
-        closedir(filetest);
-        return true;
-    }
-    return false;
-}
-
-char * get_string_sha1(uint8_t* buf, long size) {
-    uint8_t sha1[20];
-    SHA1_CTX ctx;
-    sha1_init(&ctx);
-    sha1_update(&ctx, (uint8_t *)buf, size);
-    sha1_final(&ctx, (uint8_t *)sha1);
-
-    char hash[42];
-    memset(hash, 0, sizeof(hash));
-
-    int i;
-    for (i = 0; i < 20; i++) {
-        char string[4];
-        sprintf(string, "%02X", sha1[i]);
-        strcat(hash, string);
-    }
-
-    hash[41] = '\0';
-    return strdup(hash);
-}
-
-char * get_file_sha1(const char* path) {
-    FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
-
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    void *buf = malloc(size);
-    fread(buf, 1, size, f);
-    fclose(f);
-
-    char * ret = get_string_sha1(buf, size);
-    free(buf);
-    return ret;
-}
-
-int mkpath(char* file_path, mode_t mode) {
-    assert(file_path && *file_path);
-    for (char* p = strchr(file_path + 1, '/'); p; p = strchr(p + 1, '/')) {
-        *p = '\0';
-        if (mkdir(file_path, mode) == -1) {
-            if (errno != EEXIST) {
-                *p = '/';
-                return -1;
-            }
-        }
-        *p = '/';
-    }
-    return 0;
-}
-
-void file_save(const char* path, const uint8_t * buffer, size_t size) {
-    FILE * f = fopen(path, "wb");
-    if (f) {
-        fwrite(buffer, size, 1, f);
-        fclose(f);
-    }
-}
-
-void cp(const char * src, const char * dst) {
-    if (!file_exists(src)) return;
-
-    char * mkpath_path = strdup(dst);
-    mkpath(mkpath_path, 0755);
-    free(mkpath_path);
-
-    FILE *f = fopen(src, "rb");
-    if (!f) return;
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    void *buf = malloc(size);
-    fread(buf, 1, size, f);
-    fclose(f);
-    file_save(dst, buf, size);
-    free(buf);
 }

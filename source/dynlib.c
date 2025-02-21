@@ -246,17 +246,17 @@ void exit_soloader(int status) {
 }
 
 void *dlopen_hook(const char *restrict filename, int flags) {
-	logv_info("dlopen(%s, %i) called", filename, flags);
+	logv_error("Not Implemented dlopen(%s, %i) called", filename, flags);
 
-	void* res = dlopen("ux0:/data/bgda/lib/armeabi-v7a/libdarkalliance.so", flags);
+	// void* res = dlopen("ux0:/data/bgda/lib/armeabi-v7a/libdarkalliance.so", flags);
 
-	if (!res) {
-		// Check dlerror()
-		char* err = dlerror();
-		logv_error("dlopen error: %s", err);
-	}
+	// if (!res) {
+	// 	// Check dlerror()
+	// 	char* err = dlerror();
+	// 	logv_error("dlopen error: %s", err);
+	// }
 
-	return res;
+	return 0;
 }
 
 void *dlsym_fake(void *restrict handle, const char *restrict symbol) {
@@ -284,7 +284,6 @@ GLuint glCreateProgram_wrapper(void) {
 //glCreateShader_wrapper
 GLuint glCreateShader_wrapper(GLenum type) {
 	GLuint res = glCreateShader(type);
-	logv_info("glCreateShader(%i) called, returning %i", type, res);
 	// Check for errors
 	if (res == 0) {
 		log_error("glCreateShader failed");
@@ -339,10 +338,20 @@ void glShaderSource_wrapper(GLuint shader, GLsizei count, const GLchar **string,
 	glShaderSource(shader, count, string, length);
 }
 
+// JBE_CRC_ctor
 void JBE_CRC_ctor(void *this, char *param_1) {
     *(uint32_t *)this = 0;  // Set CRC value to 0 (or any static value)
     return;
 }
+
+// JBE_CRC_AddBuffer
+void JBE_CRC_AddBuffer(void const* data, unsigned int size) {
+	log_error("unimpl: JBE_CRC_AddBuffer");
+	return;
+}
+
+
+void* JBE_CloudPF_sReadBack;
 
 struct NvSysCaps {
     uint8_t unknown_header[8];  // New field for the missing bytes (0x1b0c0 - 0x1b0c8)
@@ -912,8 +921,8 @@ so_default_dynlib default_dynlib[] = {
 		// OpenGL
 		{ "glActiveTexture", (uintptr_t)&glActiveTexture },
 		{ "glAlphaFuncx", (uintptr_t)&glAlphaFuncx },
-		{ "glAttachShader", (uintptr_t)&glAttachShader_wrapper },
-		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation_wrapper },
+		{ "glAttachShader", (uintptr_t)&glAttachShader },
+		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation },
 		{ "glBindBuffer", (uintptr_t)&glBindBuffer },
 		{ "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
 		{ "glBindRenderbuffer", (uintptr_t)&glBindRenderbuffer },
@@ -934,13 +943,13 @@ so_default_dynlib default_dynlib[] = {
 		{ "glColor4x", (uintptr_t)&glColor4x },
 		{ "glColorMask", (uintptr_t)&glColorMask },
 		{ "glColorPointer", (uintptr_t)&glColorPointer },
-		{ "glCompileShader", (uintptr_t)&glCompileShader_wrapper },
+		{ "glCompileShader", (uintptr_t)&glCompileShader_soloader },
 		{ "glCompressedTexImage2D", (uintptr_t)&glCompressedTexImage2D },
 		{ "glCompressedTexSubImage2D", (uintptr_t)&ret0 },
 		{ "glCopyTexImage2D", (uintptr_t)&glCopyTexImage2D },
 		{ "glCopyTexSubImage2D", (uintptr_t)&glCopyTexSubImage2D },
-		{ "glCreateProgram", (uintptr_t)&glCreateProgram_wrapper },
-		{ "glCreateShader", (uintptr_t)&glCreateShader_wrapper },
+		{ "glCreateProgram", (uintptr_t)&glCreateProgram },
+		{ "glCreateShader", (uintptr_t)&glCreateShader },
 		{ "glCullFace", (uintptr_t)&glCullFace },
 		{ "glDeleteBuffers", (uintptr_t)&glDeleteBuffers },
 		{ "glDeleteFramebuffers", (uintptr_t)&glDeleteFramebuffers },
@@ -1001,7 +1010,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glRenderbufferStorage", (uintptr_t)&glRenderbufferStorage },
 		{ "glScissor", (uintptr_t)&glScissor },
 		{ "glShadeModel", (uintptr_t)&glShadeModel },
-		{ "glShaderSource", (uintptr_t)&glShaderSource_wrapper },
+		{ "glShaderSource", (uintptr_t)&glShaderSource_soloader },
 		{ "glStencilFunc", (uintptr_t)&glStencilFunc },
 		{ "glStencilFuncSeparate", (uintptr_t)&glStencilFuncSeparate },
 		{ "glStencilMask", (uintptr_t)&glStencilMask },
@@ -1365,8 +1374,10 @@ so_default_dynlib default_dynlib[] = {
 
 		// JBE namespace stuff
 		{ "_ZN3JBE3CRCC1EPKc", (uintptr_t)&JBE_CRC_ctor },
+		{ "_ZN3JBE3CRC9AddBufferEPKvj", (uintptr_t)&JBE_CRC_AddBuffer },
 		{ "_ZN3JBE4Util6Render12GetNvSysCapsEv", (uintptr_t)&GetNvSysCaps },
-		{ "_ZN3JBE7InputPF20ProcessDeviceChangesEPFvPviiEPFvS1_iES1_", (uintptr_t)&ProcessDeviceChanges }
+		{ "_ZN3JBE7InputPF20ProcessDeviceChangesEPFvPviiEPFvS1_iES1_", (uintptr_t)&ProcessDeviceChanges },
+		{ "_ZN3JBE7CloudPF9sReadBackE", (uintptr_t)&JBE_CloudPF_sReadBack },
 };
 
 void resolve_imports(so_module* mod) {

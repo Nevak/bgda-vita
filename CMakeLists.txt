@@ -20,7 +20,7 @@ set(VITA_VERSION "01.00")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
-set(PSVITAIP "192.168.110.16" CACHE STRING "PSVita IP (for FTP access)")
+set(PSVITAIP "192.168.110.89" CACHE STRING "PSVita IP (for FTP access)")
 set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
 # Game-specific definitions
@@ -171,7 +171,7 @@ add_custom_target(send_kvdb
 
 add_custom_target(dump
 				  COMMAND ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump.sh ${PSVITAIP}
-				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/soulcalibur -s 24
+				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/soulcalibur -s 1024
 				  )
 
 add_custom_target(reboot

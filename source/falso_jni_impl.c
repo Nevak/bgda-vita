@@ -302,6 +302,10 @@ jobject getAssetPackPath(jmethodID id, va_list args) {
 }
 
 jobject loadClass(jmethodID id, va_list args) {
+	jstring className = va_arg(args, jstring);
+	
+	fjni_logv_err("loadClass with %s", className);
+	
 	JavaDynArray * ret = jda_alloc(strlen("com.rinnegatamante.bgda.BGDA") + 1, FIELD_TYPE_BYTE);
 	char *arr = ret->array;
 	strcpy(arr, "com.rinnegatamante.bgda.BGDA");

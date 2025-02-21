@@ -148,10 +148,60 @@ bool isES31() {
 }
 
 
+//MC_Init
+so_hook MC_Init_hook;
+int MC_Init(int param_1) {
+	logv_error("MC_Init(%i)\n", param_1);
+	int returnval = SO_CONTINUE(int, MC_Init_hook, param_1);
+	logv_error("MC_Init returned %i\n", returnval);
+	return returnval;
+}
+
+//coreAddTask
+so_hook coreAddTask_hook;
+int coreAddTask(void *param_1, int param_2, char *param_3) {
+	logv_error("coreAddTask(%p, %i, %s)\n", param_1, param_2, param_3);
+	int returnval = SO_CONTINUE(int, coreAddTask_hook, param_1, param_2, param_3);
+	logv_error("coreAddTask returned %i\n", returnval);
+	return returnval;
+}
+
+//XInitCloud
+so_hook XInitCloud_hook;
+int XInitCloud(int param_1, void *param_2, int param_3, void *param_4, int param_5) {
+	logv_error("XInitCloud(%i, %p, %i, %p, %i)\n", param_1, param_2, param_3, param_4, param_5);
+	int returnval = SO_CONTINUE(int, XInitCloud_hook, param_1, param_2, param_3, param_4, param_5);
+	logv_error("XInitCloud returned %i\n", returnval);
+	return returnval;
+}
+
+// ShaderManager_LoadProgram
+so_hook ShaderManager_LoadProgram_hook;
+/* JBE::ShaderManager::LoadProgram(JBE::ShaderProgram&, JBE::ShaderManager::VertexDef const&, int,
+   JBE::ShaderManager::PixelDef const&, unsigned int, int
+   (*)(JBE::Container<JBE::Util::AlignedPtr<char const> >::Iterator&)) */
+void ShaderManager_LoadProgram(void *thisptr, void *param_1, int param_2, void *param_3, unsigned int param_4, int (*param_5)(void *)) {
+	logv_error("ShaderManager_LoadProgram(%p, %p, %i, %p, %u, %p)\n", thisptr, param_1, param_2, param_3, param_4, param_5);
+	SO_CONTINUE(int, ShaderManager_LoadProgram_hook, thisptr, param_1, param_2, param_3, param_4, param_5);
+	log_error("ShaderManager_LoadProgram returned \n");
+}
+
 
 void so_patch(void) {
 
-	printf("Patching .so functions");
+	log_error("Patching .so functions\n");
+
+	// _Z7MC_Initi MC_Init
+	MC_Init_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z7MC_Initi"), (uintptr_t)&MC_Init);
+
+	// _Z11coreAddTaskPFvvEiPKc coreAddTask
+	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
+
+	// _Z10XInitCloudiPFvPKvjiEPFvRPvRjEi XInitCloud
+	XInitCloud_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z10XInitCloudiPFvPKvjiEPFvRPvRjEi"), (uintptr_t)&XInitCloud);
+	
+	// _ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE
+	//ShaderManager_LoadProgram_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE"), (uintptr_t)&ShaderManager_LoadProgram);
 
 	//lumpLoad_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8lumpLoadPKc"), (uintptr_t)&lumpLoad);
 	// memPrintFree_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z12memPrintFreev"), (uintptr_t)&memPrintFree);

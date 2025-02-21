@@ -52,7 +52,7 @@ AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename, int mode) {
         a = nullptr;
     }
 
-    ALOGD("[AAssetManager] AAssetManager_open(%p, %s, %i): %p", mgr, realp.c_str(), mode, a);
+    //ALOGD("[AAssetManager] AAssetManager_open(%p, %s, %i): %p", mgr, realp.c_str(), mode, a);
     return (AAsset *) a;
 }
 

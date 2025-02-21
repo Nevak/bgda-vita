@@ -60,7 +60,7 @@ int open_soloader(char *_fname, int flags) {
 
     flags = oflags_newlib_to_oflags_musl(flags);
     int ret = open(_fname, flags);
-    logv_debug("[io] open(%s, %x): %i", _fname, flags, ret);
+    //logv_debug("[io] open(%s, %x): %i", _fname, flags, ret);
     return ret;
 }
 
@@ -81,7 +81,7 @@ int stat_soloader(char *_pathname, stat64_bionic *statbuf) {
     if (res == 0)
         stat_newlib_to_stat_bionic(&st, statbuf);
 
-    logv_debug("[io] stat(%s): %i", _pathname, res);
+    //logv_debug("[io] stat(%s): %i", _pathname, res);
     return res;
 }
 
@@ -98,7 +98,7 @@ int fclose_soloader(FILE * f) {
 
 int close_soloader(int fd) {
     int ret = close(fd);
-    logv_debug("[io] close(fd#%i): %i", fd, ret);
+    //logv_debug("[io] close(fd#%i): %i", fd, ret);
     return ret;
 }
 

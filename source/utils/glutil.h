@@ -16,13 +16,32 @@
  
  #include <vitaGL.h>
  
- void gl_preload();
+#define USE_CG_SHADERS
+#define DUMP_COMPILED_SHADERS
+
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+ 
  void gl_init();
+ 
+ void gl_preload();
+ 
  void gl_swap();
  
- void glShaderSourceHook(GLuint shader, GLsizei count, const GLchar **string, const GLint *_length);
- void glCompileShaderHook(GLuint shader);
+ void glCompileShader_soloader(GLuint shader);
  
+ void glShaderSource_soloader(GLuint shader, GLsizei count,
+                              const GLchar **string, const GLint *_length);
+ 
+ #ifdef __cplusplus
+ };
+ #endif
+ 
+
+
+ // EGL STUFF. TOOD: Move to another file
+
  EGLBoolean eglInitialize(EGLDisplay dpy, EGLint *major, EGLint *minor);
  EGLBoolean eglGetConfigAttrib(EGLDisplay display, EGLConfig config, EGLint attribute, EGLint * value);
  EGLBoolean eglGetConfigs(EGLDisplay display, EGLConfig * configs, EGLint config_size, EGLint * num_config);
