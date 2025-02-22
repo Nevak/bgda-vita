@@ -26,13 +26,15 @@ set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-c
 # Game-specific definitions
 set(DATA_PATH "ux0:data/bgda/" CACHE STRING "Path to data (with trailing /)")
 set(SO_PATH "${DATA_PATH}lib/armeabi-v7a/libdarkalliance.so" CACHE STRING "Path to .so")
+set(SO_PATH_LIBCPP "${DATA_PATH}lib/armeabi-v7a/libc++_shared.so" CACHE STRING "Path to .so")
+set(SO_PATH_LIBXMV "${DATA_PATH}lib/armeabi-v7a/libxmv.so" CACHE STRING "Path to .so")
 
 option(USE_SCELIBC_IO "Use SceLibcBridge for IO and some other std functions" ON)
 if (USE_SCELIBC_IO)
   add_definitions(-DUSE_SCELIBC_IO)
 endif()
 
-add_definitions(-DDATA_PATH="${DATA_PATH}" -DSO_PATH="${SO_PATH}")
+add_definitions(-DDATA_PATH="${DATA_PATH}" -DSO_PATH="${SO_PATH}" -DSO_PATH_LIBCPP="${SO_PATH_LIBCPP}" -DSO_PATH_LIBXMV="${SO_PATH_LIBXMV}")
 
 # makes sincos, sincosf, etc. visible
 add_definitions(-D_GNU_SOURCE -D__POSIX_VISIBLE=999999)

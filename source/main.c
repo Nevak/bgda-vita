@@ -33,6 +33,8 @@ int sceLibcHeapSize = 24 * 1024 * 1024;
 #endif
 
 so_module so_mod;
+so_module so_mod_libcpp;
+so_module so_mod_libxmv;
 
 int main() {
 	SceAppUtilInitParam appUtilParam;
@@ -129,33 +131,33 @@ int main() {
 
 
 	// void JBEMain(int param_1,char **param_2)
-	// void (* JBEMain)(int, char **) = (void *) so_symbol(&so_mod, "_Z7JBEMainiPPKc");
-	// if (JBEMain == NULL)
-	// {
-	// 	log_error("JBEMain is NULL");
-	// }
-	// else
-	// {
-	// 	log_info("JBEMain is not NULL");
-	// 	char *argv[] = { "soulcalibur", NULL };
-	// 	JBEMain(1, argv);
-	// }
-
-
-	//_Z11wrappedMainiPPc
-	void (* wrappedMain)(int, char **) = (void *) so_symbol(&so_mod, "_Z11wrappedMainiPPc");
-	if (wrappedMain == NULL)
+	void (* JBEMain)(int, char **) = (void *) so_symbol(&so_mod, "_Z7JBEMainiPPKc");
+	if (JBEMain == NULL)
 	{
-		log_error("wrappedMain is NULL");
+		log_error("JBEMain is NULL");
 	}
 	else
 	{
-		log_info("wrappedMain is not NULL");
+		log_info("JBEMain is not NULL");
 		char *argv[] = { "soulcalibur", NULL };
-		wrappedMain(1, argv);
+		JBEMain(1, argv);
 	}
 
-	log_info("wrappedMain() passed");
+
+	//_Z11wrappedMainiPPc
+	// void (* wrappedMain)(int, char **) = (void *) so_symbol(&so_mod, "_Z11wrappedMainiPPc");
+	// if (wrappedMain == NULL)
+	// {
+	// 	log_error("wrappedMain is NULL");
+	// }
+	// else
+	// {
+	// 	log_info("wrappedMain is not NULL");
+	// 	char *argv[] = { "soulcalibur", NULL };
+	// 	wrappedMain(1, argv);
+	// }
+
+	// log_info("wrappedMain() passed");
 
 	// log_info("Main thread shutting down");
 /*

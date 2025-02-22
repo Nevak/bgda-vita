@@ -447,7 +447,7 @@ struct NvSysCaps* GetNvSysCaps() {
 
 /* JBE::InputPF::ProcessDeviceChanges(void (*)(void*, int, int), void (*)(void*, int), void*) */
 void ProcessDeviceChanges(void *param_1, void *param_2, void *param_3) {
-	log_error("unimpl: JBE_InputPF_ProcessDeviceChanges");
+	//log_error("unimpl: JBE_InputPF_ProcessDeviceChanges");
 }
 
 // XMVCreateDecoder
@@ -458,7 +458,9 @@ void ProcessDeviceChanges(void *param_1, void *param_2, void *param_3) {
 // XMVGetAudioStream
 // XMVGetNextFrame
 
-int XMVCreateDecoder(char *szFileName, void **ppDecoder) {
+int curFrame = 0;
+int XMVCreateDecoder(void * thisPtr, int t, int t2, void *pFile) {
+	curFrame = 0;
 	log_error("unimpl: XMVCreateDecoder");
 	return 0;
 }
@@ -487,8 +489,10 @@ int XMVEnableAudioStream(void *pDecoder, int AudioStream, int Flags, void *pMixB
 }
 
 int XMVGetNextFrame(void *pDecoder, int *pSurface) {
-	log_error("unimpl: XMVGetNextFrame");
-	return -1;
+	curFrame++;
+
+	logv_error("unimpl: XMVGetNextFrame (%d)", curFrame);
+	return curFrame;
 }
 
 
@@ -551,6 +555,17 @@ int _ZNSt6__ndk112__next_primeEj(void *this, int n) {
 	return n;
 }
 
+double fabs( double x ) {
+	return x < 0 ? -x : x;
+}
+
+int isatty(int fd) {
+	return 0;
+}
+
+void assert2(const char* f, int l, const char* func, const char* msg) {
+    logv_error("[%s:%i][%s] Assertion failed: %s\n", f, l, func, msg);
+}
 
 so_default_dynlib default_dynlib[] = {
 		// OpenSLES
@@ -1389,13 +1404,13 @@ so_default_dynlib default_dynlib[] = {
 		// XMVEnableAudioStream
 		// XMVGetAudioStream
 		// XMVGetNextFrame
-		{ "XMVCreateDecoder", (uintptr_t)&XMVCreateDecoder },
-		{ "XMVCloseDecoder", (uintptr_t)&XMVCloseDecoder },
-		{ "XMVGetVideoDescriptor", (uintptr_t)&XMVGetVideoDescriptor },
-		{ "XMVGetAudioDescriptor", (uintptr_t)&XMVGetAudioDescriptor },
-		{ "XMVEnableAudioStream", (uintptr_t)&XMVEnableAudioStream },
-		{ "XMVGetAudioStream", (uintptr_t)&XMVGetAudioStream },
-		{ "XMVGetNextFrame", (uintptr_t)&XMVGetNextFrame },
+		// { "XMVCreateDecoder", (uintptr_t)&XMVCreateDecoder },
+		// { "XMVCloseDecoder", (uintptr_t)&XMVCloseDecoder },
+		// { "XMVGetVideoDescriptor", (uintptr_t)&XMVGetVideoDescriptor },
+		// { "XMVGetAudioDescriptor", (uintptr_t)&XMVGetAudioDescriptor },
+		// { "XMVEnableAudioStream", (uintptr_t)&XMVEnableAudioStream },
+		// { "XMVGetAudioStream", (uintptr_t)&XMVGetAudioStream },
+		// { "XMVGetNextFrame", (uintptr_t)&XMVGetNextFrame },
 
 		// JBE namespace stuff
 		{ "_ZN3JBE3CRCC1EPKc", (uintptr_t)&JBE_CRC_ctor },
@@ -1404,8 +1419,14 @@ so_default_dynlib default_dynlib[] = {
 		{ "_ZN3JBE7InputPF20ProcessDeviceChangesEPFvPviiEPFvS1_iES1_", (uintptr_t)&ProcessDeviceChanges },
 		{ "_ZN3JBE7CloudPF9sReadBackE", (uintptr_t)&JBE_CloudPF_sReadBack },
 
+		{ "fabs", (uintptr_t)&fabs },
+		{ "isatty", (uintptr_t)&isatty },
+		{ "llrint", (uintptr_t)&llrint },
+		{ "bsearch", (uintptr_t)&bsearch },
+		{ "__assert2", (uintptr_t)&assert2},
+
 		// NDK
-		{ "_ZNSt6__ndk112__next_primeEj", (uintptr_t)&_ZNSt6__ndk112__next_primeEj },
+		//{ "_ZNSt6__ndk112__next_primeEj", (uintptr_t)&_ZNSt6__ndk112__next_primeEj },
 };
 
 void resolve_imports(so_module* mod) {

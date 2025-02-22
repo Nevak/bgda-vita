@@ -35,6 +35,9 @@
 #define LOAD_ADDRESS 0x98000000
 
 extern so_module so_mod;
+extern so_module so_mod_libcpp;
+extern so_module so_mod_libxmv;
+
 
 void soloader_init_all() {
     // Set default overclock values
@@ -58,7 +61,28 @@ void soloader_init_all() {
                     "sure that you have %s file exactly at that path.", SO_PATH);
     }
 
-    if (so_file_load(&so_mod, SO_PATH, LOAD_ADDRESS) < 0)
+
+
+    if (so_file_load(&so_mod_libcpp, SO_PATH_LIBCPP, LOAD_ADDRESS) < 0)
+        fatal_error("Error: could not load %s.", SO_PATH_LIBCPP);
+    so_relocate(&so_mod_libcpp);
+    logv_info("Resolving imports for %s", SO_PATH_LIBCPP);
+    resolve_imports(&so_mod_libcpp);
+    so_flush_caches(&so_mod_libcpp);
+    so_initialize(&so_mod_libcpp);
+    logv_info("%s loaded successfully.", SO_PATH_LIBCPP);
+
+    if (so_file_load(&so_mod_libxmv, SO_PATH_LIBXMV, LOAD_ADDRESS + 0x100000) < 0)
+        fatal_error("Error: could not load %s.", SO_PATH_LIBXMV);
+    so_relocate(&so_mod_libxmv);
+    logv_info("Resolving imports for %s", SO_PATH_LIBXMV);
+    resolve_imports(&so_mod_libxmv);
+    so_flush_caches(&so_mod_libxmv);
+    so_initialize(&so_mod_libxmv);
+    logv_info("%s loaded successfully.", SO_PATH_LIBXMV);
+
+
+    if (so_file_load(&so_mod, SO_PATH, LOAD_ADDRESS + 0x3000000) < 0)
         fatal_error("Error: could not load %s.", SO_PATH);
 
     settings_load();
@@ -78,6 +102,8 @@ void soloader_init_all() {
 
     so_initialize(&so_mod);
     log_info("so_initialize() passed.");
+
+
 
     gl_preload();
     log_info("gl_preload() passed.");

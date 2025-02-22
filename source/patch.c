@@ -190,9 +190,30 @@ void ShaderManager_LoadProgram(void *thisptr, void *param_1, int param_2, void *
 so_hook gameLoop_hook;
 void gameLoop() {
 	log_error("gameLoop()\n");
-	SO_CONTINUE(int, gameLoop_hook);
+	SO_CONTINUE(void *, gameLoop_hook);
 	log_error("gameLoop returned\n");
 }
+
+// machMpegLoop
+so_hook machMpegLoop_hook;
+
+
+void machMpegLoop(char *param_1,char *param_2,void *param_3,int param_4,char *param_5,
+	char *param_6,int param_7,bool param_8,bool param_9)
+	{
+		logv_error("machMpegLoop(%s)\n", param_5);
+		SO_CONTINUE(void *, machMpegLoop_hook, param_1, param_2, param_3, param_4, param_5, param_6, param_7, param_8);
+		log_error("machMpegLoop returned\n");	
+	}
+
+so_hook XMVDecoder_CreateDecoderForFile_hook;
+int XMVDecoder_CreateDecoderForFile(int param_1, char * fileName, int param_3) {
+	logv_error("XMVDecoder_CreateDecoderForFile(%s)\n", fileName);
+	int returnval = SO_CONTINUE(int, XMVDecoder_CreateDecoderForFile_hook, param_1, fileName, param_3);
+	logv_error("XMVDecoder_CreateDecoderForFile returned %i\n", returnval);
+	return returnval;
+}
+
 
 
 void so_patch(void) {
@@ -222,6 +243,40 @@ void so_patch(void) {
 		logv_error("gameLoop found at %p\n", gameLoop_addr);
 		gameLoop_hook = hook_addr(gameLoop_addr, (uintptr_t)&gameLoop);
 	}
+
+	// _Z12machMpegLoopPKcS0_PFivEiS0_S0_ibb machMpegLoop
+	// uintptr_t machMpegLoop_addr = (uintptr_t)so_symbol(&so_mod, "_Z12machMpegLoopPKcS0_PFivEiS0_S0_ibb");
+	// if (machMpegLoop_addr == NULL) {
+	// 	log_error("machMpegLoop not found\n");
+	// } else {
+	// 	logv_error("machMpegLoop found at %p\n", machMpegLoop_addr);
+	// 	machMpegLoop_hook = hook_addr(machMpegLoop_addr, (uintptr_t)&machMpegLoop);
+	// }
+
+	// 2106a0
+	// undefined4 XMVDecoder_CreateDecoderForFile(undefined4 param_1,undefined4 param_2,undefined4 param_3)
+	// uintptr_t XMVDecoder_CreateDecoderForFile_addr = so_mod.text_base + 0x1106a0;
+	// if (XMVDecoder_CreateDecoderForFile_addr == NULL) {
+	// 	log_error("XMVDecoder_CreateDecoderForFile not found\n");
+	// } else {
+	// 	logv_error("XMVDecoder_CreateDecoderForFile found at %p\n", XMVDecoder_CreateDecoderForFile_addr);
+	// 	//hook_addr(XMVDecoder_CreateDecoderForFile_addr, (uintptr_t)&ret0);
+	// }
+
+
+	// Patch the hardcoded "sampler" string in the text section
+	// This is used in the shader manager to load the sampler
+	// I had to rename the sampler field in the shaders to "sam" cause in Cg it's a reserved keyword
+
+	uintptr_t sampler = so_mod.text_base + 0x0009719f;
+	// Print the original string to see if we're at the right place
+	logv_error("Original sampler string: %s\n", (char *)sampler);
+	// Patch the string
+	kuKernelCpuUnrestrictedMemcpy((void *)sampler, "sam", 4);
+	// Print the new string to see if it was patched correctly
+	logv_error("Patched sampler string: %s\n", (char *)sampler);
+
+
 
 	// _ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE
 	//ShaderManager_LoadProgram_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE"), (uintptr_t)&ShaderManager_LoadProgram);
