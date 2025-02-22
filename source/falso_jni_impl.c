@@ -64,6 +64,7 @@ NameToMethodID nameToMethodId[] = {
 	{ 48, "getMaxTouchPoints", METHOD_TYPE_INT },
 	{ 49, "isPVRTraceActive", METHOD_TYPE_BOOLEAN },
 	{ 50, "initCloud", METHOD_TYPE_OBJECT },
+	{ 51, "getISO3Language", METHOD_TYPE_OBJECT },
 };
 
 void stringCatcher(jmethodID id, va_list args) {
@@ -238,6 +239,33 @@ jobject getLocale(jmethodID id, va_list args) {
     return (jobject)ret;
 }
 
+jobject getISO3Language(jmethodID id, va_list args) {
+	JavaDynArray * ret = jda_alloc(3, FIELD_TYPE_BYTE);
+	char *arr = ret->array;
+	
+	int res;
+	sceAppUtilSystemParamGetInt(SCE_SYSTEM_PARAM_ID_LANG, &res);
+	switch (res) {
+	case SCE_SYSTEM_PARAM_LANG_JAPANESE:
+		strcpy(arr, "jpn");
+		break;
+	case SCE_SYSTEM_PARAM_LANG_SPANISH:
+		strcpy(arr, "spa");
+		break;
+	case SCE_SYSTEM_PARAM_LANG_FRENCH:
+		strcpy(arr, "fra");
+		break;
+	case SCE_SYSTEM_PARAM_LANG_GERMAN:
+		strcpy(arr, "deu");
+		break;
+	default:
+		strcpy(arr, "eng");
+		break;
+	}
+	
+	return (jobject)ret;
+}
+
 jobject getSubLibPath(jmethodID id, va_list args) {
 	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
 	char *arr = ret->array;
@@ -407,6 +435,7 @@ MethodsObject methodsObject[] = {
 	{ 42, getCacheDir },
 	{ 47, getAbsolutePath },
 	{ 50, initCloud },
+	{ 51, getISO3Language },
 };
 
 MethodsVoid methodsVoid[] = {

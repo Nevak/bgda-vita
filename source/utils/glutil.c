@@ -174,7 +174,7 @@
          size_t size;
  
          file_load(cg_path, (uint8_t **) &buffer, &size);
-         logv_debug("[Thread:%d] calling glShaderSource with source %s", sceKernelGetThreadId(), buffer);
+         //logv_debug("[Thread:%d] calling glShaderSource with source %s", sceKernelGetThreadId(), buffer);
          glShaderSource(shader, 1, &buffer, &size);
          strcpy(next_shader_fname, gxp_path);
  

@@ -1,0 +1,37 @@
+// Cg Fragment Shader
+
+// Uniform texture sampler (matches: uniform sampler2D u0;)
+sampler2D u0;
+
+#if D3D_ALPHA_TEST
+// When alpha testing is enabled, we need the reference parameters.
+// This corresponds to the GLSL: "uniform D3D_ALPHA_REF_SIGN_TYPE D3D_ALPHA_REF_SIGN;"
+uniform float2 D3D_ALPHA_REF_SIGN;
+#endif
+
+// The fragment shader receives two varyings:
+//   - oD0: an interpolated float4 (for example, a lighting or color value)
+//   - oT0: the texture coordinate (float2)
+float4 main(float4 oD0 : TEXCOORD0, float2 oT0 : TEXCOORD1) : COLOR
+{
+    // Sample the texture using the provided texture coordinate.
+    float4 t0 = tex2D(u0, oT0);
+
+    // Compute the final color: multiply oD0 and the texture sample and scale.
+    float4 col = oD0 * t0 * 2.0;
+
+    // Premultiply the RGB by (1 - alpha) and adjust the alpha.
+    col.rgb *= 1.0 - col.a;
+    col.a = 1.0 - t0.a;
+
+    #if D3D_ALPHA_TEST
+    // Perform an alpha test similar to the GLSL macro.
+    // If the condition is met, discard the fragment.
+    if (sign(floor(col.a * 255.0) - D3D_ALPHA_REF_SIGN.x) != D3D_ALPHA_REF_SIGN.y)
+    {
+        clip(-1);  // clip() with a negative value discards the fragment.
+    }
+    #endif
+
+    return col;
+}

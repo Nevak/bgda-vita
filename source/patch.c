@@ -162,7 +162,7 @@ so_hook coreAddTask_hook;
 int coreAddTask(void *param_1, int param_2, char *param_3) {
 	logv_error("coreAddTask(%p, %i, %s)\n", param_1, param_2, param_3);
 	int returnval = SO_CONTINUE(int, coreAddTask_hook, param_1, param_2, param_3);
-	logv_error("coreAddTask returned %i\n", returnval);
+	//logv_error("coreAddTask returned %i\n", returnval);
 	return returnval;
 }
 
@@ -186,6 +186,14 @@ void ShaderManager_LoadProgram(void *thisptr, void *param_1, int param_2, void *
 	log_error("ShaderManager_LoadProgram returned \n");
 }
 
+// gameLoop
+so_hook gameLoop_hook;
+void gameLoop() {
+	log_error("gameLoop()\n");
+	SO_CONTINUE(int, gameLoop_hook);
+	log_error("gameLoop returned\n");
+}
+
 
 void so_patch(void) {
 
@@ -198,8 +206,23 @@ void so_patch(void) {
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
 
 	// _Z10XInitCloudiPFvPKvjiEPFvRPvRjEi XInitCloud
-	XInitCloud_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z10XInitCloudiPFvPKvjiEPFvRPvRjEi"), (uintptr_t)&XInitCloud);
+	uintptr_t XInitCloud_addr = (uintptr_t)so_symbol(&so_mod, "_Z10XInitCloudiPFvPKvjiEPFvRPvRjEi");
+	if (XInitCloud_addr == NULL) {
+		log_error("XInitCloud not found\n");
+	} else {
+		logv_error("XInitCloud found at %p\n", XInitCloud_addr);
+		XInitCloud_hook = hook_addr(XInitCloud_addr, (uintptr_t)&XInitCloud);
+	}
 	
+	// gameLoop
+	uintptr_t gameLoop_addr = so_mod.text_base + 0xb296c;
+	if (gameLoop_addr == NULL) {
+	log_error("gameLoop not found\n");
+	} else {
+		logv_error("gameLoop found at %p\n", gameLoop_addr);
+		gameLoop_hook = hook_addr(gameLoop_addr, (uintptr_t)&gameLoop);
+	}
+
 	// _ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE
 	//ShaderManager_LoadProgram_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE"), (uintptr_t)&ShaderManager_LoadProgram);
 

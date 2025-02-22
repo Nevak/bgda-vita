@@ -488,7 +488,7 @@ int XMVEnableAudioStream(void *pDecoder, int AudioStream, int Flags, void *pMixB
 
 int XMVGetNextFrame(void *pDecoder, int *pSurface) {
 	log_error("unimpl: XMVGetNextFrame");
-	return 0;
+	return -1;
 }
 
 
@@ -524,6 +524,33 @@ void app_dummy(void)
 {
   return;
 }
+
+int is_prime(int n) {
+	if (n <= 3)
+		return 1;
+	
+	if (n % 2 == 0 || n % 3 == 0)
+		return 0;
+	
+	for (int i = 5; i * i <= n; i = i + 6) {
+		if (n % i == 0 || n % (i + 2) == 0)
+			return 0;
+	}
+	
+	return 1;
+}
+
+int _ZNSt6__ndk112__next_primeEj(void *this, int n) {
+	if (n <= 1)
+		return 2;
+	
+	while (!is_prime(n)) {
+		n++;
+	}
+	
+	return n;
+}
+
 
 so_default_dynlib default_dynlib[] = {
 		// OpenSLES
@@ -1370,14 +1397,15 @@ so_default_dynlib default_dynlib[] = {
 		{ "XMVGetAudioStream", (uintptr_t)&XMVGetAudioStream },
 		{ "XMVGetNextFrame", (uintptr_t)&XMVGetNextFrame },
 
-
-
 		// JBE namespace stuff
 		{ "_ZN3JBE3CRCC1EPKc", (uintptr_t)&JBE_CRC_ctor },
 		{ "_ZN3JBE3CRC9AddBufferEPKvj", (uintptr_t)&JBE_CRC_AddBuffer },
 		{ "_ZN3JBE4Util6Render12GetNvSysCapsEv", (uintptr_t)&GetNvSysCaps },
 		{ "_ZN3JBE7InputPF20ProcessDeviceChangesEPFvPviiEPFvS1_iES1_", (uintptr_t)&ProcessDeviceChanges },
 		{ "_ZN3JBE7CloudPF9sReadBackE", (uintptr_t)&JBE_CloudPF_sReadBack },
+
+		// NDK
+		{ "_ZNSt6__ndk112__next_primeEj", (uintptr_t)&_ZNSt6__ndk112__next_primeEj },
 };
 
 void resolve_imports(so_module* mod) {

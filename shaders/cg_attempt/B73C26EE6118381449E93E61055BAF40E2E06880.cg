@@ -1,0 +1,9 @@
+// profile sce_fp_psp2
+
+uniform sampler2D sam;
+
+void main(
+	float2 texCoord : TEXCOORD0,
+	float4 out gl_FragColor : COLOR
+) {
+	gl_FragColor = tex2D(sam,  texCoord);}
