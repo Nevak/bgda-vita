@@ -214,6 +214,13 @@ int XMVDecoder_CreateDecoderForFile(int param_1, char * fileName, int param_3) {
 	return returnval;
 }
 
+so_hook jbe_android_main_sub_hook;
+void JBE_android_main_sub(void *param_1) {
+	log_error("JBE_android_main_sub() entered\n");
+	SO_CONTINUE(void *, jbe_android_main_sub_hook, param_1);
+	log_error("JBE_android_main_sub returned\n");
+}
+
 
 
 void so_patch(void) {
@@ -243,6 +250,19 @@ void so_patch(void) {
 		logv_error("gameLoop found at %p\n", gameLoop_addr);
 		gameLoop_hook = hook_addr(gameLoop_addr, (uintptr_t)&gameLoop);
 	}
+
+	// // void JBE_android_main_sub(android_app *param_1)
+	// uintptr_t jbe_andoid_main_addr = (uintptr_t) so_symbol(&so_mod, "JBE_android_main_sub");
+	// if (jbe_andoid_main_addr == NULL)
+	// {
+	// 	log_error("JBE_android_main_sub not found\n");
+	// }
+	// else
+	// {
+	// 	logv_error("JBE_android_main_sub found at %p\n", jbe_andoid_main_addr);
+	// 	jbe_android_main_sub_hook = hook_addr(jbe_andoid_main_addr, (uintptr_t)&JBE_android_main_sub);
+	// }
+
 
 	// _Z12machMpegLoopPKcS0_PFivEiS0_S0_ibb machMpegLoop
 	// uintptr_t machMpegLoop_addr = (uintptr_t)so_symbol(&so_mod, "_Z12machMpegLoopPKcS0_PFivEiS0_S0_ibb");

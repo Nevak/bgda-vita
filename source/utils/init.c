@@ -35,6 +35,7 @@
 #define LOAD_ADDRESS 0x98000000
 
 extern so_module so_mod;
+extern so_module so_mod_jbejni;
 extern so_module so_mod_libcpp;
 extern so_module so_mod_libxmv;
 
@@ -62,8 +63,17 @@ void soloader_init_all() {
     }
 
 
+    if (so_file_load(&so_mod_jbejni, SO_PATH_JBEJNI, LOAD_ADDRESS) < 0)
+        fatal_error("Error: could not load %s.", SO_PATH_JBEJNI);
+    so_relocate(&so_mod_jbejni);
+    logv_info("Resolving imports for %s", SO_PATH_JBEJNI);
+    resolve_imports(&so_mod_jbejni);
+    so_flush_caches(&so_mod_jbejni);
+    so_initialize(&so_mod_jbejni);
+    logv_info("%s loaded successfully.", SO_PATH_JBEJNI);
 
-    if (so_file_load(&so_mod_libcpp, SO_PATH_LIBCPP, LOAD_ADDRESS) < 0)
+
+    if (so_file_load(&so_mod_libcpp, SO_PATH_LIBCPP, LOAD_ADDRESS + 0x100000) < 0)
         fatal_error("Error: could not load %s.", SO_PATH_LIBCPP);
     so_relocate(&so_mod_libcpp);
     logv_info("Resolving imports for %s", SO_PATH_LIBCPP);
@@ -72,7 +82,7 @@ void soloader_init_all() {
     so_initialize(&so_mod_libcpp);
     logv_info("%s loaded successfully.", SO_PATH_LIBCPP);
 
-    if (so_file_load(&so_mod_libxmv, SO_PATH_LIBXMV, LOAD_ADDRESS + 0x100000) < 0)
+    if (so_file_load(&so_mod_libxmv, SO_PATH_LIBXMV, LOAD_ADDRESS + 0x200000) < 0)
         fatal_error("Error: could not load %s.", SO_PATH_LIBXMV);
     so_relocate(&so_mod_libxmv);
     logv_info("Resolving imports for %s", SO_PATH_LIBXMV);
@@ -82,7 +92,7 @@ void soloader_init_all() {
     logv_info("%s loaded successfully.", SO_PATH_LIBXMV);
 
 
-    if (so_file_load(&so_mod, SO_PATH, LOAD_ADDRESS + 0x3000000) < 0)
+    if (so_file_load(&so_mod, SO_PATH, LOAD_ADDRESS + 0x4000000) < 0)
         fatal_error("Error: could not load %s.", SO_PATH);
 
     settings_load();

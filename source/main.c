@@ -33,6 +33,7 @@ int sceLibcHeapSize = 24 * 1024 * 1024;
 #endif
 
 so_module so_mod;
+so_module so_mod_jbejni;
 so_module so_mod_libcpp;
 so_module so_mod_libxmv;
 
@@ -45,9 +46,32 @@ int main() {
 	
 	soloader_init_all();
 
+	int (*ANativeActivity_onCreate)(ANativeActivity *activity, void *savedState,
+		size_t savedStateSize) = (void *) so_symbol(&so_mod_jbejni, "ANativeActivity_onCreate");
+
 	ANativeActivity *activity = ANativeActivity_create();
 
 	log_info("Created NativeActivity object");
+
+	ANativeActivity_onCreate(activity, NULL, 0);
+	log_info("ANativeActivity_onCreate() passed");
+
+	activity->callbacks->onStart(activity);
+	log_info("onStart() passed");
+
+	AInputQueue *aInputQueue = AInputQueue_create();
+	activity->callbacks->onInputQueueCreated(activity, aInputQueue);
+	log_info("onInputQueueCreated() passed");
+
+	ANativeWindow *aNativeWindow = ANativeWindow_create();
+	activity->callbacks->onNativeWindowCreated(activity, aNativeWindow);
+	log_info("onNativeWindowCreated() passed");
+
+	activity->callbacks->onWindowFocusChanged(activity, 1);
+	log_info("onWindowFocusChanged() passed");
+
+	log_info("Main thread shutting down");
+
 
 	//JBE_android_main_sub(NULL);
 	
@@ -102,46 +126,51 @@ int main() {
 
 	//_ZN3JBE8SystemPF13SetAndroidAppEP11android_app
 	/* JBE::SystemPF::SetAndroidApp(android_app*) */
-	void (* JBE_SystemPF_SetAndroidApp)(void *) = (void *) so_symbol(&so_mod, "_ZN3JBE8SystemPF13SetAndroidAppEP11android_app");
-	if (JBE_SystemPF_SetAndroidApp == NULL)
-	{
-		log_error("JBE_SystemPF_SetAndroidApp is NULL");
-	}
-	else
-	{
-		log_info("JBE_SystemPF_SetAndroidApp is not NULL");
-		JBE_SystemPF_SetAndroidApp(activity->instance);
-	}
-
-	log_info("JBE_SystemPF_SetAndroidApp() passed");
 
 
-	int (* JBEStartup)(void) = (void *) so_symbol(&so_mod, "_Z10JBEStartupv");
-	if (JBEStartup == NULL)
-	{
-		log_error("JBEStartup is NULL");
-	}
-	else
-	{
-		log_info("JBEStartup is not NULL");
-		JBEStartup();
-	}
-
-	log_info("JBEStartup() passed");
 
 
-	// void JBEMain(int param_1,char **param_2)
-	void (* JBEMain)(int, char **) = (void *) so_symbol(&so_mod, "_Z7JBEMainiPPKc");
-	if (JBEMain == NULL)
-	{
-		log_error("JBEMain is NULL");
-	}
-	else
-	{
-		log_info("JBEMain is not NULL");
-		char *argv[] = { "soulcalibur", NULL };
-		JBEMain(1, argv);
-	}
+
+	// void (* JBE_SystemPF_SetAndroidApp)(void *) = (void *) so_symbol(&so_mod, "_ZN3JBE8SystemPF13SetAndroidAppEP11android_app");
+	// if (JBE_SystemPF_SetAndroidApp == NULL)
+	// {
+	// 	log_error("JBE_SystemPF_SetAndroidApp is NULL");
+	// }
+	// else
+	// {
+	// 	log_info("JBE_SystemPF_SetAndroidApp is not NULL");
+	// 	JBE_SystemPF_SetAndroidApp(activity->instance);
+	// }
+
+	// log_info("JBE_SystemPF_SetAndroidApp() passed");
+
+
+	// int (* JBEStartup)(void) = (void *) so_symbol(&so_mod, "_Z10JBEStartupv");
+	// if (JBEStartup == NULL)
+	// {
+	// 	log_error("JBEStartup is NULL");
+	// }
+	// else
+	// {
+	// 	log_info("JBEStartup is not NULL");
+	// 	JBEStartup();
+	// }
+
+	// log_info("JBEStartup() passed");
+
+
+	// // void JBEMain(int param_1,char **param_2)
+	// void (* JBEMain)(int, char **) = (void *) so_symbol(&so_mod, "_Z7JBEMainiPPKc");
+	// if (JBEMain == NULL)
+	// {
+	// 	log_error("JBEMain is NULL");
+	// }
+	// else
+	// {
+	// 	log_info("JBEMain is not NULL");
+	// 	char *argv[] = { "soulcalibur", NULL };
+	// 	JBEMain(1, argv);
+	// }
 
 
 	//_Z11wrappedMainiPPc

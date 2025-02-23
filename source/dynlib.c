@@ -147,6 +147,10 @@ extern const char *BIONIC_ctype_;
 extern const short *BIONIC_tolower_tab_;
 extern const short *BIONIC_toupper_tab_;
 
+
+extern so_module so_mod;
+ 
+
 static FILE __sF_fake[3];
 
 int __atomic_dec(volatile int *ptr) {
@@ -261,6 +265,19 @@ void *dlopen_hook(const char *restrict filename, int flags) {
 
 void *dlsym_fake(void *restrict handle, const char *restrict symbol) {
 	logv_info("dlsym(%p, %s) called", handle, symbol);
+
+	if (strcmp("JBE_android_main_sub", symbol) == 0) {
+		uintptr_t jbe_andoid_main_addr = (uintptr_t) so_symbol(&so_mod, "JBE_android_main_sub");
+		if (jbe_andoid_main_addr == NULL)
+		{
+			log_error("[dlsym]JBE_android_main_sub not found\n");
+		}
+		else
+		{
+			logv_error("[dlsym]JBE_android_main_sub found at %p\n", jbe_andoid_main_addr);
+			return (void *) jbe_andoid_main_addr;
+		}
+	}
 
 	return dlsym(handle, symbol);
 
