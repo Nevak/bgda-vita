@@ -50,8 +50,13 @@ void AInputQueue_attachLooper(AInputQueue* queue, ALooper* looper,
 
     pthread_mutex_lock(&q->mLock);
 
+    ALOGD("AInputQueue_attachLooper called: %p, %p, %i, %p, %p", queue, looper, ident, callback, data);
+    ALOGD("Total Loopers [%d]", q->mAppLoopers.size());
+
     for (size_t i = 0; i < q->mAppLoopers.size(); i++) {
+        //ALOGD("Looper %p", q->mAppLoopers[i]);
         if (looper == q->mAppLoopers[i]) {
+            ALOGD("Looper already attached %d", i);
             pthread_mutex_unlock(&q->mLock);
             return;
         }

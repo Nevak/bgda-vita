@@ -292,7 +292,7 @@ void so_patch(void) {
 	// Print the original string to see if we're at the right place
 	logv_error("Original sampler string: %s\n", (char *)sampler);
 	// Patch the string
-	kuKernelCpuUnrestrictedMemcpy((void *)sampler, "sam", 4);
+	kuKernelCpuUnrestrictedMemcpy((void *)sampler, "plersam", 8);
 	// Print the new string to see if it was patched correctly
 	logv_error("Patched sampler string: %s\n", (char *)sampler);
 

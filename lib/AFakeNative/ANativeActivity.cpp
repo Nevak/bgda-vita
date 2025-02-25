@@ -15,16 +15,16 @@ ANativeActivity * ANativeActivity_create() {
     ret->externalDataPath = DATA_PATH"assets/";
     ret->sdkVersion = 14;
     // Create a fake android_app instance
-    android_app * app = (android_app *) malloc(sizeof(android_app));
-    app->activity = (ANativeActivity *) ret;
-    app->config = AConfiguration_new();
-    app->savedState = nullptr;
-    app->savedStateSize = 0;
-    app->userData = nullptr;
-    app->onAppCmd = nullptr;
-    app->onInputEvent = nullptr;
+    // android_app * app = (android_app *) malloc(sizeof(android_app));
+    // app->activity = (ANativeActivity *) ret;
+    // app->config = AConfiguration_new();
+    // app->savedState = nullptr;
+    // app->savedStateSize = 0;
+    // app->userData = nullptr;
+    // app->onAppCmd = nullptr;
+    // app->onInputEvent = nullptr;
 
-    ret->instance = app;
+    ret->instance = nullptr;
 
     return ret;
 }

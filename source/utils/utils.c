@@ -78,7 +78,7 @@ bool file_exists(const char * path) {
 }
 
 bool file_load(const char * path, uint8_t ** buffer, size_t * size) {
-    logv_debug("file_load: Loading data from \"%s\".", path);
+    //logv_debug("file_load: Loading data from \"%s\".", path);
     if (!buffer || !size) {
         log_error("file_load: Invalid argument(s).");
         return false;

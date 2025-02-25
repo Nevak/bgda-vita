@@ -98,15 +98,26 @@ jint getAssetPackCount(jmethodID id, va_list args) {
 }
 
 jint getOrientation(jmethodID id, va_list args) {
-	return 1;
+	// Got this number by analyzing the decompiled Java code
+	return 4;
 }
 
 jint getNaturalOrientation(jmethodID id, va_list args) {
-	return 1;
+	// Got this number by analyzing the decompiled Java code
+	return 2;
 }
 
 jfloat getDisplayRealWorldSize(jmethodID id, va_list args) {
-	return 1.0f;
+	// The java code does:
+	
+    // public float getDisplayRealWorldSize() {
+    //     DisplayMetrics dm = new DisplayMetrics();
+    //     this.mDisplay.getMetrics(dm);
+    //     return (float) Math.sqrt(Math.pow((double) (((float) dm.widthPixels) / dm.xdpi), 2.0d) + Math.pow((double) (((float) dm.heightPixels) / dm.ydpi), 2.0d));
+    // }
+
+	// Seems like the screen size in inches. The vita screen is 5 inches.
+	return 5.0f;
 }
 
 jint getMaxTouchPoints(jmethodID id, va_list args) {

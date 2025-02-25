@@ -33,6 +33,7 @@ int sceLibcHeapSize = 24 * 1024 * 1024;
 #endif
 
 so_module so_mod;
+so_module so_mod_libcpufeatues;
 so_module so_mod_jbejni;
 so_module so_mod_libcpp;
 so_module so_mod_libxmv;
@@ -45,6 +46,9 @@ int main() {
 	sceAppUtilInit(&appUtilParam, &appUtilBootParam);
 	
 	soloader_init_all();
+
+
+    int (*JNI_OnLoad)(JavaVM* jvm) = (void*)so_symbol(&so_mod_jbejni, "JNI_OnLoad");
 
 	int (*ANativeActivity_onCreate)(ANativeActivity *activity, void *savedState,
 		size_t savedStateSize) = (void *) so_symbol(&so_mod_jbejni, "ANativeActivity_onCreate");
@@ -62,6 +66,8 @@ int main() {
 	AInputQueue *aInputQueue = AInputQueue_create();
 	activity->callbacks->onInputQueueCreated(activity, aInputQueue);
 	log_info("onInputQueueCreated() passed");
+
+	JNI_OnLoad(&jvm);
 
 	ANativeWindow *aNativeWindow = ANativeWindow_create();
 	activity->callbacks->onNativeWindowCreated(activity, aNativeWindow);

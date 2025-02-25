@@ -54,6 +54,9 @@
         "xtree": "cpp",
         "xutility": "cpp",
         "string.h": "c",
-        "so_util.h": "c"
+        "so_util.h": "c",
+        "stdlib.h": "c",
+        "afakenative.h": "c",
+        "falsojni.h": "c"
     }
 }
