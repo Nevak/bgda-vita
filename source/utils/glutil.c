@@ -147,7 +147,7 @@
  #elif defined(USE_GLSL_SHADERS)
  void load_shader(GLuint shader, const char * string, size_t length) {
      glShaderSource(shader, 1, &string, &length);
- }
+ } 
  #elif defined(USE_CG_SHADERS) && defined(DUMP_COMPILED_SHADERS)
  void load_shader(GLuint shader, const char * string, size_t length) {
      char* sha_name = str_sha1sum(string, length);
@@ -206,19 +206,22 @@
  }
  #elif defined(USE_CG_SHADERS) || defined(USE_GXP_SHADERS)
  void load_shader(GLuint shader, const char * string, size_t length) {
-     char* sha_name;
-     if (strncmp(string, "sha:", 4) == 0) {
-         sha_name = malloc(41);
-         strncpy(sha_name, string+4, 40);
-         sha_name[40] = '\0';
-         logv_warn("will load faked shader using sha1 \"%s\"", sha_name);
-     } else {
-         sha_name = str_sha1sum((uint8_t*)string, length);
-         strncpy(known_shaders[known_shaders_count - 1].real_name, sha_name, 40);
-         known_shaders[known_shaders_count - 1].real_name[40] = '\0';
-         logv_warn("saved faked shader sha1 \"%s\" under id %i", sha_name, known_shaders_count - 1);
-     }
- 
+
+    //  char* sha_name;
+    //  if (strncmp(string, "sha:", 4) == 0) {
+    //      sha_name = malloc(41);
+    //      strncpy(sha_name, string+4, 40);
+    //      sha_name[40] = '\0';
+    //      logv_warn("will load faked shader using sha1 \"%s\"", sha_name);
+    //  } else {
+    //      sha_name = str_sha1sum((uint8_t*)string, length);
+    //      strncpy(known_shaders[known_shaders_count - 1].real_name, sha_name, 40);
+    //      known_shaders[known_shaders_count - 1].real_name[40] = '\0';
+    //      logv_warn("saved faked shader sha1 \"%s\" under id %i", sha_name, known_shaders_count - 1);
+    //  }
+     char* sha_name = str_sha1sum(string, length);
+     logv_debug("[Thread:%d] ProgramId (%d) => %s", sceKernelGetThreadId(), shader, sha_name);
+
      char path[256];
  #ifdef USE_CG_SHADERS
      snprintf(path, sizeof(path), DATA_PATH"cg/%s.cg", sha_name);
@@ -233,7 +236,7 @@
  
          file_load(path, (uint8_t **) &buffer, &size);
  
-         glShaderSource(shader, 1, &string, &size);
+         glShaderSource(shader, 1, &buffer, &size);
  
          free(buffer);
  #else

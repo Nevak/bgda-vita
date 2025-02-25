@@ -601,16 +601,71 @@ void glUniform1f_fake(GLint location, GLfloat v0) {
 	glUniform1f(location, v0);
 }
 
+// glUniform1fv_fake
+void glUniform1fv_fake(GLint location, GLsizei count, const GLfloat *value) {
+	logv_info("glUniform1fv(%i, %i, %p) called", location, count, value);
+	glUniform1fv(location, count, value);
+}
+
+// glUniform1iv_fake
+void glUniform1iv_fake(GLint location, GLsizei count, const GLint *value) {
+	logv_info("glUniform1iv(%i, %i, %p) called", location, count, value);
+	glUniform1iv(location, count, value);
+}
+
+// glUniform2f_fake
+void glUniform2f_fake(GLint location, GLfloat v0, GLfloat v1) {
+	logv_info("glUniform2f(%i, %f, %f) called", location, v0, v1);
+	glUniform2f(location, v0, v1);
+}
+
+// glUniform2fv_fake
+void glUniform2fv_fake(GLint location, GLsizei count, const GLfloat *value) {
+	logv_info("glUniform2fv(%i, %i, %p) called", location, count, value);
+	glUniform2fv(location, count, value);
+}
+
+// glUniform2iv_fake
+void glUniform2iv_fake(GLint location, GLsizei count, const GLint *value) {
+	logv_info("glUniform2iv(%i, %i, %p) called", location, count, value);
+	glUniform2iv(location, count, value);
+}
+
+// glUniform3fv_fake
+void glUniform3fv_fake(GLint location, GLsizei count, const GLfloat *value) {
+	logv_info("glUniform3fv(%i, %i, %p) called", location, count, value);
+	for (int i = 0; i < count; i++) {
+		logv_info("  value[%i] = %f", i, value[i]);
+	}
+	glUniform3fv(location, count, value);
+}
+
+// glUniform4fv_fake
+void glUniform4fv_fake(GLint location, GLsizei count, const GLfloat *value) {
+	logv_info("glUniform4fv(%i, %i, %p) called", location, count, value);
+	for (int i = 0; i < count; i++) {
+		logv_info("  value[%i] = %f", i, value[i]);
+	}
+	glUniform4fv(location, count, value);
+}
+
 // glGetUniformLocation_fake
 GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
-	logv_info("glGetUniformLocation(%i, %s) called", program, name);
-	return glGetUniformLocation(program, name);
+	GLint res = glGetUniformLocation(program, name);
+	logv_info("glGetUniformLocation(%i, %s) called. Returning %i", program, name, res);
+	return res;
 }
 
 // glGetAttribLocation_fake
 GLint glGetAttribLocation_fake(GLuint program, const GLchar *name) {
 	logv_info("glGetAttribLocation(%i, %s) called", program, name);
 	return glGetAttribLocation(program, name);
+}
+
+// glViewport_fake
+void glViewport_fake(GLint x, GLint y, GLsizei width, GLsizei height) {
+	logv_info("glViewport(%i, %i, %i, %i) called", x, y, width, height);
+	glViewport(x, y, width, height);
 }
 
 so_default_dynlib default_dynlib[] = {
@@ -1112,17 +1167,17 @@ so_default_dynlib default_dynlib[] = {
 		{ "glTexParameteri", (uintptr_t)&glTexParameteri },
 		{ "glTexSubImage2D", (uintptr_t)&glTexSubImage2D },
 		{ "glUniform1f", (uintptr_t)&glUniform1f_fake },
-		{ "glUniform1fv", (uintptr_t)&glUniform1fv },
+		{ "glUniform1fv", (uintptr_t)&glUniform1fv_fake },
 		{ "glUniform1i", (uintptr_t)&glUniform1i_fake },
-		{ "glUniform1iv", (uintptr_t)&glUniform1iv },
-		{ "glUniform2f", (uintptr_t)&glUniform2f },
-		{ "glUniform2fv", (uintptr_t)&glUniform2fv },
-		{ "glUniform2iv", (uintptr_t)&glUniform2iv },
+		{ "glUniform1iv", (uintptr_t)&glUniform1iv_fake },
+		{ "glUniform2f", (uintptr_t)&glUniform2f_fake },
+		{ "glUniform2fv", (uintptr_t)&glUniform2fv_fake },
+		{ "glUniform2iv", (uintptr_t)&glUniform2iv_fake },
 		{ "glUniform3f", (uintptr_t)&glUniform3f },
-		{ "glUniform3fv", (uintptr_t)&glUniform3fv },
+		{ "glUniform3fv", (uintptr_t)&glUniform3fv_fake },
 		{ "glUniform3iv", (uintptr_t)&glUniform3iv },
 		{ "glUniform4f", (uintptr_t)&glUniform4f },
-		{ "glUniform4fv", (uintptr_t)&glUniform4fv },
+		{ "glUniform4fv", (uintptr_t)&glUniform4fv_fake },
 		{ "glUniform4iv", (uintptr_t)&glUniform4iv },
 		{ "glUniformMatrix2fv", (uintptr_t)&glUniformMatrix2fv },
 		{ "glUniformMatrix3fv", (uintptr_t)&glUniformMatrix3fv },
@@ -1131,7 +1186,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glVertexAttrib4f", (uintptr_t)&glVertexAttrib4f },
 		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
 		{ "glVertexPointer", (uintptr_t)&glVertexPointer },
-		{ "glViewport", (uintptr_t)&glViewport },
+		{ "glViewport", (uintptr_t)&glViewport_fake },
 
 		// By Raul
 		{ "glGetShaderPrecisionFormat", (uintptr_t)&ret0 },

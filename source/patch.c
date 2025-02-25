@@ -297,6 +297,22 @@ void so_patch(void) {
 	logv_error("Patched sampler string: %s\n", (char *)sampler);
 
 
+	sampler = so_mod.text_base + 0x0008d0e9 + 23;
+	// Print the original string to see if we're at the right place
+	logv_error("Original sampler string #2: %s\n", (char *)sampler);
+	// Patch the string
+	kuKernelCpuUnrestrictedMemcpy((void *)sampler, "plersam", 7);
+	// Print the new string to see if it was patched correctly
+	logv_error("Patched sampler string #2: %s\n", (char *)sampler);
+
+	sampler = so_mod.text_base + 0x0008d0e9 + 99;
+	// Print the original string to see if we're at the right place
+	logv_error("Original sampler string #3: %s\n", (char *)sampler);
+	// Patch the string
+	kuKernelCpuUnrestrictedMemcpy((void *)sampler, "plersam", 7);
+	// Print the new string to see if it was patched correctly
+	logv_error("Patched sampler string #3: %s\n", (char *)sampler);
+
 
 	// _ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE
 	//ShaderManager_LoadProgram_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE"), (uintptr_t)&ShaderManager_LoadProgram);
