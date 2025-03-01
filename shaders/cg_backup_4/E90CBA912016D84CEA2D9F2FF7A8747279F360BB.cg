@@ -1,0 +1,11 @@
+// profile sce_fp_psp2
+
+// The fragment shader receives:
+// - oD0: a varying color from the vertex shader (mapped to TEXCOORD0)
+float4 main(
+    float4 oD0 : COLOR0  // "VARYING_oD0(lowp vec4)" becomes an input parameter
+) : COLOR
+{
+    return oD0;  // Directly output the varying color as the final color
+    //return float4(1,0,1,1);
+}

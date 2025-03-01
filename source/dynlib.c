@@ -313,7 +313,17 @@ GLuint glCreateShader_wrapper(GLenum type) {
 // glBindAttribLocation_wrapper
 void glBindAttribLocation_wrapper(GLuint program, GLuint index, const GLchar *name) {
 	logv_info("glBindAttribLocation(%i, %i, %s) called", program, index, name);
-	glBindAttribLocation(program, index, "_position_");
+	glBindAttribLocation(program, index, name);
+
+	// Test with glGetAttribLocation
+	GLint loc = glGetAttribLocation(program, name);
+	if (loc == -1) {
+		log_error("glBindAttribLocation failed");
+	}
+	else
+	{
+		logv_info("glBindAttribLocation successful at %i", loc);
+	}
 }
 
 // glCompileShader_wrapper
@@ -368,19 +378,131 @@ void JBE_CRC_AddBuffer(void const* data, unsigned int size) {
 	return;
 }
 
+// glTexParameterfv_fake
+void glTexParameterfv_fake(GLenum target, GLenum pname, const GLfloat *params) {
+	logv_info("glTexParameterfv(%i, %i, %p) called", target, pname, params);
+	//glTexParameterfv(target, pname, params);
+}
+
+// glBlendColor_wrap
+void glBlendColor_wrap(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) {
+	logv_info("glBlendColor(%f, %f, %f, %f) called", red, green, blue, alpha);
+	//glBlendColor(red, green, blue, alpha);
+	return;
+}
+
+// glCompressedTexSubImage2D_fake
+int glCompressedTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void *data) {
+	logv_error("[UNIMPLEMENTED] glCompressedTexSubImage2D(%i, %i, %i, %i, %i, %i, %i, %i, %p) called", target, level, xoffset, yoffset, width, height, format, imageSize, data);
+	//glCompressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, imageSize, data);
+	return 0;
+}
+
+// glCompressedTexImage2D_fake
+void glCompressedTexImage2D_fake(GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data) {
+	logv_info("glCompressedTexImage2D(%i, %i, %i, %i, %i, %i, %i, %p) called", target, level, internalformat, width, height, border, imageSize, data);
+	glCompressedTexImage2D(target, level, internalformat, width, height, border, imageSize, data);
+}
+
+// glTexSubImage2D_fake
+// void glTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) {
+// 	logv_info("glTexSubImage2D(%i, %i, %i, %i, %i, %i, %i, %i, %p) called", target, level, xoffset, yoffset, width, height, format, type, pixels);
+// 	glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
+// }
+
+// glTexImage2D_fake
+void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) {
+	logv_error("glTexImage2D(%i, %i, format:0x%x, w:%i, h:%i, %i, format0x%x, type:0x%x, %p) called", 
+		target, level, internalformat, width, height, border, format, type, pixels);
+    
+	// Generate one random color (RGBA). 
+	// You may want to call srand() once, in some init code.
+	unsigned char r = 0;
+	unsigned char g = 256;
+	unsigned char b = 0;
+	unsigned char a = 255;
+
+
+	// 2) Check format/type pairs and fill
+	if (type == GL_UNSIGNED_BYTE && (format == GL_RGBA || format == GL_BGRA)) {
+		// Cast away 'const' to overwrite the buffer
+		unsigned char *fakePixels = NULL;
+		size_t totalPixels = (size_t)width * (size_t)height;
+		size_t totalBytes = totalPixels * 4; // 4 bytes per pixel
+		fakePixels = (unsigned char *)malloc(totalBytes);
+		
+		if (format == GL_RGBA) {
+			log_error("FAKE:   Filling RGBA with GL_UNSIGNED_BYTE.\n");
+			// RGBA means index 0=R, 1=G, 2=B, 3=A
+			//size_t totalPixels = (size_t)width * (size_t)height;
+			for (size_t i = 0; i < totalPixels; i++) {
+				fakePixels[i*4 + 0] = r;
+				fakePixels[i*4 + 1] = g;
+				fakePixels[i*4 + 2] = b;
+				fakePixels[i*4 + 3] = a;
+			}
+		}
+		else if (format == GL_BGRA) {
+			log_error("FAKE:   Filling BGRA with GL_UNSIGNED_BYTE.\n");
+			// BGRA means index 0=B, 1=G, 2=R, 3=A
+			//size_t totalPixels = (size_t)width * (size_t)height;
+			for (size_t i = 0; i < totalPixels; i++) {
+				fakePixels[i*4 + 0] = b;
+				fakePixels[i*4 + 1] = g;
+				fakePixels[i*4 + 2] = r;
+				fakePixels[i*4 + 3] = a;
+			}
+		}
+		else {
+			// Unhandled format for debug
+			logv_error("FAKE:   Unhandled format=0x%x with GL_UNSIGNED_BYTE.\n", (unsigned)format);
+		}
+
+		// Call the real glTexImage2D with the fake data
+		log_error("FAKE:   Calling real glTexImage2D.\n");
+		glTexImage2D(target, level, internalformat, width, height, border, format, type, fakePixels);
+		free(fakePixels);
+		return;
+	}
+	else {
+		// Other type combos not handled here
+		logv_error("FAKE:   Unhandled format=0x%x, type=0x%x.\n", (unsigned)format, (unsigned)type);
+	}
+
+	log_error("FAKE:   Calling real glTexImage2D.\n");
+	glTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
+}
+
+// glActiveTexture_fake
+void glActiveTexture_fake(GLenum texture) {
+	logv_info("glActiveTexture(0x%x) called. Will override with location 0x84C0 for debug", texture);
+	glActiveTexture(0x84C0); // GL_TEXTURE0
+}
+
+//glBindTexture_fake
+void glBindTexture_fake(GLenum target, GLuint texture) {
+	logv_info("glBindTexture(0x%x, 0x%x) called", target, texture);
+ 	glBindTexture(target, texture);
+}
+
+// glGenTextures_fake
+void glGenTextures_fake(GLsizei n, GLuint *textures) {
+	logv_info("glGenTextures(%i, %p) called", n, textures);
+	glGenTextures(n, textures);
+}
 
 void* JBE_CloudPF_sReadBack;
 
 struct NvSysCaps {
-    uint8_t unknown_header[8];  // New field for the missing bytes (0x1b0c0 - 0x1b0c8)
+    uint8_t unknown_header[8];  // New field for the missing bytes (0x1b0c0 - 0x1b0c8)			0 - > 8
 
     // GPU Information
-    char gl_vendor[256];      // 0x1b0c8 - GPU Vendor String
-    char gl_version[256];     // 0x1b1c8 - OpenGL Version String
-    char gl_renderer[256];    // 0x1b2c8 - GPU Renderer String
+    char gl_vendor[256];      // 0x1b0c8 - GPU Vendor String									8 - > 264
+    char gl_version[256];     // 0x1b1c8 - OpenGL Version String								264 - > 520
+    char gl_renderer[256];    // 0x1b2c8 - GPU Renderer String									520 - > 776
 
     // Feature Flags
-    uint8_t has_system_time;             // 0x1b3c8 - System time support (1 if available)
+    uint8_t has_system_time;             // 0x1b3c8 - System time support (1 if available)		776 - > 777
     uint8_t has_s3tc_texture_compression; // 0x1b3c9 - S3TC texture compression
     uint8_t has_astc_texture_compression; // 0x1b3ca - ASTC texture compression
     uint8_t has_pvrtc_texture_compression;// 0x1b3cb - PVRTC support (used on Vita)
@@ -583,7 +705,7 @@ void glDrawArrays_fake(GLenum mode, GLint first, GLsizei count) {
 
 //glUseProgram_fake
 void glUseProgram_fake(GLuint program) {
-	logv_info("glUseProgram(%i) called", program);
+	//logv_info("glUseProgram(%i) called", program);
 	glUseProgram(program);
 }
 
@@ -599,7 +721,7 @@ void glUniform1i_fake(GLint location, GLint v0) {
 void glUniform1f_fake(GLint location, GLfloat v0) {
 	logv_info("glUniform1f(%i, %f) called", location, v0);
 	glUniform1f(location, v0);
-}
+} 
 
 // glUniform1fv_fake
 void glUniform1fv_fake(GLint location, GLsizei count, const GLfloat *value) {
@@ -656,16 +778,40 @@ GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
 	return res;
 }
 
+// glLinkProgram_fake
+void glLinkProgram_fake(GLuint program) {
+	//logv_info("glLinkProgram(%i) called", program);
+	glLinkProgram(program);
+}
+
 // glGetAttribLocation_fake
 GLint glGetAttribLocation_fake(GLuint program, const GLchar *name) {
-	logv_info("glGetAttribLocation(%i, %s) called", program, name);
+	//logv_info("glGetAttribLocation(%i, %s) called", program, name);
 	return glGetAttribLocation(program, name);
 }
 
 // glViewport_fake
 void glViewport_fake(GLint x, GLint y, GLsizei width, GLsizei height) {
-	logv_info("glViewport(%i, %i, %i, %i) called", x, y, width, height);
+	//logv_info("glViewport(%i, %i, %i, %i) called", x, y, width, height);
 	glViewport(x, y, width, height);
+}
+
+//  glVertexAttribPointer_fake
+void glVertexAttribPointer_fake(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid *pointer) {
+	//logv_info("glVertexAttribPointer(%i, %i, %i, %i, %i, %p) called", index, size, type, normalized, stride, pointer);
+	glVertexAttribPointer(index, size, type, normalized, stride, pointer);
+}
+
+// glBufferData_fake
+void glBufferData_fake(GLenum target, GLsizeiptr size, const GLvoid *data, GLenum usage) {
+	//logv_info("glBufferData(%i, %i, %p, %i) called", target, size, data, usage);
+	glBufferData(target, size, data, usage);
+}
+
+// glEnableVertexAttribArray_fake
+void glEnableVertexAttribArray_fake(GLuint index) {
+	//logv_info("glEnableVertexAttribArray(%i) called", index);
+	glEnableVertexAttribArray(index);
 }
 
 so_default_dynlib default_dynlib[] = {
@@ -1062,19 +1208,19 @@ so_default_dynlib default_dynlib[] = {
 
 
 		// OpenGL
-		{ "glActiveTexture", (uintptr_t)&glActiveTexture },
+		{ "glActiveTexture", (uintptr_t)&glActiveTexture_fake },
 		{ "glAlphaFuncx", (uintptr_t)&glAlphaFuncx },
-		{ "glAttachShader", (uintptr_t)&glAttachShader },
-		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation },
+		{ "glAttachShader", (uintptr_t)&glAttachShader_wrapper },
+		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation_wrapper },
 		{ "glBindBuffer", (uintptr_t)&glBindBuffer },
 		{ "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
 		{ "glBindRenderbuffer", (uintptr_t)&glBindRenderbuffer },
-		{ "glBindTexture", (uintptr_t)&glBindTexture },
+		{ "glBindTexture", (uintptr_t)&glBindTexture_fake },
 		{ "glBlendEquation", (uintptr_t)&glBlendEquation },
 		{ "glBlendEquationSeparate", (uintptr_t)&glBlendEquationSeparate },
 		{ "glBlendFunc", (uintptr_t)&glBlendFunc },
 		{ "glBlendFuncSeparate", (uintptr_t)&glBlendFuncSeparate },
-		{ "glBufferData", (uintptr_t)&glBufferData },
+		{ "glBufferData", (uintptr_t)&glBufferData_fake },
 		{ "glBufferSubData", (uintptr_t)&glBufferSubData },
 		{ "glCheckFramebufferStatus", (uintptr_t)&glCheckFramebufferStatus },
 		{ "glClear", (uintptr_t)&glClear },
@@ -1087,8 +1233,8 @@ so_default_dynlib default_dynlib[] = {
 		{ "glColorMask", (uintptr_t)&glColorMask },
 		{ "glColorPointer", (uintptr_t)&glColorPointer },
 		{ "glCompileShader", (uintptr_t)&glCompileShader_soloader },
-		{ "glCompressedTexImage2D", (uintptr_t)&glCompressedTexImage2D },
-		{ "glCompressedTexSubImage2D", (uintptr_t)&ret0 },
+		{ "glCompressedTexImage2D", (uintptr_t)&glCompressedTexImage2D_fake },
+		{ "glCompressedTexSubImage2D", (uintptr_t)&glCompressedTexSubImage2D_fake },
 		{ "glCopyTexImage2D", (uintptr_t)&glCopyTexImage2D },
 		{ "glCopyTexSubImage2D", (uintptr_t)&glCopyTexSubImage2D },
 		{ "glCreateProgram", (uintptr_t)&glCreateProgram },
@@ -1111,7 +1257,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glDrawElements", (uintptr_t)&glDrawElements },
 		{ "glEnable", (uintptr_t)&glEnable },
 		{ "glEnableClientState", (uintptr_t)&glEnableClientState },
-		{ "glEnableVertexAttribArray", (uintptr_t)&glEnableVertexAttribArray },
+		{ "glEnableVertexAttribArray", (uintptr_t)&glEnableVertexAttribArray_fake },
 		{ "glFlush", (uintptr_t)&glFlush },
 		{ "glFramebufferRenderbuffer", (uintptr_t)&glFramebufferRenderbuffer },
 		{ "glFramebufferTexture2D", (uintptr_t)&glFramebufferTexture2D },
@@ -1120,7 +1266,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glGenerateMipmap", (uintptr_t)&glGenerateMipmap },
 		{ "glGenFramebuffers", (uintptr_t)&glGenFramebuffers },
 		{ "glGenRenderbuffers", (uintptr_t)&glGenRenderbuffers },
-		{ "glGenTextures", (uintptr_t)&glGenTextures },
+		{ "glGenTextures", (uintptr_t)&glGenTextures_fake },
 		{ "glGetActiveAttrib", (uintptr_t)&glGetActiveAttrib },
 		{ "glGetActiveUniform", (uintptr_t)&glGetActiveUniform },
 		{ "glGetAttribLocation", (uintptr_t)&glGetAttribLocation_fake },
@@ -1138,7 +1284,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glLightx", (uintptr_t)&ret0 },
 		{ "glLightxv", (uintptr_t)&glLightxv },
 		{ "glLineWidth", (uintptr_t)&glLineWidth },
-		{ "glLinkProgram", (uintptr_t)&glLinkProgram },
+		{ "glLinkProgram", (uintptr_t)&glLinkProgram_fake },
 		{ "glLoadMatrixf", (uintptr_t)&glLoadMatrixf },
 		{ "glLoadMatrixx", (uintptr_t)&glLoadMatrixx },
 		{ "glMaterialx", (uintptr_t)&ret0 },
@@ -1162,7 +1308,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glTexCoordPointer", (uintptr_t)&glTexCoordPointer },
 		{ "glTexEnvx", (uintptr_t)&glTexEnvx },
 		{ "glTexEnvxv", (uintptr_t)&glTexEnvxv },
-		{ "glTexImage2D", (uintptr_t)&glTexImage2D },
+		{ "glTexImage2D", (uintptr_t)&glTexImage2D_fake },
 		{ "glTexParameterf", (uintptr_t)&glTexParameterf },
 		{ "glTexParameteri", (uintptr_t)&glTexParameteri },
 		{ "glTexSubImage2D", (uintptr_t)&glTexSubImage2D },
@@ -1184,24 +1330,24 @@ so_default_dynlib default_dynlib[] = {
 		{ "glUniformMatrix4fv", (uintptr_t)&glUniformMatrix4fv },
 		{ "glUseProgram", (uintptr_t)&glUseProgram_fake },
 		{ "glVertexAttrib4f", (uintptr_t)&glVertexAttrib4f },
-		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
+		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer_fake },
 		{ "glVertexPointer", (uintptr_t)&glVertexPointer },
 		{ "glViewport", (uintptr_t)&glViewport_fake },
 
 		// By Raul
 		{ "glGetShaderPrecisionFormat", (uintptr_t)&ret0 },
 		// TODO: see (https://github.com/Rinnegatamante/mc3-vita/blob/fa877861195538b525cdd618f81b72f94ad2c319/source/dynlib.c#L150) 
-		// { "glBlendColor", (uintptr_t)&glBlendColor_wrap },
+		{ "glBlendColor", (uintptr_t)&glBlendColor_wrap },
 		{ "glColor4ub", (uintptr_t)&glColor4ub },
 		{ "glGetBufferParameteriv", (uintptr_t)&glGetBufferParameteriv },
 		{ "glLoadIdentity", (uintptr_t)&glLoadIdentity },
 		{ "glOrthof", (uintptr_t)&glOrthof },
 		{ "glReleaseShaderCompiler", (uintptr_t)&glReleaseShaderCompiler },
 		{ "glScalef", (uintptr_t)&glScalef },
-		{ "glTexParameterfv", (uintptr_t)&ret0 },
+		{ "glTexParameterfv", (uintptr_t)&glTexParameterfv_fake },
 		{ "glTranslatef", (uintptr_t)&glTranslatef },
 		{ "glVertexAttrib4fv", (uintptr_t)&glVertexAttrib4fv },
-		{"glBlendColor", (uintptr_t)&ret0},
+		//{"glBlendColor", (uintptr_t)&ret0},
 
 
 		// EGL

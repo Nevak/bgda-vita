@@ -76,7 +76,7 @@ int main() {
 	activity->callbacks->onWindowFocusChanged(activity, 1);
 	log_info("onWindowFocusChanged() passed");
 
-	log_info("Main thread shutting down");
+	log_info("Main  thread shutting down");
 
 
 	//JBE_android_main_sub(NULL);

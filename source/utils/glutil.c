@@ -11,7 +11,7 @@
  * of the MIT license. See the LICENSE file for details.
  */
 
-#include "utils/glutil.h"
+#include "utils/glutil.h" 
 
 #include "utils/utils.h"
 #include "utils/dialog.h"
@@ -36,7 +36,7 @@
  void gl_preload() {
      if (!file_exists("ur0:/data/libshacccg.suprx")
          && !file_exists("ur0:/data/external/libshacccg.suprx")) {
-         fatal_error("Error: libshacccg.suprx is not installed. "
+         fatal_error("Error:  libshacccg.suprx is not installed. "
                      "Google \"ShaRKBR33D\" for quick installation.");
      }
  
@@ -56,7 +56,7 @@
  void glShaderSource_soloader(GLuint shader, GLsizei count,
                               const GLchar **string, const GLint *_length) {
  #ifdef DEBUG_OPENGL
-     sceClibPrintf("[gl_dbg] glShaderSource<%p>(shader: %i, count: %i, string: %p, length: %p)\n", __builtin_return_address(0), shader, count, string, _length);
+     sceClibPrintf("[gl_dbg] glShaderSource<%p>(shader: %i, count: %i, string: %s, length: %p)\n", __builtin_return_address(0), shader, count, *string, _length);
  #endif
      if (!string) {
         logv_error("<%p> Shader source string is NULL, count: %i",
@@ -226,7 +226,7 @@
  #ifdef USE_CG_SHADERS
      snprintf(path, sizeof(path), DATA_PATH"cg/%s.cg", sha_name);
  #else
-     snprintf(path, sizeof(path), "app0:gxp/%s.gxp", sha_name);
+     snprintf(path, sizeof(path), DATA_PATH"gxp/%s.gxp", sha_name);
  #endif
  
      if (file_exists(path)) {
@@ -251,7 +251,7 @@
  #endif
      } else {
         logv_warn("Encountered an untranslated shader %s, saving GLSL "
-                "and using a dummy shader.", sha_name);
+                "and using a dummy shader.", path);
  
          char glsl_path[256];
          snprintf(glsl_path, sizeof(glsl_path), DATA_PATH"glsl/%s.glsl", sha_name);
@@ -259,7 +259,7 @@
          logv_debug("[Thread:%d]USE_CG_SHADERS untranslated saving GLSL shader to %s", sceKernelGetThreadId(), glsl_path);
          file_save(glsl_path, (const uint8_t *) string, length);
  
-         if (strstr(string, "gl_FragColor")) {
+         if (strstr(string, "gl_FragColor") || strstr(string, "float4 main(")) {
              const char *dummy_shader = "float4 main() { return float4(1.0,1.0,1.0,1.0); }";
              int32_t dummy_shader_len = (int32_t) strlen(dummy_shader);
              glShaderSource(shader, 1, &dummy_shader, &dummy_shader_len);

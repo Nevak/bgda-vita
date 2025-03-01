@@ -17,7 +17,10 @@
  #include <vitaGL.h>
  
 #define USE_CG_SHADERS
+//#define USE_GLSL_SHADERS
+//#define USE_GXP_SHADERS
 //#define DUMP_COMPILED_SHADERS
+//#define DEBUG_OPENGL
 
  #ifdef __cplusplus
  extern "C" {

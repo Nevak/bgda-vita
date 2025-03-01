@@ -1,0 +1,10 @@
+// profile sce_fp_psp2
+
+void main(
+	float2 texCoord : TEXCOORD0,
+	float4 out gl_FragColor : COLOR,
+    uniform sampler2D plersam
+) {
+	gl_FragColor = tex2D(plersam,  texCoord);
+    //gl_FragColor = float4(1, 0, 0, 1);
+}

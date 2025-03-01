@@ -380,7 +380,7 @@ public abstract class Cloud {
 
 jobject initCloud(jmethodID id, va_list args) {
 	// log
-	fjni_log_err("initCloud");
+	//fjni_log_err("initCloud");
 	//jstring arg2 = va_arg(args, jstring);
 	//fjni_logv_err("initCloud with %s", arg2);
     // Create a minimal, non-null "object" to keep the code happy.

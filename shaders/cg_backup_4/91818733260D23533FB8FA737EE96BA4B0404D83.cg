@@ -1,0 +1,20 @@
+// profile sce_vp_psp2
+
+void main(
+    // Input attributes
+    in float4 v0 : POSITION,  // Corresponds to "ATTRIBUTE_v0(mediump vec4)"
+    in float4 v1 : NORMAL, // Corresponds to "ATTRIBUTE_v1(mediump vec4)"
+    in float2 v9 : TEXCOORD0, // Corresponds to "ATTRIBUTE_v9(mediump vec2)"
+
+    // Output "varyings"
+    out float4 oPos : POSITION, // Equivalent to "gl_Position"
+
+    out float2 oT0  : TEXCOORD0  // Equivalent to "VARYING_oT0(mediump vec2)"
+)
+{
+    // Pass the vertex position directly to the output
+    oPos = v0;
+
+    // Pass the texture coordinate directly to the output
+    oT0 = v9; 
+}

@@ -153,14 +153,14 @@ so_hook MC_Init_hook;
 int MC_Init(int param_1) {
 	logv_error("MC_Init(%i)\n", param_1);
 	int returnval = SO_CONTINUE(int, MC_Init_hook, param_1);
-	logv_error("MC_Init returned %i\n", returnval);
+	logv_error("MC_Init returned %i", returnval);
 	return returnval;
 }
 
 //coreAddTask
 so_hook coreAddTask_hook;
 int coreAddTask(void *param_1, int param_2, char *param_3) {
-	logv_error("coreAddTask(%p, %i, %s)\n", param_1, param_2, param_3);
+	logv_error("coreAddTask(%p, %i, %s)", param_1, param_2, param_3);
 	int returnval = SO_CONTINUE(int, coreAddTask_hook, param_1, param_2, param_3);
 	//logv_error("coreAddTask returned %i\n", returnval);
 	return returnval;
@@ -169,9 +169,9 @@ int coreAddTask(void *param_1, int param_2, char *param_3) {
 //XInitCloud
 so_hook XInitCloud_hook;
 int XInitCloud(int param_1, void *param_2, int param_3, void *param_4, int param_5) {
-	logv_error("XInitCloud(%i, %p, %i, %p, %i)\n", param_1, param_2, param_3, param_4, param_5);
+	logv_error("XInitCloud(%i, %p, %i, %p, %i)", param_1, param_2, param_3, param_4, param_5);
 	int returnval = SO_CONTINUE(int, XInitCloud_hook, param_1, param_2, param_3, param_4, param_5);
-	logv_error("XInitCloud returned %i\n", returnval);
+	logv_error("XInitCloud returned %i", returnval);
 	return returnval;
 }
 
@@ -183,15 +183,15 @@ so_hook ShaderManager_LoadProgram_hook;
 void ShaderManager_LoadProgram(void *thisptr, void *param_1, int param_2, void *param_3, unsigned int param_4, int (*param_5)(void *)) {
 	logv_error("ShaderManager_LoadProgram(%p, %p, %i, %p, %u, %p)\n", thisptr, param_1, param_2, param_3, param_4, param_5);
 	SO_CONTINUE(int, ShaderManager_LoadProgram_hook, thisptr, param_1, param_2, param_3, param_4, param_5);
-	log_error("ShaderManager_LoadProgram returned \n");
+	log_error("ShaderManager_LoadProgram returned");
 }
 
 // gameLoop
 so_hook gameLoop_hook;
 void gameLoop() {
-	log_error("gameLoop()\n");
+	log_error("gameLoop()");
 	SO_CONTINUE(void *, gameLoop_hook);
-	log_error("gameLoop returned\n");
+	log_error("gameLoop returned");
 }
 
 // machMpegLoop
@@ -221,6 +221,76 @@ void JBE_android_main_sub(void *param_1) {
 	log_error("JBE_android_main_sub returned\n");
 }
 
+so_hook loader_load_hook;
+void loader_load(void *param_1, char *param_2, void (*param_3)(void *), void *param_4, void *param_5, int param_6, void *param_7, int *param_8) {
+	logv_error("loader_load(%s)\n", param_2);
+	SO_CONTINUE(void *, loader_load_hook, param_1, param_2, param_3, param_4, param_5, param_6, param_7, param_8);
+	log_error("loader_load returned\n");
+}
+
+so_hook lumpFindResource_hook;
+int lumpFindResource(char *param_1, char *param_2) {
+	logv_error("lumpFindResource(%s, %s)\n", param_1, param_2);
+	return SO_CONTINUE(int, lumpFindResource_hook, param_1, param_2);
+	//log_error("lumpFindResource returned\n");
+}
+
+so_hook pvr_error_output_debug_hook;
+void pvr_error_output_debug(char *param_1, ...) {
+	// log all the parameters
+	logv_error("pvr_error_output_debug(%s)\n", param_1);
+	SO_CONTINUE(void *, pvr_error_output_debug_hook, param_1);
+	log_error("pvr_error_output_debug returned\n");
+}
+
+so_hook pvr_texture_load_from_pointer_hook;
+int pvr_texture_load_from_pointer(void *param_1, void *param_2, void *param_3, unsigned int param_4, void *param_5) {
+	logv_error("pvr_texture_load_from_pointer(%p, %p, %p, %u, %p)\n", param_1, param_2, param_3, param_4, param_5);
+	int returnval = SO_CONTINUE(int, pvr_texture_load_from_pointer_hook, param_1, param_2, param_3, param_4, param_5);
+	logv_error("pvr_texture_load_from_pointer returned %i\n", returnval);
+	return returnval;
+}
+
+
+so_hook d3d_base_texture_get_info_hook;
+void d3d_base_texture_get_info(void *thisptr, void *pFormat, int *param_2, void *param_3, int *param_4, int *param_5) {
+	//logv_error("d3d_base_texture_get_info(%p, %p, %p, %p, %p)\n", thisptr, pFormat, param_2, param_3, param_4);
+	SO_CONTINUE(void *, d3d_base_texture_get_info_hook, thisptr, pFormat, param_2, param_3, param_4, param_5);
+	// print the content of pFormat
+	logv_error("\t d3d_base_texture_get_info format: 0x%x\n", *(int *)pFormat);
+	//log_error("d3d_base_texture_get_info returned\n");
+}
+
+so_hook xg_is_swizzled_format_hook;
+bool xg_is_swizzled_format(int param_1) {
+	logv_error("xg_is_swizzled_format(0x%x)\n", param_1);
+	bool returnval = SO_CONTINUE(bool, xg_is_swizzled_format_hook, param_1);
+	logv_error("xg_is_swizzled_format returned %i\n", returnval);
+	return returnval;
+}
+
+so_hook xg_is_compressed_format_hook;
+bool xg_is_compressed_format(int param_1) {
+	logv_error("xg_is_compressed_format(0x%x)\n", param_1);
+	bool returnval = SO_CONTINUE(bool, xg_is_compressed_format_hook, param_1);
+	logv_error("xg_is_compressed_format returned %i\n", returnval);
+	return returnval;
+}
+
+so_hook xg_bytes_per_pixel_from_format_hook;
+int xg_bytes_per_pixel_from_format(int param_1) {
+	logv_error("xg_bytes_per_pixel_from_format(0x%x)\n", param_1);
+	int returnval = SO_CONTINUE(int, xg_bytes_per_pixel_from_format_hook, param_1);
+	logv_error("xg_bytes_per_pixel_from_format returned %i\n", returnval);
+	return returnval;
+}
+
+so_hook texProcessDecompress_hook;
+void texProcessDecompress() {
+	log_error("texProcessDecompress()\n");
+	SO_CONTINUE(void *, texProcessDecompress_hook);
+	log_error("texProcessDecompress returned\n");
+}
 
 
 void so_patch(void) {
@@ -228,28 +298,28 @@ void so_patch(void) {
 	log_error("Patching .so functions\n");
 
 	// _Z7MC_Initi MC_Init
-	MC_Init_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z7MC_Initi"), (uintptr_t)&MC_Init);
+	//MC_Init_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z7MC_Initi"), (uintptr_t)&MC_Init);
 
 	// _Z11coreAddTaskPFvvEiPKc coreAddTask
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
 
 	// _Z10XInitCloudiPFvPKvjiEPFvRPvRjEi XInitCloud
-	uintptr_t XInitCloud_addr = (uintptr_t)so_symbol(&so_mod, "_Z10XInitCloudiPFvPKvjiEPFvRPvRjEi");
-	if (XInitCloud_addr == NULL) {
-		log_error("XInitCloud not found\n");
-	} else {
-		logv_error("XInitCloud found at %p\n", XInitCloud_addr);
-		XInitCloud_hook = hook_addr(XInitCloud_addr, (uintptr_t)&XInitCloud);
-	}
+	// uintptr_t XInitCloud_addr = (uintptr_t)so_symbol(&so_mod, "_Z10XInitCloudiPFvPKvjiEPFvRPvRjEi");
+	// if (XInitCloud_addr == NULL) {
+	// 	log_error("XInitCloud not found\n");
+	// } else {
+	// 	logv_error("XInitCloud found at %p\n", XInitCloud_addr);
+	// 	XInitCloud_hook = hook_addr(XInitCloud_addr, (uintptr_t)&XInitCloud);
+	// }
 	
-	// gameLoop
-	uintptr_t gameLoop_addr = so_mod.text_base + 0xb296c;
-	if (gameLoop_addr == NULL) {
-	log_error("gameLoop not found\n");
-	} else {
-		logv_error("gameLoop found at %p\n", gameLoop_addr);
-		gameLoop_hook = hook_addr(gameLoop_addr, (uintptr_t)&gameLoop);
-	}
+	// // gameLoop
+	// uintptr_t gameLoop_addr = so_mod.text_base + 0xb296c;
+	// if (gameLoop_addr == NULL) {
+	// log_error("gameLoop not found\n");
+	// } else {
+	// 	logv_error("gameLoop found at %p\n", gameLoop_addr);
+	// 	gameLoop_hook = hook_addr(gameLoop_addr, (uintptr_t)&gameLoop);
+	// }
 
 	// // void JBE_android_main_sub(android_app *param_1)
 	// uintptr_t jbe_andoid_main_addr = (uintptr_t) so_symbol(&so_mod, "JBE_android_main_sub");
@@ -263,6 +333,89 @@ void so_patch(void) {
 	// 	jbe_android_main_sub_hook = hook_addr(jbe_andoid_main_addr, (uintptr_t)&JBE_android_main_sub);
 	// }
 
+	// _ZN3JBE6Loader4LoadEPKcPFvPvES3_PNS_3Mem4HeapENS6_8LocationEiRS3_RPi
+	// uintptr_t Loader_Load_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE6Loader4LoadEPKcPFvPvES3_PNS_3Mem4HeapENS6_8LocationEiRS3_RPi");
+	// if (Loader_Load_addr == NULL) {
+	// 	log_error("Loader_Load not found\n");
+	// } else {
+	// 	logv_error("Loader_Load found at %p\n", Loader_Load_addr);
+	// 	loader_load_hook = hook_addr(Loader_Load_addr, (uintptr_t)&loader_load);
+	// }
+
+	// _Z16lumpFindResourcePKcS0_
+	uintptr_t lumpFindResource_addr = (uintptr_t)so_symbol(&so_mod, "_Z16lumpFindResourcePKcS0_");
+	if (lumpFindResource_addr == NULL) {
+		log_error("lumpFindResource not found\n");
+	} else {
+		logv_error("lumpFindResource found at %p\n", lumpFindResource_addr);
+		//lumpFindResource_hook = hook_addr(lumpFindResource_addr, (uintptr_t)&lumpFindResource);
+	}
+
+	// _Z20texProcessDecompressv
+	uintptr_t texProcessDecompress_addr = (uintptr_t)so_symbol(&so_mod, "_Z20texProcessDecompressv");
+	if (texProcessDecompress_addr == NULL) {
+		log_error("texProcessDecompress not found\n");
+	} else {
+		logv_error("texProcessDecompress found at %p\n", texProcessDecompress_addr);
+		texProcessDecompress_hook = hook_addr(texProcessDecompress_addr, (uintptr_t)&texProcessDecompress);
+	}
+
+
+	// _Z26PVRTTextureLoadFromPointerPKvPjS0_bjS0_
+	uintptr_t PVRTTextureLoadFromPointer_addr = (uintptr_t)so_symbol(&so_mod, "_Z26PVRTTextureLoadFromPointerPKvPjS0_bjS0_");
+	if (PVRTTextureLoadFromPointer_addr == NULL) {
+		log_error("PVRTTextureLoadFromPointer not found\n");
+	} else {
+		logv_error("PVRTTextureLoadFromPointer found at %p\n", PVRTTextureLoadFromPointer_addr);
+		pvr_texture_load_from_pointer_hook = hook_addr(PVRTTextureLoadFromPointer_addr, (uintptr_t)&pvr_texture_load_from_pointer);
+	}
+
+	// _Z20PVRTErrorOutputDebugPKcz
+	uintptr_t PVRTErrorOutputDebug_addr = (uintptr_t)so_symbol(&so_mod, "_Z20PVRTErrorOutputDebugPKcz");
+	if (PVRTErrorOutputDebug_addr == NULL) {
+		log_error("PVRTErrorOutputDebug not found\n");
+	} else {
+		logv_error("PVRTErrorOutputDebug found at %p\n", PVRTErrorOutputDebug_addr);
+		//pvr_error_output_debug_hook = hook_addr(PVRTErrorOutputDebug_addr, (uintptr_t)&pvr_error_output_debug);
+	}
+
+	//_ZNK14D3DBaseTexture7GetInfoER10_D3DFORMATRiS2_RmS3_
+	uintptr_t D3DBaseTexture_GetInfo_addr = (uintptr_t)so_symbol(&so_mod, "_ZNK14D3DBaseTexture7GetInfoER10_D3DFORMATRiS2_RmS3_");
+	if (D3DBaseTexture_GetInfo_addr == NULL) {
+		log_error("D3DBaseTexture_GetInfo not found\n");
+	} else {
+		logv_error("D3DBaseTexture_GetInfo found at %p\n", D3DBaseTexture_GetInfo_addr);
+		//d3d_base_texture_get_info_hook = hook_addr(D3DBaseTexture_GetInfo_addr, (uintptr_t)&d3d_base_texture_get_info);
+	}
+
+	// bool XGIsSwizzledFormat(int param_1)
+	// uintptr_t XGIsSwizzledFormat_addr = (uintptr_t)so_symbol(&so_mod, "XGIsSwizzledFormat");
+	// if (XGIsSwizzledFormat_addr == NULL) {
+	// 	log_error("XGIsSwizzledFormat not found\n");
+	// } else {
+	// 	logv_error("XGIsSwizzledFormat found at %p\n", XGIsSwizzledFormat_addr);
+	// 	xg_is_swizzled_format_hook = hook_addr(XGIsSwizzledFormat_addr, (uintptr_t)&xg_is_swizzled_format);
+	// }
+	// //bool XGIsCompressedFormat(uint param_1)
+	// uintptr_t XGIsCompressedFormat_addr = (uintptr_t)so_symbol(&so_mod, "XGIsCompressedFormat");
+	// if (XGIsCompressedFormat_addr == NULL) {
+	// 	log_error("XGIsCompressedFormat not found\n");
+	// } else {
+	// 	logv_error("XGIsCompressedFormat found at %p\n", XGIsCompressedFormat_addr);
+	// 	xg_is_compressed_format_hook = hook_addr(XGIsCompressedFormat_addr, (uintptr_t)&xg_is_compressed_format);
+	// }
+
+ 	// undefined4 XGBytesPerPixelFromFormat(undefined4 param_1)
+	uintptr_t XGBytesPerPixelFromFormat_addr = (uintptr_t)so_symbol(&so_mod, "XGBytesPerPixelFromFormat");
+	if (XGBytesPerPixelFromFormat_addr == NULL) {
+		log_error("XGBytesPerPixelFromFormat not found\n");
+	} else {
+		logv_error("XGBytesPerPixelFromFormat found at %p\n", XGBytesPerPixelFromFormat_addr);
+		//xg_bytes_per_pixel_from_format_hook = hook_addr(XGBytesPerPixelFromFormat_addr, (uintptr_t)&xg_bytes_per_pixel_from_format);
+	}
+	
+	// _Z8lumpLoadPKc	
+	//lumpLoad_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8lumpLoadPKc"), (uintptr_t)&lumpLoad);
 
 	// _Z12machMpegLoopPKcS0_PFivEiS0_S0_ibb machMpegLoop
 	// uintptr_t machMpegLoop_addr = (uintptr_t)so_symbol(&so_mod, "_Z12machMpegLoopPKcS0_PFivEiS0_S0_ibb");
@@ -314,11 +467,19 @@ void so_patch(void) {
 	logv_error("Patched sampler string #3: %s\n", (char *)sampler);
 
 
+	// uintptr_t menuTexture = so_mod.text_base + 0x000a3a91 - 0x00010000;
+	// // Print the original string to see if we're at the right place
+	// logv_error("Original menuTexture string: %s\n", (char *)menuTexture);
+	// // Patch the string and add the null terminator cause original string was longer "frontendmenulong.tex"
+	// kuKernelCpuUnrestrictedMemcpy((void *)menuTexture, "frontendmenu.tex", 17);
+	// // Print the new string to see if it was patched correctly
+	// logv_error("Patched menuTexture string: %s\n", (char *)menuTexture);
+
+
 	// _ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE
 	//ShaderManager_LoadProgram_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE"), (uintptr_t)&ShaderManager_LoadProgram);
 
-	//lumpLoad_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8lumpLoadPKc"), (uintptr_t)&lumpLoad);
-	// memPrintFree_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z12memPrintFreev"), (uintptr_t)&memPrintFree);
+	//memPrintFree_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z12memPrintFreev"), (uintptr_t)&memPrintFree);
 	// // "_Z8listInitv"
 	// listInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8listInitv"), (uintptr_t)&listInit);
 	// // _Z8machInitv

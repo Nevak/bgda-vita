@@ -147,7 +147,7 @@ bool file_load(const char * path, uint8_t ** buffer, size_t * size) {
 }
 
 bool file_mkpath(const char * path, mode_t mode) {
-    logv_debug("file_mkpath: Creating directories leading to \"%s\".", path);
+    //logv_debug("file_mkpath: Creating directories leading to \"%s\".", path);
     if (!path || !*path) {
         log_error("file_mkpath: Invalid argument.");
         return false;
@@ -172,7 +172,7 @@ bool file_mkpath(const char * path, mode_t mode) {
 }
 
 bool file_save(const char * path, const uint8_t * buffer, size_t size) {
-    logv_debug("file_save: Saving %d bytes to \"%s\".", size, path);
+    //logv_debug("file_save: Saving %d bytes to \"%s\".", size, path);
 #ifdef USE_SCELIBC_IO
     FILE * f = sceLibcBridge_fopen(path, "wb");
 #else
