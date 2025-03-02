@@ -352,13 +352,13 @@ void so_patch(void) {
 	}
 
 	// _Z20texProcessDecompressv
-	uintptr_t texProcessDecompress_addr = (uintptr_t)so_symbol(&so_mod, "_Z20texProcessDecompressv");
-	if (texProcessDecompress_addr == NULL) {
-		log_error("texProcessDecompress not found\n");
-	} else {
-		logv_error("texProcessDecompress found at %p\n", texProcessDecompress_addr);
-		texProcessDecompress_hook = hook_addr(texProcessDecompress_addr, (uintptr_t)&texProcessDecompress);
-	}
+	// uintptr_t texProcessDecompress_addr = (uintptr_t)so_symbol(&so_mod, "_Z20texProcessDecompressv");
+	// if (texProcessDecompress_addr == NULL) {
+	// 	log_error("texProcessDecompress not found\n");
+	// } else {
+	// 	logv_error("texProcessDecompress found at %p\n", texProcessDecompress_addr);
+	// 	texProcessDecompress_hook = hook_addr(texProcessDecompress_addr, (uintptr_t)&texProcessDecompress);
+	// }
 
 
 	// _Z26PVRTTextureLoadFromPointerPKvPjS0_bjS0_
