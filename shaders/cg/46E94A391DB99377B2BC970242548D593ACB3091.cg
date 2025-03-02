@@ -1,0 +1,52 @@
+// // Cg Fragment Shader
+// // Used fullscreen since the start
+
+// // Uniform texture sampler (low precision)
+// // sampler2D u0;
+
+// // Uniform gamma correction factors (low precision)
+// //float3 D3D_GAMMA_FACTORS;
+
+// // Varying texture coordinate (from TEXCOORD0)
+// void main(
+    // float2 in oT0 : TEXCOORD0,
+    // float4 out outColor : COLOR,
+    // uniform sampler2D u0 : TEXUNIT0,
+    // uniform float3 D3D_GAMMA_FACTORS
+// )
+// {
+    // // Sample the texture at the given coordinates
+    // float4 pix = tex2D(u0, oT0);
+    
+    // // Apply gamma correction to the RGB channels
+    // float4 color;
+    // color.a = pix.a;
+    // color.rgb = pow(pix.rgb, D3D_GAMMA_FACTORS);
+    // outColor = color; 
+    // outColor += float4(oT0.x,1,oT0.y,1); 
+// }
+
+// PROGRAM 2
+// Cg Fragment Shader
+
+//uniform sampler2D u0 : TEXUNIT0              // same as "uniform lowp sampler2D u0;"
+//float3 D3D_GAMMA_FACTORS;   // same as "uniform lowp vec3 D3D_GAMMA_FACTORS;"
+
+uniform sampler2D u0;
+uniform float3 D3D_GAMMA_FACTORS;
+
+// The function uses 'oT0' as an input from TEXCOORD0
+float4 main(
+    float2 oT0 : TEXCOORD0  // Equivalent to VARYING_oT0(...) in GLSL
+)
+{
+    // Sample the texture
+    float4 pix = tex2D(u0, oT0);
+    
+    // Apply gamma correction to the RGB components
+    float4 color;
+    color.a   = pix.a;
+    color.rgb = pow(pix.rgb, D3D_GAMMA_FACTORS);
+    color += 0.5 * float4(oT0.x,1,oT0.y,0); 
+    return color; // Equivalent to 'gl_FragColor'
+}

@@ -1,0 +1,11 @@
+// Cg Fragment Shader
+
+sampler2D u0 : TEXUNIT4; // Equivalent to "uniform lowp sampler2D u0;"
+
+float4 main(
+    float2 oT0 : TEXCOORD0 // Matches "VARYING_oT0(noperspective mediump vec2)" in GLSL
+) : COLOR
+{
+    // Sample the texture at oT0 and output the color
+    return tex2D(u0, oT0);
+}

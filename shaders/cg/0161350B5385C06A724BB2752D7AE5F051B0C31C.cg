@@ -1,0 +1,103 @@
+// -----------------------------------------------------------------------------
+// 1. Uniforms
+// -----------------------------------------------------------------------------
+
+// Large uniform array "c" like in your GLSL (154 float4's total).
+uniform float4 c[154];            // c[0..153]
+
+// Additional uniforms
+uniform float4 D3D_SCR_CST;       // For screenspace transform
+uniform float4 D3D_RENDERTARGET_SCALE;
+
+// Helper to mimic GLSL #define C(idx) c[idx]
+float4 C(int idx)
+{
+    return c[idx];
+}
+
+// For convenience, define these to match your original usage
+#define D3D_RENDERTARGET_SCALE_H   D3D_RENDERTARGET_SCALE.x
+#define D3D_RENDERTARGET_SCALE_V   D3D_RENDERTARGET_SCALE.y
+#define D3D_RENDERTARGET_SCALE_MIN D3D_RENDERTARGET_SCALE.z
+#define D3D_RENDERTARGET_SCALE_MAX D3D_RENDERTARGET_SCALE.w
+
+// Macro for screenspace transform
+#define screenspace(var) \
+    { var.xy += D3D_SCR_CST.xy; \
+      var.xy *= D3D_SCR_CST.zw; }
+
+// -----------------------------------------------------------------------------
+// 2. Main Vertex Shader (No structs; old-style params)
+// -----------------------------------------------------------------------------
+void main(
+    // Input attributes
+    float4 v0 : ATTR0,   // "attribute vec4 v0" in GLSL
+    float4 v1 : ATTR1,   // "attribute vec4 v1" in GLSL
+
+    // Output semantics
+    out float4 oPos : POSITION,   // gl_Position
+    out float4 oD0  : COLOR0,     // varying vec4 oD0
+    out float  oPts : PSIZE       // gl_PointSize (1D float)
+)
+{
+    // -------------------------------------------------------------------------
+    // 2a. GLSL-style macro #defines to keep the code similar
+    #define inPos v0
+    #define inVel v1
+    #define descListPos 106
+
+    // We'll reuse local regs like r2, r5, etc. as local float4 or float.
+    // "time" => r5, "time2" => r6 in the original. We'll just define them as floats.
+
+    // -------------------------------------------------------------------------
+    // 2b. Logic
+    // -------------------------------------------------------------------------
+
+    // a0 = int(inVel.w)
+    int a0 = (int) inVel.w;
+
+    // time = float(inPos.w) * C(101).y + C(101).x
+    float time = (inPos.w) * C(101).y + C(101).x;
+
+    // r2 = time * vec4(inVel) + vec4(inPos)
+    float4 r2 = time * inVel + inPos;
+
+    // time2 = time * time
+    float time2 = time * time;
+
+    // r2.z = time2 * C(a0+descListPos).x + r2.z
+    r2.z = time2 * C(a0 + descListPos).x + r2.z;
+
+    // oPos = r2.x*C(97) + r2.y*C(98) + r2.z*C(99) + C(100)
+    float4 pos = r2.x * C(97);
+    pos       += r2.y * C(98);
+    pos       += r2.z * C(99);
+    pos       += C(100);
+
+    // 1.0 / pos.w
+    float r1 = 1.0 / pos.w;
+
+    // pos.xyz += r1 * C(0).xyz
+    pos.xyz += r1 * C(0).xyz;
+
+    // screenspace macro
+    screenspace(pos);
+
+    // oD0 = C(a0+descListPos+1) + C(a0+descListPos+2)*time
+    float4 colorVal = C(a0 + descListPos + 1) +
+                      (C(a0 + descListPos + 2) * time);
+
+    // Assign to output
+    oD0 = colorVal;
+
+    // r2.x = C(a0+descListPos+0).w + C(a0+descListPos+0).y * time
+    r2.x  = C(a0 + descListPos + 0).w;
+    r2.x += C(a0 + descListPos + 0).y * time;
+
+    // oPts = max(0.0, r2.x * r1 * D3D_RENDERTARGET_SCALE_MAX)
+    float ps = r2.x * r1 * D3D_RENDERTARGET_SCALE_MAX;
+    oPts = max(ps, 0.0);
+
+    // Finally, output position
+    oPos = pos;
+}

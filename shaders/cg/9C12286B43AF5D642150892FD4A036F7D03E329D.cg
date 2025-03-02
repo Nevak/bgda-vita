@@ -17,12 +17,13 @@ void main(
 )
 {
     // Sample the texture at the given coordinates
+    oT0.y = 1.0 - oT0.y;
     float4 pix = tex2D(u0, oT0);
     
     // Apply gamma correction to the RGB channels
     float4 color;
     color.a = pix.a;
     color.rgb = pow(pix.rgb, D3D_GAMMA_FACTORS);
-    //outColor = color; 
-    outColor += float4(oT0.x,1,oT0.y,1); 
+    outColor = color; 
+    //outColor = float4(oT0.x,0,0,0) + pix; 
 }

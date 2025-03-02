@@ -1,0 +1,106 @@
+// profile sce_vp_psp2
+// We assume you’ll compile with something like:
+//   cgc -profile vs_3_0 -entry main MyShader.cg
+// or an equivalent approach in your engine.
+
+// Large uniform array, as in your GLSL:
+uniform float4 c[192];
+uniform float4 D3D_SCR_CST;  // for screenspace adjustment
+
+// Helper function to mimic your #define C(idx) c[idx].
+float4 C(int idx)
+{
+    return c[idx];
+}
+
+// We'll keep boneStart the same
+#define boneStart 10
+
+// The main entry point, using old-style parameter semantics:
+void main(
+    // Keep the original names to match your OpenGL attribute lookups:
+    in float4 v0,  // was "attribute vec4 v0"
+    in float4 v2,  // was "attribute vec4 v2"
+    in float2 v9,  // was "attribute vec2 v9" 
+    in float4 v1,  // was "attribute vec4 v1"
+                        // (Note: Not all profiles support ATTR9!)
+
+    // Outputs
+    out float4 oPos : POSITION,
+    out float4 oD0  : COLOR0,
+    out float2 oT0  : TEXCOORD0,
+    out float2 oT1  : TEXCOORD1
+)
+{
+    // Use defines to keep code readable
+    #define inPos       v0
+    #define inBoneData  v1
+    #define inNormal    v2
+    #define inTexCoord  v9
+
+    // For your "screenspace" macro:
+    #define screenspace(var) { var.xy += D3D_SCR_CST.xy; var.xy *= D3D_SCR_CST.zw; }
+
+    // Convert bone index from float to int
+    int a0 = (int) inBoneData.x;
+
+    // Weighted bone transforms #1
+    float4 r3 = C(a0 + boneStart)       * inBoneData.y;
+    float4 r4 = C(a0 + 1 + boneStart)   * inBoneData.y;
+    float4 r5 = C(a0 + 2 + boneStart)   * inBoneData.y;
+    float4 r6 = C(a0 + 3 + boneStart)   * inBoneData.y;
+
+    // Weighted bone transforms #2
+    a0 = (int) inBoneData.z;
+    r3 += C(a0 + boneStart)       * inBoneData.w;
+    r4 += C(a0 + 1 + boneStart)   * inBoneData.w;
+    r5 += C(a0 + 2 + boneStart)   * inBoneData.w;
+    r6 += C(a0 + 3 + boneStart)   * inBoneData.w;
+
+    // Construct the final position
+    float4 pos = inPos.x * r3;
+    pos       += inPos.y * r4;
+    pos       += inPos.z * r5;
+    pos       += r6;
+
+    // Transform the normal
+    float4 tnormal = inNormal.x * r3;
+    tnormal       += inNormal.y * r4;
+    tnormal       += inNormal.z * r5;
+
+    // Dot with light directions in c[1..3]
+    float4 lightAmount = tnormal.x * C(1);
+    lightAmount       += tnormal.y * C(2);
+    lightAmount       += tnormal.z * C(3);
+    lightAmount        = max(lightAmount, 0.0); // clamp to 0
+
+    // Accumulate light colors in c[4..7] + ambient c[8]
+    float4 lightColor = lightAmount.x * C(4);
+    lightColor       += lightAmount.y * C(5);
+    lightColor       += lightAmount.z * C(6);
+    lightColor       += lightAmount.w * C(7);
+    lightColor       += C(8);
+
+    // Saturate final color
+    float4 finalColor = min(lightColor, 1.0);
+
+    // Output color
+    oD0 = finalColor;
+
+    // Pass through the texture coordinate
+    oT0 = inTexCoord;
+
+    // Compute tnormal.xy * c[191].xy + c[191].ww
+    float2 scale2  = C(191).xy;
+    float2 offset2 = float2(C(191).w, C(191).w);
+    oT1 = (tnormal.xy * scale2) + offset2;
+
+    // Add c[0].xyz to position
+    pos.xyz += C(0).xyz;
+
+    // screenspace macro
+    screenspace(pos);
+
+    // Output final position
+    oPos = pos;
+}

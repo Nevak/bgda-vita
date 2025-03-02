@@ -1,4 +1,4 @@
-// profile sce_vp_psp2
+// Cg Vertex Shader
 
 // We have two uniforms:
 //   1) c[0]: a single float4 from the array c[] (like "uniform vec4 c[1];")
@@ -7,25 +7,19 @@
 
 // A small macro to do the screen-space adjustment
 #define screenspace(var) var.xy += D3D_SCR_CST.xy; var.xy *= D3D_SCR_CST.zw;
-// Seems like D3D_CRST is set to -424.000000 
-// Seems like c is set to:
-// x = 424.00000
-// y = 240.000000
-// z = 0.000000
-// w = 1.000000
-uniform float4 c[1];
+
 // The main vertex function, with input attributes and output varyings specified by semantics.
 void main(
     // Input attributes
-    in float4 v0 : POSITION,   // ATTRIBUTE_v0(highp vec4)
-    in float2 v1 : TEXCOORD0,     // ATTRIBUTE_v1(highp vec2)
-    in float4 v2 : COLOR0,  // ATTRIBUTE_v2(highp vec4)
+    in  float4 v0 : POSITION,   // ATTRIBUTE_v0(highp vec4)
+    in  float2 v1 : TEXCOORD0,  // ATTRIBUTE_v1(highp vec2)
+    in  float4 v2 : COLOR0,  // ATTRIBUTE_v2(highp vec4)
     
     // Output varyings
     out float4 oPos : POSITION, // Equivalent to gl_Position
     out float2 oT0  : TEXCOORD0,// Equivalent to VARYING_oT0(mediump vec2)
     out float4 oD0  : COLOR0, // Equivalent to VARYING_oD0(highp vec4)
-    
+    uniform float4 c,
     uniform float4 D3D_SCR_CST
 )
 {
@@ -35,7 +29,7 @@ void main(
     oD0  = v2;
 
     // Add c[0].xyz to the position (translating the vertex)
-    oPos.xyz += c[0].xyz;
+    oPos.xyz += c.xyz;
 
     // Apply screen space transform
     screenspace(oPos);
@@ -43,9 +37,3 @@ void main(
     // Divide z by 65535.0 * 256.0
     oPos.z /= (65535.0 * 256.0);
 }
-
-
-//D3D_SCR_CST[0] = -424.000000←[0m
-//D3D_SCR_CST[1] = -240.000000←[0m
-//D3D_SCR_CST[2] = 0.002358←[0m
-//D3D_SCR_CST[3] = -0.004167←[0m

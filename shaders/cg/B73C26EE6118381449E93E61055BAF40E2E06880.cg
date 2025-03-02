@@ -2,9 +2,10 @@
 
 void main(
 	float2 texCoord : TEXCOORD0,
-	float4 out gl_FragColor : COLOR,
+	float4 out col : COLOR,
     uniform sampler2D plersam : TEXUNIT0
 ) {
-	gl_FragColor = tex2D(plersam,  texCoord);
+	texCoord.y = 1.0 - texCoord.y;
+	col = tex2D(plersam,  texCoord);
     //gl_FragColor = float4(1, 0, 0, 1);
 }

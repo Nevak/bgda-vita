@@ -1,0 +1,27 @@
+// Minimal Cg fragment program matching your GLSL logic.
+// Compile with something like:
+//   cgc -profile fp40 -entry main MyShader.cg
+// or whichever profile your pipeline supports.
+
+// A 2D texture sampler, named "u3" as in your GLSL:
+uniform sampler2D u3;
+
+// main entry point with old-style parameter semantics
+void main(
+    // 'oD0' is the varying color from the vertex shader (COLOR0).
+    float4 oD0 : COLOR0,
+    
+    // 'oPts' is the point coordinate passed from the vertex shader (TEXCOORD0).
+    // In GLSL, this was gl_PointCoord. In Cg, we emulate it via a varying.
+    float2 oPts : TEXCOORD0,
+    
+    // Output color, equivalent to gl_FragColor
+    out float4 oCol : COLOR
+)
+{
+    // Sample texture at 'oPts'
+    float4 texColor = tex2D(u3, oPts);
+
+    // Multiply by the varying color and 2.0
+    oCol = texColor * oD0 * 2.0;
+}
