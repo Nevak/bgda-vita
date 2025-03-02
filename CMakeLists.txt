@@ -8,14 +8,14 @@ endif ()
 set(CMAKE_TOOLCHAIN_FILE "$ENV{VITASDK}/share/vita.toolchain.cmake"
 	CACHE PATH "Toolchain file")
 
-project(soulcalibur C CXX)
+project(bgda C CXX)
 
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 # Vita application configuration
-set(VITA_APP_NAME "SoulCalibur")
-set(VITA_TITLEID "SOUL00001")
-set(VITA_VPKNAME "soulcalibur")
+set(VITA_APP_NAME "Balrdur's Gate: Dark Alliance")
+set(VITA_TITLEID "BGDA00001")
+set(VITA_VPKNAME "bgda")
 set(VITA_VERSION "01.00")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
@@ -157,12 +157,17 @@ vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR)
 vita_create_vpk(${VITA_VPKNAME}.vpk ${VITA_TITLEID} eboot.bin
 				VERSION ${VITA_VERSION}
 				NAME ${VITA_APP_NAME}
-				FILE ${CMAKE_SOURCE_DIR}/extras/livearea/icon0.png sce_sys/icon0.png
+				FILE ${CMAKE_SOURCE_DIR}/extras/cpuinfo cpuinfo
+                FILE ${CMAKE_SOURCE_DIR}/extras/meminfo meminfo
+				FILE ${CMAKE_SOURCE_DIR}/extras/cpuinfo_max_freq cpuinfo_max_freq
+				FILE ${CMAKE_SOURCE_DIR}/extras/possible possible
+				FILE ${CMAKE_SOURCE_DIR}/extras/present present
+				${CMAKE_SOURCE_DIR}/extras/livearea/icon0.png sce_sys/icon0.png
 				${CMAKE_SOURCE_DIR}/extras/livearea/pic0.png sce_sys/pic0.png
 				${CMAKE_SOURCE_DIR}/extras/livearea/startup.png sce_sys/livearea/contents/startup.png
 				${CMAKE_SOURCE_DIR}/extras/livearea/bg0.png sce_sys/livearea/contents/bg0.png
 				${CMAKE_SOURCE_DIR}/extras/livearea/template.xml sce_sys/livearea/contents/template.xml
-				${CMAKE_SOURCE_DIR}/extras/livearea/TROPHY.TRP sce_sys/trophy/SOUL00001_00/TROPHY.TRP
+				${CMAKE_SOURCE_DIR}/extras/livearea/TROPHY.TRP sce_sys/trophy/BGDA00001_00/TROPHY.TRP
 				)
 
 add_custom_target(send
@@ -182,7 +187,7 @@ add_custom_target(send_kvdb
 
 add_custom_target(dump
 				  COMMAND ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump.sh ${PSVITAIP}
-				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/soulcalibur -s 1024
+				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/soulcalibur -s 24
 				  )
 
 add_custom_target(reboot
