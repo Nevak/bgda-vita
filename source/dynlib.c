@@ -366,18 +366,6 @@ void glShaderSource_wrapper(GLuint shader, GLsizei count, const GLchar **string,
 	glShaderSource(shader, count, string, length);
 }
 
-// JBE_CRC_ctor
-void JBE_CRC_ctor(void *this, char *param_1) {
-    *(uint32_t *)this = 0;  // Set CRC value to 0 (or any static value)
-    return;
-}
-
-// JBE_CRC_AddBuffer
-void JBE_CRC_AddBuffer(void const* data, unsigned int size) {
-	log_error("unimpl: JBE_CRC_AddBuffer");
-	return;
-}
-
 // glTexParameterfv_fake
 void glTexParameterfv_fake(GLenum target, GLenum pname, const GLfloat *params) {
 	logv_info("glTexParameterfv(%i, %i, %p) called", target, pname, params);
@@ -475,13 +463,13 @@ void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei
 
 // glActiveTexture_fake
 void glActiveTexture_fake(GLenum texture) {
-	logv_info("glActiveTexture(0x%x) called. Will override with location 0x84C0 for debug", texture);
+	logv_info("glActiveTexture(0x%x) called. Will override with location 0x84C0 for debug.", texture);
 	glActiveTexture(0x84C0); // GL_TEXTURE0
 }
 
 //glBindTexture_fake
 void glBindTexture_fake(GLenum target, GLuint texture) {
-	logv_info("glBindTexture(0x%x, 0x%x) called", target, texture);
+	//logv_info("glBindTexture(0x%x, 0x%x) called", target, texture);
  	glBindTexture(target, texture);
 }
 
@@ -491,210 +479,15 @@ void glGenTextures_fake(GLsizei n, GLuint *textures) {
 	glGenTextures(n, textures);
 }
 
-void* JBE_CloudPF_sReadBack;
-
-struct NvSysCaps {
-    uint8_t unknown_header[8];  // New field for the missing bytes (0x1b0c0 - 0x1b0c8)			0 - > 8
-
-    // GPU Information
-    char gl_vendor[256];      // 0x1b0c8 - GPU Vendor String									8 - > 264
-    char gl_version[256];     // 0x1b1c8 - OpenGL Version String								264 - > 520
-    char gl_renderer[256];    // 0x1b2c8 - GPU Renderer String									520 - > 776
-
-    // Feature Flags
-    uint8_t has_system_time;             // 0x1b3c8 - System time support (1 if available)		776 - > 777
-    uint8_t has_s3tc_texture_compression; // 0x1b3c9 - S3TC texture compression
-    uint8_t has_astc_texture_compression; // 0x1b3ca - ASTC texture compression
-    uint8_t has_pvrtc_texture_compression;// 0x1b3cb - PVRTC support (used on Vita)
-    uint8_t has_atc_texture_compression;  // 0x1b3cc - ATC texture compression (AMD/ATI)
-    uint8_t has_nv_depth_nonlinear;       // 0x1b3ce - NVIDIA Depth Nonlinear
-    uint8_t has_nv_shader_framebuffer_fetch; // 0x1b3cf - NVIDIA Shader Framebuffer Fetch
-    uint8_t has_nv_coverage_sample;       // 0x1b3d0 - NVIDIA Coverage Sample
-    uint8_t has_nv_multisample_framebuffer; // 0x1b3d2 - NVIDIA Multisample Framebuffer
-    uint8_t has_nv_bindless_texture;      // 0x1b3d3 - NVIDIA Bindless Texture
-    uint8_t has_nv_path_rendering;        // 0x1b3d4 - NVIDIA Path Rendering
-    uint8_t supports_egl_pbuffer;         // 0x1b3d5 - EGL PBuffer support
-    uint8_t supports_egl_window;          // 0x1b3d6 - EGL Window support
-    uint8_t supports_egl_surface;         // 0x1b3d7 - EGL Surface support
-    uint8_t supports_egl_multisample;     // 0x1b3d8 - EGL Multisample support
-    uint8_t supports_egl_vsync;           // 0x1b3d9 - EGL VSync support
-    uint8_t supports_egl_stencil_8;       // 0x1b3da - EGL Stencil 8-bit support
-
-    // CPU Information
-    uint32_t cpu_core_count;  // 0x1b3e0 - Number of CPU cores
-    uint32_t cpu_max_freq_mhz;// 0x1b3e4 - Maximum CPU frequency in MHz
-    uint32_t total_ram_mb;    // 0x1b3dc - Total system RAM in MB
-    uint32_t cpu_arch;        // 0x1b3f0 - CPU Architecture (e.g., ARMv7 = 7, ARM64 = 8)
-    uint8_t supports_neon;    // 0x1b3f4 - NEON support (1 = supported)
-    uint8_t supports_vfpv3;   // 0x1b3e8 - VFPv3 support
-    uint8_t supports_vfpv4;   // 0x1b3e9 - VFPv4 support
-    uint16_t cpu_part;        // 0x1b3ec - CPU Part ID (e.g., Cortex-A9 = 0xc09)
-
-    // System Classification
-    int32_t gpu_tier;         // 0x1b3fc - GPU classification (-1 = unknown, 0 = low-end, 2 = high-end)
-    int32_t cpu_tier;         // 0x1b400 - CPU classification (similar scale as GPU tier)
-    uint8_t supports_advanced_graphics; // 0x1b3fa - 1 if system supports advanced graphics features
-};
-
-
-struct NvSysCaps capabilities = {
-    {0},  // unknown_header[8] - Likely padding or reserved memory, setting to zero    // GPU Information
-    "Imagination Technologies",  // gl_vendor - The PS Vita uses a PowerVR SGX543MP4+
-    "OpenGL ES 2.0",             // gl_version - VitaGL supports OpenGL ES 2.0
-    "PowerVR SGX543MP4+",        // gl_renderer - The actual GPU model in the Vita    // Feature Flags (1 = supported, 0 = not supported)
-    0,  // has_system_time (PS Vita does not have NV System Time)
-    0,  // has_s3tc_texture_compression (PS Vita does NOT support S3TC)
-    0,  // has_astc_texture_compression (PS Vita does NOT support ASTC)
-    1,  // has_pvrtc_texture_compression (PS Vita supports PVRTC, required for VitaGL)
-    0,  // has_atc_texture_compression (PS Vita does NOT support ATC)
-    0,  // has_nv_depth_nonlinear (PS Vita does NOT support NVIDIA depth nonlinear)
-    0,  // has_nv_shader_framebuffer_fetch (PS Vita does NOT support this)
-    0,  // has_nv_coverage_sample (PS Vita does NOT support this)
-    0,  // has_nv_multisample_framebuffer (PS Vita does NOT support this)
-    0,  // has_nv_bindless_texture (PS Vita does NOT support this)
-    0,  // has_nv_path_rendering (PS Vita does NOT support this)
-    1,  // supports_egl_pbuffer (VitaGL uses PBuffer for some operations)
-    1,  // supports_egl_window (VitaGL can create EGL Windows)
-    1,  // supports_egl_surface (VitaGL uses EGL Surfaces)
-    0,  // supports_egl_multisample (PS Vita does NOT support MSAA in hardware)
-    1,  // supports_egl_vsync (VitaGL supports vsync)
-    1,  // supports_egl_stencil_8 (VitaGL supports 8-bit stencil buffers)    // CPU Information
-    4,    // cpu_core_count (PS Vita has a quad-core ARM Cortex-A9 CPU)
-    500,  // cpu_max_freq_mhz (500 MHz when boosted, normally ~333 MHz)
-    512,  // total_ram_mb (512MB system RAM)
-    7,    // cpu_arch (ARMv7-A, as Vita uses Cortex-A9)
-    1,    // supports_neon (PS Vita supports NEON SIMD instructions)
-    1,    // supports_vfpv3 (PS Vita supports VFPv3)
-    0,    // supports_vfpv4 (PS Vita does NOT support VFPv4)
-    0xc09,// cpu_part (0xC09 corresponds to Cortex-A9 CPU)    // System Classification
-    2,    // gpu_tier (2 = high-end for a handheld, comparable to a Tegra 3)
-    5,    // cpu_tier (5 = decent, but below modern ARM CPUs)
-    1     // supports_advanced_graphics (1 = Yes, as VitaGL enables full OpenGL ES 2.0)
-};struct NvSysCaps* GetNvSysCaps() {
-	log_error("unimpl: GetNvSysCaps");
-	return &capabilities;
-}
-
 /* JBE::InputPF::ProcessDeviceChanges(void (*)(void*, int, int), void (*)(void*, int), void*) */
- void ProcessDeviceChanges(void *param_1, void *param_2, void *param_3) {
+void ProcessDeviceChanges(void *param_1, void *param_2, void *param_3) {
  	log_error("unimpl: JBE_InputPF_ProcessDeviceChanges");
 }
 
-// XMVCreateDecoder
-// XMVCloseDecoder
-// XMVGetVideoDescriptor
-// XMVGetAudioDescriptor
-// XMVEnableAudioStream
-// XMVGetAudioStream
-// XMVGetNextFrame
-
-int curFrame = 0;
-int XMVCreateDecoder(void * thisPtr, int t, int t2, void *pFile) {
-	curFrame = 0;
-	log_error("unimpl: XMVCreateDecoder");
-	return 0;
-}
-
-int XMVCloseDecoder(void *pDecoder)	{
-	log_error("unimpl: XMVCloseDecoder");
-	return 0;
-}
-
-void XMVGetVideoDescriptor(void *pDecoder, void *pVideoDescriptor) {
-	log_error("unimpl: XMVGetVideoDescriptor");
-}
-
-void XMVGetAudioDescriptor(void *pDecoder, int AudioStream, void *pAudioDescriptor) {
-	log_error("unimpl: XMVGetAudioDescriptor");
-}
-
-int XMVGetAudioStream(int param_1,int param_2) {
-	log_error("unimpl: XMVGetAudioStream");
-	return 0;
-}
-
-int XMVEnableAudioStream(void *pDecoder, int AudioStream, int Flags, void *pMixBins, void **ppStream) {
-	log_error("unimpl: XMVEnableAudioStream");
-	return 0;
-}
-
-int XMVGetNextFrame(void *pDecoder, int *pSurface) {
-	curFrame++;
-
-	logv_error("unimpl: XMVGetNextFrame (%d)", curFrame);
-	return curFrame;
-}
-
-
-
-enum {
-    ANDROID_CPU_ARM_FEATURE_ARMv7       = (1 << 0),
-    ANDROID_CPU_ARM_FEATURE_VFPv3       = (1 << 1),
-    ANDROID_CPU_ARM_FEATURE_NEON        = (1 << 2),
-    ANDROID_CPU_ARM_FEATURE_LDREX_STREX = (1 << 3),
-    ANDROID_CPU_ARM_FEATURE_VFPv2       = (1 << 4),
-    ANDROID_CPU_ARM_FEATURE_VFP_D32     = (1 << 5),
-    ANDROID_CPU_ARM_FEATURE_VFP_FP16    = (1 << 6),
-    ANDROID_CPU_ARM_FEATURE_VFP_FMA     = (1 << 7),
-    ANDROID_CPU_ARM_FEATURE_NEON_FMA    = (1 << 8),
-    ANDROID_CPU_ARM_FEATURE_IDIV_ARM    = (1 << 9),
-    ANDROID_CPU_ARM_FEATURE_IDIV_THUMB2 = (1 << 10),
-    ANDROID_CPU_ARM_FEATURE_iWMMXt      = (1 << 11),
-    ANDROID_CPU_ARM_FEATURE_AES         = (1 << 12),
-    ANDROID_CPU_ARM_FEATURE_PMULL       = (1 << 13),
-    ANDROID_CPU_ARM_FEATURE_SHA1        = (1 << 14),
-    ANDROID_CPU_ARM_FEATURE_SHA2        = (1 << 15),
-    ANDROID_CPU_ARM_FEATURE_CRC32       = (1 << 16),
-};
-
-// https://android.googlesource.com/platform/bionic/+/master/libc/private/bionic_cpu-features.c
-// https://www.copetti.org/writings/consoles/playstation-vita/
-uint64_t android_getCpuFeatures(void) {
-	// Hardcoded for PSVita
-	return ANDROID_CPU_ARM_FEATURE_ARMv7 | ANDROID_CPU_ARM_FEATURE_VFPv3 | ANDROID_CPU_ARM_FEATURE_NEON | ANDROID_CPU_ARM_FEATURE_VFPv2 | ANDROID_CPU_ARM_FEATURE_VFP_D32 | ANDROID_CPU_ARM_FEATURE_VFP_FP16 | ANDROID_CPU_ARM_FEATURE_VFP_FMA | ANDROID_CPU_ARM_FEATURE_NEON_FMA | ANDROID_CPU_ARM_FEATURE_IDIV_ARM | ANDROID_CPU_ARM_FEATURE_IDIV_THUMB2;
-}
 
 void app_dummy(void)
 {
-  return;
-}
-
-int is_prime(int n) {
-	if (n <= 3)
-		return 1;
-	
-	if (n % 2 == 0 || n % 3 == 0)
-		return 0;
-	
-	for (int i = 5; i * i <= n; i = i + 6) {
-		if (n % i == 0 || n % (i + 2) == 0)
-			return 0;
-	}
-	
-	return 1;
-}
-
-int _ZNSt6__ndk112__next_primeEj(void *this, int n) {
-	if (n <= 1)
-		return 2;
-	
-	while (!is_prime(n)) {
-		n++;
-	}
-	
-	return n;
-}
-
-double fabs( double x ) {
-	return x < 0 ? -x : x;
-}
-
-int isatty(int fd) {
-	return 0;
-}
-
-void assert2(const char* f, int l, const char* func, const char* msg) {
-    logv_error("[%s:%i][%s] Assertion failed: %s\n", f, l, func, msg);
+	return;
 }
 
 //glDrawArrays_fake
@@ -708,8 +501,6 @@ void glUseProgram_fake(GLuint program) {
 	//logv_info("glUseProgram(%i) called", program);
 	glUseProgram(program);
 }
-
-//glUniform1i(glGetUniformLocation(ourShader.ID, "texture1"), 0);
 
 // glUniform1i_fake
 void glUniform1i_fake(GLint location, GLint v0) {
@@ -756,8 +547,10 @@ void glUniform2iv_fake(GLint location, GLsizei count, const GLint *value) {
 // glUniform3fv_fake
 void glUniform3fv_fake(GLint location, GLsizei count, const GLfloat *value) {
 	logv_info("glUniform3fv(%i, %i, %p) called", location, count, value);
-	for (int i = 0; i < count; i++) {
+	for (int i = 0; i < count; i+=3) {
 		logv_info("  value[%i] = %f", i, value[i]);
+		logv_info("  value[%i] = %f", i+1, value[i+1]);
+		logv_info("  value[%i] = %f", i+2, value[i+2]);
 	}
 	glUniform3fv(location, count, value);
 }
@@ -765,10 +558,14 @@ void glUniform3fv_fake(GLint location, GLsizei count, const GLfloat *value) {
 // glUniform4fv_fake
 void glUniform4fv_fake(GLint location, GLsizei count, const GLfloat *value) {
 	logv_info("glUniform4fv(%i, %i, %p) called", location, count, value);
-	for (int i = 0; i < count; i++) {
+	for (int i = 0; i < count; i+=4) {
 		logv_info("  value[%i] = %f", i, value[i]);
+		logv_info("  value[%i] = %f", i+1, value[i+1]);
+		logv_info("  value[%i] = %f", i+2, value[i+2]);
+		logv_info("  value[%i] = %f", i+3, value[i+3]);
 	}
 	glUniform4fv(location, count, value);
+	logv_info("glUniform4fv(%i, %i, %p) done", location, count, value);
 }
 
 // glGetUniformLocation_fake
@@ -804,7 +601,25 @@ void glVertexAttribPointer_fake(GLuint index, GLint size, GLenum type, GLboolean
 
 // glBufferData_fake
 void glBufferData_fake(GLenum target, GLsizeiptr size, const GLvoid *data, GLenum usage) {
-	//logv_info("glBufferData(%i, %i, %p, %i) called", target, size, data, usage);
+	// logv_info("glBufferData(%i, %i, %p, %i) called", target, size, data, usage);
+    // if (data && size > 0) {
+    //     // Number of floats in the buffer:
+    //     size_t floatCount = size / sizeof(float);
+        
+    //     // Cast to float pointer
+    //     const float* floatData = (const float*) data;
+
+    //     // Print them out. Be mindful of how large 'floatCount' can be!
+    //     logv_info("Buffer contents as floats (count=%zu) Truncated: %s:", floatCount, floatCount > 100 ? "YES" : "NO");
+	// 	// print only the first 100 floats
+	// 	floatCount = floatCount > 100 ? 100 : floatCount;
+    //     for (size_t i = 0; i < floatCount; i++) {
+    //         logv_info("  [%3zu] = %f", i, floatData[i]);
+    //     }
+    // } else {
+    //     logv_info("No valid data to print (data=%p, size=%zd)", data, size);
+    // }
+
 	glBufferData(target, size, data, usage);
 }
 
@@ -899,10 +714,6 @@ so_default_dynlib default_dynlib[] = {
 		{ "__stack_chk_guard", (uintptr_t)&__stack_chk_guard },
 		{ "__swbuf", (uintptr_t)&__swbuf },
 		{ "__system_property_get", (uintptr_t)&__system_property_get },
-
-			// AAssetManager_openDir
-	// AAssetDir_getNextFileName
-	// AAssetDir_close
 
 		// ANative
 		{ "AAssetDir_close", (uintptr_t)&AAssetDir_close },
@@ -1253,11 +1064,11 @@ so_default_dynlib default_dynlib[] = {
 		{ "glDisable", (uintptr_t)&glDisable },
 		{ "glDisableClientState", (uintptr_t)&glDisableClientState },
 		{ "glDisableVertexAttribArray", (uintptr_t)&glDisableVertexAttribArray },
-		{ "glDrawArrays", (uintptr_t)&glDrawArrays_fake },
+		{ "glDrawArrays", (uintptr_t)&glDrawArrays },
 		{ "glDrawElements", (uintptr_t)&glDrawElements },
 		{ "glEnable", (uintptr_t)&glEnable },
 		{ "glEnableClientState", (uintptr_t)&glEnableClientState },
-		{ "glEnableVertexAttribArray", (uintptr_t)&glEnableVertexAttribArray_fake },
+		{ "glEnableVertexAttribArray", (uintptr_t)&glEnableVertexAttribArray },
 		{ "glFlush", (uintptr_t)&glFlush },
 		{ "glFramebufferRenderbuffer", (uintptr_t)&glFramebufferRenderbuffer },
 		{ "glFramebufferTexture2D", (uintptr_t)&glFramebufferTexture2D },
@@ -1266,7 +1077,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glGenerateMipmap", (uintptr_t)&glGenerateMipmap },
 		{ "glGenFramebuffers", (uintptr_t)&glGenFramebuffers },
 		{ "glGenRenderbuffers", (uintptr_t)&glGenRenderbuffers },
-		{ "glGenTextures", (uintptr_t)&glGenTextures_fake },
+		{ "glGenTextures", (uintptr_t)&glGenTextures },
 		{ "glGetActiveAttrib", (uintptr_t)&glGetActiveAttrib },
 		{ "glGetActiveUniform", (uintptr_t)&glGetActiveUniform },
 		{ "glGetAttribLocation", (uintptr_t)&glGetAttribLocation_fake },
@@ -1308,29 +1119,29 @@ so_default_dynlib default_dynlib[] = {
 		{ "glTexCoordPointer", (uintptr_t)&glTexCoordPointer },
 		{ "glTexEnvx", (uintptr_t)&glTexEnvx },
 		{ "glTexEnvxv", (uintptr_t)&glTexEnvxv },
-		{ "glTexImage2D", (uintptr_t)&glTexImage2D_fake },
+		{ "glTexImage2D", (uintptr_t)&glTexImage2D },
 		{ "glTexParameterf", (uintptr_t)&glTexParameterf },
 		{ "glTexParameteri", (uintptr_t)&glTexParameteri },
 		{ "glTexSubImage2D", (uintptr_t)&glTexSubImage2D },
-		{ "glUniform1f", (uintptr_t)&glUniform1f_fake },
-		{ "glUniform1fv", (uintptr_t)&glUniform1fv_fake },
-		{ "glUniform1i", (uintptr_t)&glUniform1i_fake },
-		{ "glUniform1iv", (uintptr_t)&glUniform1iv_fake },
-		{ "glUniform2f", (uintptr_t)&glUniform2f_fake },
-		{ "glUniform2fv", (uintptr_t)&glUniform2fv_fake },
-		{ "glUniform2iv", (uintptr_t)&glUniform2iv_fake },
+		{ "glUniform1f", (uintptr_t)&glUniform1f },
+		{ "glUniform1fv", (uintptr_t)&glUniform1fv },
+		{ "glUniform1i", (uintptr_t)&glUniform1i },
+		{ "glUniform1iv", (uintptr_t)&glUniform1iv },
+		{ "glUniform2f", (uintptr_t)&glUniform2f },
+		{ "glUniform2fv", (uintptr_t)&glUniform2fv },
+		{ "glUniform2iv", (uintptr_t)&glUniform2iv },
 		{ "glUniform3f", (uintptr_t)&glUniform3f },
-		{ "glUniform3fv", (uintptr_t)&glUniform3fv_fake },
+		{ "glUniform3fv", (uintptr_t)&glUniform3fv },
 		{ "glUniform3iv", (uintptr_t)&glUniform3iv },
 		{ "glUniform4f", (uintptr_t)&glUniform4f },
-		{ "glUniform4fv", (uintptr_t)&glUniform4fv_fake },
+		{ "glUniform4fv", (uintptr_t)&glUniform4fv },
 		{ "glUniform4iv", (uintptr_t)&glUniform4iv },
 		{ "glUniformMatrix2fv", (uintptr_t)&glUniformMatrix2fv },
 		{ "glUniformMatrix3fv", (uintptr_t)&glUniformMatrix3fv },
 		{ "glUniformMatrix4fv", (uintptr_t)&glUniformMatrix4fv },
 		{ "glUseProgram", (uintptr_t)&glUseProgram_fake },
 		{ "glVertexAttrib4f", (uintptr_t)&glVertexAttrib4f },
-		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer_fake },
+		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
 		{ "glVertexPointer", (uintptr_t)&glVertexPointer },
 		{ "glViewport", (uintptr_t)&glViewport_fake },
 
@@ -1608,7 +1419,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "inflateReset", (uintptr_t)&inflateReset },
 
 		// Android cpu features
-		{ "android_getCpuFeatures", (uintptr_t)&android_getCpuFeatures },
+		//{ "android_getCpuFeatures", (uintptr_t)&android_getCpuFeatures },
 
 		// Misc
 		{ "app_dummy", (uintptr_t)&app_dummy },
@@ -1647,37 +1458,12 @@ so_default_dynlib default_dynlib[] = {
 		{ "alcCloseDevice", (uintptr_t)&alcCloseDevice },
 
 
-		// XMV library dummy functions
-		// XMVCreateDecoder
-		// XMVCloseDecoder
-		// XMVGetVideoDescriptor
-		// XMVGetAudioDescriptor
-		// XMVEnableAudioStream
-		// XMVGetAudioStream
-		// XMVGetNextFrame
-		// { "XMVCreateDecoder", (uintptr_t)&XMVCreateDecoder },
-		// { "XMVCloseDecoder", (uintptr_t)&XMVCloseDecoder },
-		// { "XMVGetVideoDescriptor", (uintptr_t)&XMVGetVideoDescriptor },
-		// { "XMVGetAudioDescriptor", (uintptr_t)&XMVGetAudioDescriptor },
-		// { "XMVEnableAudioStream", (uintptr_t)&XMVEnableAudioStream },
-		// { "XMVGetAudioStream", (uintptr_t)&XMVGetAudioStream },
-		// { "XMVGetNextFrame", (uintptr_t)&XMVGetNextFrame },
-
-		// JBE namespace stuff
-		//{ "_ZN3JBE3CRCC1EPKc", (uintptr_t)&JBE_CRC_ctor },
-		//{ "_ZN3JBE3CRC9AddBufferEPKvj", (uintptr_t)&JBE_CRC_AddBuffer },
-		//{ "_ZN3JBE4Util6Render12GetNvSysCapsEv", (uintptr_t)&GetNvSysCaps },
-		//{ "_ZN3JBE7InputPF20ProcessDeviceChangesEPFvPviiEPFvS1_iES1_", (uintptr_t)&ProcessDeviceChanges },
-		{ "_ZN3JBE7CloudPF9sReadBackE", (uintptr_t)&JBE_CloudPF_sReadBack },
 
 		{ "fabs", (uintptr_t)&fabs },
 		{ "isatty", (uintptr_t)&isatty },
 		{ "llrint", (uintptr_t)&llrint },
 		{ "bsearch", (uintptr_t)&bsearch },
 		{ "__assert2", (uintptr_t)&assert2},
-
-		// NDK
-		//{ "_ZNSt6__ndk112__next_primeEj", (uintptr_t)&_ZNSt6__ndk112__next_primeEj },
 };
 
 void resolve_imports(so_module* mod) {
