@@ -38,6 +38,12 @@ FILE *fopen_soloader(char *fname, char *mode) {
         return fopen_soloader("app0:/cpuinfo", mode);
     } else if (strcmp(fname, "/proc/meminfo") == 0) {
         return fopen_soloader("app0:/meminfo", mode);
+    } else if (strcmp(fname, "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq") == 0) {
+        return fopen_soloader("app0:/cpuinfo_max_freq", mode);
+    } else if (strcmp(fname, "/sys/devices/system/cpu/present") == 0) {
+        return fopen_soloader("app0:/present", mode);
+    } else if (strcmp(fname, "/sys/devices/system/cpu/possible") == 0) {
+        return fopen_soloader("app0:/possible", mode);
     }
 
     #ifdef USE_SCELIBC_IO
@@ -46,7 +52,7 @@ FILE *fopen_soloader(char *fname, char *mode) {
         FILE* ret = fopen(fname, mode);
     #endif
 
-    logv_debug("[io] fopen(%s, %s): 0x%x", fname, mode, ret);
+    //logv_debug("[io] fopen(%s, %s): 0x%x", fname, mode, ret);
 
     return ret;
 }
@@ -56,6 +62,12 @@ int open_soloader(char *_fname, int flags) {
         return open_soloader("app0:/cpuinfo", flags);
     } else if (strcmp(_fname, "/proc/meminfo") == 0) {
         return open_soloader("app0:/meminfo", flags);
+    } else if (strcmp(_fname, "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq") == 0) {
+        return open_soloader("app0:/cpuinfo_max_freq", flags);
+    } else if (strcmp(_fname, "/sys/devices/system/cpu/present") == 0) {
+        return open_soloader("app0:/present", flags);
+    } else if (strcmp(_fname, "/sys/devices/system/cpu/possible") == 0) {
+        return open_soloader("app0:/possible", flags);
     }
 
     flags = oflags_newlib_to_oflags_musl(flags);
