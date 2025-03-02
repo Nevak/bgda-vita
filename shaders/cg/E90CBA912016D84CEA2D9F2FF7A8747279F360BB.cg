@@ -1,4 +1,4 @@
-// Cg Fragment Shader
+// profile sce_fp_psp2
 
 // The fragment shader receives:
 // - oD0: a varying color from the vertex shader (mapped to TEXCOORD0)

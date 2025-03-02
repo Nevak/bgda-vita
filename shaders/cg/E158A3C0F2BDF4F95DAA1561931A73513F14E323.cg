@@ -1,4 +1,4 @@
-// Cg Fragment Shader
+// profile sce_fp_psp2
 
 #if D3D_ALPHA_TEST
     // Define the alpha test parameters if D3D_ALPHA_TEST is enabled

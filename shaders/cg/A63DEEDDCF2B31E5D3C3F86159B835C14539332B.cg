@@ -1,4 +1,4 @@
-// Cg Fragment Shader
+// profile sce_fp_psp2
 
 sampler2D u0; // Equivalent to "uniform lowp sampler2D u0;"
 

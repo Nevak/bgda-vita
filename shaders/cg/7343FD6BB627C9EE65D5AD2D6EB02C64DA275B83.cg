@@ -1,0 +1,69 @@
+// profile sce_vp_psp2
+
+// 1) Large uniform array c[192]
+uniform float4 c[192];
+
+// 2) Additional uniform for screen-space transform
+uniform float4 D3D_SCR_CST;
+
+// Helper function to replicate #define C(idx) c[idx]
+float4 C(int idx)
+{
+    return c[idx];
+}
+
+// Macro for screenspace transform
+#define screenspace(var) \
+    { var.xy += D3D_SCR_CST.xy; \
+      var.xy *= D3D_SCR_CST.zw; }
+
+// -----------------------------------------------------------------------------
+// main() with old-style Cg semantics (no structs)
+// -----------------------------------------------------------------------------
+void main(
+    // Attributes
+    float4 v0 : ATTR0, // "attribute vec4 v0" => inPos
+    float4 v1 : ATTR1, // "attribute vec4 v1" => inOther
+    float4 v2 : ATTR2, // "attribute vec4 v2"
+
+    // Outputs
+    out float4 oPos : POSITION, // gl_Position
+    out float4 oD0  : COLOR0,   // varying vec4
+    out float  oPts : PSIZE     // gl_PointSize
+)
+{
+    // Macros from your GLSL code
+    #define inPos   v0
+    #define inOther v1
+    #define boneStart 10
+
+    // Convert inOther.x to an integer for indexing
+    int a0 = (int) inOther.x;
+
+    // Compute p1 as inPos.x*C(a0+0+boneStart) + inPos.y*C(a0+1+boneStart) + ...
+    float4 p1 = (inPos.x) * C(a0 + 0 + boneStart);
+    p1       += (inPos.y) * C(a0 + 1 + boneStart);
+    p1       += (inPos.z) * C(a0 + 2 + boneStart);
+    p1       += C(a0 + 3 + boneStart);
+
+    // Build final position (oPos) from p1.x, p1.y, p1.z, plus c[1..4]
+    float4 pos = p1.x * C(1);
+    pos       += p1.y * C(2);
+    pos       += p1.z * C(3);
+    pos       += C(4);
+
+    // Set point size
+    oPts = (inOther.y) * C(5).x;
+
+    // Varying color (oD0) = v2
+    oD0 = v2;
+
+    // Apply screenspace macro: shift and scale pos.xy
+    screenspace(pos);
+
+    // Then scale pos.z by 0.001
+    pos.z *= 0.001;
+
+    // Output final position
+    oPos = pos;
+}

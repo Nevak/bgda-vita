@@ -1,0 +1,56 @@
+// profile sce_fp_psp2
+
+// -----------------------------------------------------------------------------
+// If you want to toggle alpha test in Cg at compile time, you can do:
+//   cgc -profile fp40 -DD3D_ALPHA_TEST=1 -entry main MyShader.cg
+// (or define D3D_ALPHA_TEST in your source code before this)
+// -----------------------------------------------------------------------------
+#define D3D_ALPHA_TEST 0 
+
+#if D3D_ALPHA_TEST
+    // In GLSL, you used "uniform mediump vec2 D3D_ALPHA_REF_SIGN;"
+    // We'll just define that as a float2 in Cg:
+    uniform float2 D3D_ALPHA_REF_SIGN;
+
+    // Helper function replicating:
+    // if ( sign(floor(alpha * 255.0) - D3D_ALPHA_REF_SIGN.x) != D3D_ALPHA_REF_SIGN.y ) { discard; }
+    void alphaTestOp(float alpha)
+    {
+        float value = floor(alpha * 255.0) - D3D_ALPHA_REF_SIGN.x;
+        if (sign(value) != D3D_ALPHA_REF_SIGN.y)
+        {
+            discard;
+        }
+    }
+#endif
+
+// Sampler for the 2D texture
+uniform sampler2D u0 : TEXUNIT0;
+
+// The main entry point
+void main(
+    // Varying from vertex shader
+    float4 oD0 : COLOR0,    // was "VARYING_oD0(lowp vec4)"
+    float2 oT0 : TEXCOORD0, // was "VARYING_oT0(highp vec2)"
+    
+    // Final fragment color
+    out float4 oCol : COLOR
+)
+{
+    // Sample the texture at oT0
+    float4 t0 = tex2D(u0, oT0);
+
+    // oCol = oD0 * t0 * 2.0
+    oCol = oD0 * t0 * 2.0;
+
+    // oCol.rgb *= 1.0 - oCol.a
+    oCol.rgb *= (1.0 - oCol.a);
+
+    // oCol.a = 1.0 - t0.a
+    oCol.a = 1.0 - t0.a;
+
+#if D3D_ALPHA_TEST
+    // Apply alpha test if enabled
+    alphaTestOp(oCol.a);
+#endif
+}

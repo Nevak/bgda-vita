@@ -1,0 +1,37 @@
+// Cg Fragment Shader
+#define D3D_ALPHA_TEST 1
+#if D3D_ALPHA_TEST
+    // When alpha testing is enabled, declare the uniform for alpha reference
+    uniform float2 D3D_ALPHA_REF_SIGN; // maps to mediump vec2
+#endif
+
+sampler2D u0; // maps to "uniform lowp sampler2D u0;"
+
+// The fragment shader receives two varyings:
+//   - oD0: a float4 color (GLSL "VARYING_oD0(lowp vec4)")
+//   - oT0: a float2 texture coordinate (GLSL "VARYING_oT0(highp vec2)")
+float4 main(
+    float4 oD0 : TEXCOORD0,
+    float2 oT0 : TEXCOORD1
+) : COLOR
+{
+    // Sample the texture
+    float4 texColor = tex2D(u0, oT0);
+    
+    // Multiply the sampled color by oD0 and 2.0
+    float4 color = oD0 * texColor * 2.0;
+
+#if D3D_ALPHA_TEST
+    // Equivalent to: 
+    //   if( sign(floor(color.a * 255.0) - D3D_ALPHA_REF_SIGN.x) != D3D_ALPHA_REF_SIGN.y ) { discard; }
+    float testVal = floor(color.a * 255.0) - D3D_ALPHA_REF_SIGN.x;
+    if (sign(testVal) != D3D_ALPHA_REF_SIGN.y)
+    {
+        // Discard the fragment in Cg
+        clip(-1.0);
+    }
+#endif
+
+    // Return the final color
+    return color;
+}

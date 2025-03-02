@@ -1,4 +1,4 @@
-// Cg Vertex Shader
+// profile sce_vp_psp2
 
 // We have two uniforms:
 //   1) c[0]: a single float4 from the array c[] (like "uniform vec4 c[1];")
@@ -7,6 +7,8 @@
 
 // A small macro to do the screen-space adjustment
 #define screenspace(var) var.xy += D3D_SCR_CST.xy; var.xy *= D3D_SCR_CST.zw;
+// Seems like D3D_CRST is set to -424.000000 
+// Seems like c is set to 424.000000
 
 // The main vertex function, with input attributes and output varyings specified by semantics.
 void main(
