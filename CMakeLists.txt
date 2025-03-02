@@ -122,7 +122,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  ogg
 					  vorbisenc
 					  FLAC
-					  /vita-dev/vitaGL/libvitaGL.a
+					  vitaGL
 					  vitashark
 					  SceShaccCgExt
 					  taihen_stub
