@@ -464,7 +464,7 @@ void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei
 // glActiveTexture_fake
 void glActiveTexture_fake(GLenum texture) {
 	logv_info("glActiveTexture(0x%x) called. Will override with location 0x84C0 for debug.", texture);
-	glActiveTexture(0x84C0); // GL_TEXTURE0
+	glActiveTexture(texture); // GL_TEXTURE0
 }
 
 //glBindTexture_fake

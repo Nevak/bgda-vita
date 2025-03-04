@@ -46,7 +46,8 @@
  }
  
  void gl_init() {
-     vglInitWithCustomThreshold(0, 960, 544, 18 * 1024 * 1024, 0, 20 * 1024 * 1024, 12 * 1024 * 1024, SCE_GXM_MULTISAMPLE_4X);
+    vglSetSemanticBindingMode(VGL_MODE_POSTPONED);
+    vglInitWithCustomThreshold(0, 960, 544, 18 * 1024 * 1024, 0, 20 * 1024 * 1024, 12 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
  }
  
  void gl_swap() {

@@ -187,7 +187,7 @@ add_custom_target(send_kvdb
 
 add_custom_target(dump
 				  COMMAND ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump.sh ${PSVITAIP}
-				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/soulcalibur -s 24
+				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 24
 				  )
 
 add_custom_target(reboot

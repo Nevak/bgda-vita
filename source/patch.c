@@ -42,49 +42,10 @@ int setAchieve(void *this, int id, int unlock) {
 int ret0() { return 0; }
 int ret1() { return 1; }
 
-uint32_t *	I_HeapKaraLoop;
-
-int S_CheckUsefulStage(int stage) {
-	// Report as unlocked any not unlockable stage
-	switch (stage) {
-	case 8:
-	case 14: // Chaos
-	case 16: // Takematsu Castle (Winter)
-	case 17:
-	case 18:
-	case 19:
-	case 20:
-	case 21:
-	case 22:
-	case 23:
-		return 1;
-	default:
-		return SO_CONTINUE(int, stage_hook, stage);
-	}
-}
-
 so_hook _machInit_hook;
-so_hook _padInit_hook;
-so_hook _cdInit_hook;
-so_hook _emathInit_hook;
-so_hook _queryPerformanceFrequency_hook;
-so_hook _createFile_hook;
-so_hook _direct3DCreate8_hook;
-so_hook _openFile_hook;
-so_hook _isES31_hook;
 
 void exit_process() {
 	sceKernelExitProcess(0);
-}
-
-int TakamatsuSummer() {
-	*I_HeapKaraLoop = 1;
-	return SO_CONTINUE(int, takamatsu_hook);
-}
-
-int TakamatsuWinter() {
-	*I_HeapKaraLoop = 1;
-	return SO_CONTINUE(int, takamatsu2_hook);
 }
 
 int lumpLoad(char *param_1) {
@@ -92,61 +53,15 @@ int lumpLoad(char *param_1) {
 	return SO_CONTINUE(int, lumpLoad_hook, param_1);
 }
 
-void memPrintFree() {
-	printf("memPrintFree()\n");
-	return SO_CONTINUE(void *, memPrintFree_hook);
-}
-
-void listInit() {
-	printf("listInit()\n");
-	return SO_CONTINUE(void *, listInit_hook);
-}
-
 void machInit() {
 	printf("machInit()\n");
 	return SO_CONTINUE(void *, _machInit_hook);
-}
-
-int queryPerformanceFrequency() {
-	printf("queryPerformanceFrequency()\n");
-	return SO_CONTINUE(int, _queryPerformanceFrequency_hook);
-}
-
-void direct3DCreate8() {
-	printf("direct3DCreate8()\n");
-	return SO_CONTINUE(void *, _direct3DCreate8_hook);
 }
 
 // void createFile(char* param_1, int param_2) {
 // 	printf("createFile()\n");
 // 	return SO_CONTINUE(void *, _createFile_hook, param_1, param_2);
 // }
-
-void padInit() {
-	printf("padInit()\n");
-	return SO_CONTINUE(void *, _padInit_hook);
-}
-
-void cdInit() {
-	printf("cdInit()\n");
-	return SO_CONTINUE(void *, _cdInit_hook);
-}
-
-void emathInit() {
-	printf("emathInit()\n");
-	return SO_CONTINUE(void *, _emathInit_hook);
-}
-
-void openFile(void * thisptr, char * param_1, int param_2) {
-	printf("openFile()\n");
-	return SO_CONTINUE(void *, _openFile_hook, thisptr, param_1, param_2);
-}
-
-bool isES31() {
-	printf("isES31()\n");
-	return SO_CONTINUE(bool, _isES31_hook);
-}
-
 
 //MC_Init
 so_hook MC_Init_hook;
@@ -182,6 +97,11 @@ so_hook ShaderManager_LoadProgram_hook;
    (*)(JBE::Container<JBE::Util::AlignedPtr<char const> >::Iterator&)) */
 void ShaderManager_LoadProgram(void *thisptr, void *param_1, int param_2, void *param_3, unsigned int param_4, int (*param_5)(void *)) {
 	logv_error("ShaderManager_LoadProgram(%p, %p, %i, %p, %u, %p)\n", thisptr, param_1, param_2, param_3, param_4, param_5);
+
+	//uVar4 = *(uint *)(param_4 + 0x20);
+	int uVar4 = *(int *)((int)param_3 + 0x20);
+	logv_error("uVar4: %i\n", uVar4);
+
 	SO_CONTINUE(int, ShaderManager_LoadProgram_hook, thisptr, param_1, param_2, param_3, param_4, param_5);
 	log_error("ShaderManager_LoadProgram returned");
 }
@@ -292,55 +212,166 @@ void texProcessDecompress() {
 	log_error("texProcessDecompress returned\n");
 }
 
+so_hook pixel_program_data_init_hook;
+void pixel_program_data_init(void *thisptr, void *param_1, unsigned int param_2) {
+	logv_error("pixel_program_data_init(%p, %p, %u)\n", thisptr, param_1, param_2);
+
+	int iVar4 = *(int *)(param_1 + 0x1c);
+	int iVar1 = iVar4;
+	// Log both variables
+	logv_error("iVar4: %i\n", iVar4);
+	logv_error("iVar1: %i\n", iVar1);
+
+	char ***ppcVar6;
+	char **ppcVar7;
+	if (iVar4 < 0) {	
+	  	iVar1 = -iVar4;
+	}
+	if (iVar4 != 0) {
+		ppcVar6 = *(char ***)(param_1 + 0x24);
+		uint uVar8 = *(uint *)(param_1 + 0x2c);
+		ppcVar7 = ppcVar6;
+		
+		do {
+			// Print a message
+			// Print the content of ppcVar7 as a string
+			logv_error("pixel_program_data_init: ppcVar7: %s\n", *ppcVar7);
+			logv_error("pixel_program_data_init: uVar8: %u\n", uVar8);
+			if ((uVar8 & 1) == 0) {
+				log_error("pixel_program_data_init: uVar8 & 1 == 0\n");
+			}
+			else {
+				log_error("pixel_program_data_init: uVar8 & 1 != 0\n");
+			}
+
+			ppcVar7 = ppcVar7 + 2;
+			uVar8 = uVar8 >> 1;
+		} while (ppcVar7 != ppcVar6 + iVar1 * 2);
+	}
+
+	if (param_2 == 2)
+	{
+		
+		// Write 1 to the last bit of param_1 + 0x1c
+		//*(int *)(param_1 + 0x2c) = iVar4 | 1;	
+	}
+	
+	SO_CONTINUE(void *, pixel_program_data_init_hook, thisptr, param_1, param_2);
+	log_error("pixel_program_data_init returned\n");
+}
+
+so_hook stage_shader_program_hook;
+void stage_shader_program(void *thisptr, void *param_1, void *param_2, unsigned int param_3) {
+	logv_error("StageShaderProgram<>::Compile(%p, %p, %p, %u)\n", thisptr, param_1, param_2, param_3);
+	SO_CONTINUE(void *, stage_shader_program_hook, thisptr, param_1, param_2, param_3);
+	log_error("StageShaderProgram<>::Compile returned\n");
+}
+
+so_hook xg_set_program_hook;
+void xg_set_program(void *param_1, void *param_2, void *param_3) {
+	logv_error("XGSetProgram(%p, %p, %p)\n", param_1, param_2, param_3);
+	SO_CONTINUE(void *, xg_set_program_hook, param_1, param_2, param_3);
+	log_error("XGSetProgram returned\n");
+}
+
+so_hook xg_link_program_hook;
+void xg_link_program(void *param_1, void *param_2, void *param_3) {
+	logv_error("XGLinkProgram(%p, %p, %p)\n", param_1, param_2, param_3);
+	SO_CONTINUE(void *, xg_link_program_hook, param_1, param_2, param_3);
+	log_error("XGLinkProgram returned\n");
+}
+
+so_hook isES31_hook;
+int isES31() {
+	log_error("isES31()\n");
+	int ret = SO_CONTINUE(int, isES31_hook);
+	logv_error("isES31 returned value %i\n", ret);
+	return ret;
+}
+
+so_hook isES3_hook;
+int isES3() {
+	log_error("isES3()\n");
+	int ret = SO_CONTINUE(int, isES3_hook);
+	logv_error("isES3 returned value %i\n", ret);
+	return ret;
+}
+
+so_hook d3d_texture_stage_state_set_to_gl_hook;
+void d3d_texture_stage_state_set_to_gl(void *thisptr, unsigned int param_1, unsigned int param_2, unsigned int param_3) {
+	logv_error("d3d_texture_stage_state_set_to_gl(%p, %u, %u, %u)\n", thisptr, param_1, param_2, param_3);
+	SO_CONTINUE(void *, d3d_texture_stage_state_set_to_gl_hook, thisptr, param_1, param_2, param_3);
+	log_error("d3d_texture_stage_state_set_to_gl returned\n");
+}
+
+so_hook d3d_resolve_msaa_hook;
+void d3d_resolve_msaa(void *thisptr, int param_1) {
+	logv_error("d3d_resolve_msaa(%p, %i)\n", thisptr, param_1);
+	SO_CONTINUE(void *, d3d_resolve_msaa_hook, thisptr, param_1);
+	log_error("d3d_resolve_msaa returned\n");
+}
+
+so_hook d3d_buffer_to_ogl_hook;
+void d3d_buffer_to_ogl(void *thisptr, void *param_1, void *param_2, int param_3) {
+	logv_error("d3d_buffer_to_ogl(%p, %p, %p, %i)\n", thisptr, param_1, param_2, param_3);
+	SO_CONTINUE(void *, d3d_buffer_to_ogl_hook, thisptr, param_1, param_2, param_3);
+	log_error("d3d_buffer_to_ogl returned\n");
+}
+
+so_hook swap_hook;
+void swap(void *thisptr, int param_1) {
+	logv_error("swap(%p, %i)\n", thisptr, param_1);
+	SO_CONTINUE(void *, swap_hook, thisptr, param_1);
+	log_error("swap returned\n");
+}
+
+so_hook pixel_stage_shader_ctr_hook;
+void pixel_stage_shader_ctr(void *thisptr, char *param_1) {
+	logv_error("PixelStageShader::PixelStageShader(%p, %s)\n", thisptr, param_1);
+	// Print the param_1 as a string
+	logv_error("PixelStageShader::PixelStageShader: source: %s\n", param_1);
+	SO_CONTINUE(void *, pixel_stage_shader_ctr_hook, thisptr, param_1);
+	// print the value of thisptr + 0x2c as hex
+	logv_error("PixelStageShader::PixelStageShader: thisptr + 0x2c: 0x%x\n", *(int *)((int)thisptr + 0x2c));
+	log_error("PixelStageShader::PixelStageShader returned\n");
+}
 
 void so_patch(void) {
 
 	log_error("Patching .so functions\n");
 
+	
+	
+
+	//_ZN3EXT6IsES31Ev
+	//undefined4 EXT::IsES31(void)
+	//isES31_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3EXT6IsES31Ev"), (uintptr_t)&isES31);
+
+	//_ZN3EXT5IsES3Ev
+	//undefined4 EXT::IsES3(void)
+	//isES3_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3EXT5IsES3Ev"), (uintptr_t)&isES3);
+
 	// _Z7MC_Initi MC_Init
 	//MC_Init_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z7MC_Initi"), (uintptr_t)&MC_Init);
+
+	// _ZN16PixelStageShaderC1EPKc
+	//pixel_stage_shader_ctr_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN16PixelStageShaderC1EPKc"), (uintptr_t)&pixel_stage_shader_ctr);
 
 	// _Z11coreAddTaskPFvvEiPKc coreAddTask
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
 
-	// _Z10XInitCloudiPFvPKvjiEPFvRPvRjEi XInitCloud
-	// uintptr_t XInitCloud_addr = (uintptr_t)so_symbol(&so_mod, "_Z10XInitCloudiPFvPKvjiEPFvRPvRjEi");
-	// if (XInitCloud_addr == NULL) {
-	// 	log_error("XInitCloud not found\n");
-	// } else {
-	// 	logv_error("XInitCloud found at %p\n", XInitCloud_addr);
-	// 	XInitCloud_hook = hook_addr(XInitCloud_addr, (uintptr_t)&XInitCloud);
-	// }
-	
-	// // gameLoop
-	// uintptr_t gameLoop_addr = so_mod.text_base + 0xb296c;
-	// if (gameLoop_addr == NULL) {
-	// log_error("gameLoop not found\n");
-	// } else {
-	// 	logv_error("gameLoop found at %p\n", gameLoop_addr);
-	// 	gameLoop_hook = hook_addr(gameLoop_addr, (uintptr_t)&gameLoop);
-	// }
+	// _ZN3JBE9D3DDevice11SwapToFrontEi
+	//swap_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice11SwapToFrontEi"), (uintptr_t)&swap);
 
-	// // void JBE_android_main_sub(android_app *param_1)
-	// uintptr_t jbe_andoid_main_addr = (uintptr_t) so_symbol(&so_mod, "JBE_android_main_sub");
-	// if (jbe_andoid_main_addr == NULL)
-	// {
-	// 	log_error("JBE_android_main_sub not found\n");
-	// }
-	// else
-	// {
-	// 	logv_error("JBE_android_main_sub found at %p\n", jbe_andoid_main_addr);
-	// 	jbe_android_main_sub_hook = hook_addr(jbe_andoid_main_addr, (uintptr_t)&JBE_android_main_sub);
-	// }
+	// _ZN14D3DBaseTexture11BufferToOGLEP21RegisteredTextureDataPKvi
+	uintptr_t d3d_buffer_to_ogl_addr = (uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture11BufferToOGLEP21RegisteredTextureDataPKvi");
+	if (d3d_buffer_to_ogl_addr == NULL) {
+		log_error("d3d_buffer_to_ogl not found\n");
+	} else {
+		logv_error("d3d_buffer_to_ogl found at %p\n", d3d_buffer_to_ogl_addr);
+		//d3d_buffer_to_ogl_hook = hook_addr(d3d_buffer_to_ogl_addr, (uintptr_t)&d3d_buffer_to_ogl);
+	}
 
-	// _ZN3JBE6Loader4LoadEPKcPFvPvES3_PNS_3Mem4HeapENS6_8LocationEiRS3_RPi
-	// uintptr_t Loader_Load_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE6Loader4LoadEPKcPFvPvES3_PNS_3Mem4HeapENS6_8LocationEiRS3_RPi");
-	// if (Loader_Load_addr == NULL) {
-	// 	log_error("Loader_Load not found\n");
-	// } else {
-	// 	logv_error("Loader_Load found at %p\n", Loader_Load_addr);
-	// 	loader_load_hook = hook_addr(Loader_Load_addr, (uintptr_t)&loader_load);
-	// }
 
 	// _Z16lumpFindResourcePKcS0_
 	uintptr_t lumpFindResource_addr = (uintptr_t)so_symbol(&so_mod, "_Z16lumpFindResourcePKcS0_");
@@ -349,6 +380,70 @@ void so_patch(void) {
 	} else {
 		logv_error("lumpFindResource found at %p\n", lumpFindResource_addr);
 		//lumpFindResource_hook = hook_addr(lumpFindResource_addr, (uintptr_t)&lumpFindResource);
+	}
+
+	// _ZN3JBE9D3DDevice11ResolveMSAAEi
+	uintptr_t d3d_resolve_msaa_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice11ResolveMSAAEi");
+	if (d3d_resolve_msaa_addr == NULL) {
+		log_error("d3d_resolve_msaa not found\n");
+	} else {
+		logv_error("d3d_resolve_msaa found at %p\n", d3d_resolve_msaa_addr);
+		//d3d_resolve_msaa_hook = hook_addr(d3d_resolve_msaa_addr, (uintptr_t)&d3d_resolve_msaa);
+	}
+
+	// _ZN3JBE9D3DDevice17TextureStageState7SetToGLEmN13XGSamplerType4EnumE
+	uintptr_t d3d_texture_stage_state_set_to_gl_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice17TextureStageState7SetToGLEmN13XGSamplerType4EnumE");
+	if (d3d_texture_stage_state_set_to_gl_addr == NULL) {
+		log_error("d3d_texture_stage_state_set_to_gl not found\n");
+	} else {
+		logv_error("d3d_texture_stage_state_set_to_gl found at %p\n", d3d_texture_stage_state_set_to_gl_addr);
+		//d3d_texture_stage_state_set_to_gl_hook = hook_addr(d3d_texture_stage_state_set_to_gl_addr, (uintptr_t)&d3d_texture_stage_state_set_to_gl);
+	}
+
+
+	// _ZN16PixelProgramData4InitEPK16PixelStageShaderj
+	uintptr_t PixelProgramData_Init_addr = (uintptr_t)so_symbol(&so_mod, "_ZN16PixelProgramData4InitEPK16PixelStageShaderj");
+	if (PixelProgramData_Init_addr == NULL) {
+		log_error("PixelProgramData_Init not found\n");
+	} else {
+		logv_error("PixelProgramData_Init found at %p\n", PixelProgramData_Init_addr);
+		//pixel_program_data_init_hook = hook_addr(PixelProgramData_Init_addr, (uintptr_t)&pixel_program_data_init);
+	}
+
+	// _ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE
+	uintptr_t ShaderManager_LoadProgram_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE");
+	if (ShaderManager_LoadProgram_addr == NULL) {
+		log_error("ShaderManager_LoadProgram not found\n");
+	} else {
+		logv_error("ShaderManager_LoadProgram found at %p\n", ShaderManager_LoadProgram_addr);
+		//ShaderManager_LoadProgram_hook = hook_addr(ShaderManager_LoadProgram_addr, (uintptr_t)&ShaderManager_LoadProgram);
+	}
+
+	// _ZN18StageShaderProgramI16PixelStageShader16PixelProgramDataE7CompileEPcm
+	uintptr_t stage_addr = (uintptr_t)so_symbol(&so_mod, "_ZN18StageShaderProgramI16PixelStageShader16PixelProgramDataE7CompileEPcm");
+	if (stage_addr == NULL) {
+		log_error("StageShaderProgram not found\n");
+	} else {
+		logv_error("StageShaderProgram found at %p\n", stage_addr);
+		//stage_shader_program_hook = hook_addr(stage_addr, (uintptr_t)&stage_shader_program);
+	}
+
+	// _Z12XGSetProgramPKmPK18_D3DPixelShaderDef
+	uintptr_t XGSetProgram_addr = (uintptr_t)so_symbol(&so_mod, "_Z12XGSetProgramPKmPK18_D3DPixelShaderDef");
+	if (XGSetProgram_addr == NULL) {
+		log_error("XGSetProgram not found\n");
+	} else {
+		logv_error("XGSetProgram found at %p\n", XGSetProgram_addr);
+		//xg_set_program_hook = hook_addr(XGSetProgram_addr, (uintptr_t)&xg_set_program);
+	}
+
+	// _Z13XGLinkProgramPKmPK18_D3DPixelShaderDef
+	uintptr_t XGLinkProgram_addr = (uintptr_t)so_symbol(&so_mod, "_Z13XGLinkProgramPKmPK18_D3DPixelShaderDef");
+	if (XGLinkProgram_addr == NULL) {
+		log_error("XGLinkProgram not found\n");
+	} else {
+		logv_error("XGLinkProgram found at %p\n", XGLinkProgram_addr);
+		//xg_link_program_hook = hook_addr(XGLinkProgram_addr, (uintptr_t)&xg_link_program);
 	}
 
 	// _Z20texProcessDecompressv
@@ -362,31 +457,31 @@ void so_patch(void) {
 
 
 	// _Z26PVRTTextureLoadFromPointerPKvPjS0_bjS0_
-	uintptr_t PVRTTextureLoadFromPointer_addr = (uintptr_t)so_symbol(&so_mod, "_Z26PVRTTextureLoadFromPointerPKvPjS0_bjS0_");
-	if (PVRTTextureLoadFromPointer_addr == NULL) {
-		log_error("PVRTTextureLoadFromPointer not found\n");
-	} else {
-		logv_error("PVRTTextureLoadFromPointer found at %p\n", PVRTTextureLoadFromPointer_addr);
-		pvr_texture_load_from_pointer_hook = hook_addr(PVRTTextureLoadFromPointer_addr, (uintptr_t)&pvr_texture_load_from_pointer);
-	}
+	// uintptr_t PVRTTextureLoadFromPointer_addr = (uintptr_t)so_symbol(&so_mod, "_Z26PVRTTextureLoadFromPointerPKvPjS0_bjS0_");
+	// if (PVRTTextureLoadFromPointer_addr == NULL) {
+	// 	log_error("PVRTTextureLoadFromPointer not found\n");
+	// } else {
+	// 	logv_error("PVRTTextureLoadFromPointer found at %p\n", PVRTTextureLoadFromPointer_addr);
+	// 	pvr_texture_load_from_pointer_hook = hook_addr(PVRTTextureLoadFromPointer_addr, (uintptr_t)&pvr_texture_load_from_pointer);
+	// }
 
-	// _Z20PVRTErrorOutputDebugPKcz
-	uintptr_t PVRTErrorOutputDebug_addr = (uintptr_t)so_symbol(&so_mod, "_Z20PVRTErrorOutputDebugPKcz");
-	if (PVRTErrorOutputDebug_addr == NULL) {
-		log_error("PVRTErrorOutputDebug not found\n");
-	} else {
-		logv_error("PVRTErrorOutputDebug found at %p\n", PVRTErrorOutputDebug_addr);
-		//pvr_error_output_debug_hook = hook_addr(PVRTErrorOutputDebug_addr, (uintptr_t)&pvr_error_output_debug);
-	}
+	// // _Z20PVRTErrorOutputDebugPKcz
+	// uintptr_t PVRTErrorOutputDebug_addr = (uintptr_t)so_symbol(&so_mod, "_Z20PVRTErrorOutputDebugPKcz");
+	// if (PVRTErrorOutputDebug_addr == NULL) {
+	// 	log_error("PVRTErrorOutputDebug not found\n");
+	// } else {
+	// 	logv_error("PVRTErrorOutputDebug found at %p\n", PVRTErrorOutputDebug_addr);
+	// 	//pvr_error_output_debug_hook = hook_addr(PVRTErrorOutputDebug_addr, (uintptr_t)&pvr_error_output_debug);
+	// }
 
-	//_ZNK14D3DBaseTexture7GetInfoER10_D3DFORMATRiS2_RmS3_
-	uintptr_t D3DBaseTexture_GetInfo_addr = (uintptr_t)so_symbol(&so_mod, "_ZNK14D3DBaseTexture7GetInfoER10_D3DFORMATRiS2_RmS3_");
-	if (D3DBaseTexture_GetInfo_addr == NULL) {
-		log_error("D3DBaseTexture_GetInfo not found\n");
-	} else {
-		logv_error("D3DBaseTexture_GetInfo found at %p\n", D3DBaseTexture_GetInfo_addr);
-		//d3d_base_texture_get_info_hook = hook_addr(D3DBaseTexture_GetInfo_addr, (uintptr_t)&d3d_base_texture_get_info);
-	}
+	// //_ZNK14D3DBaseTexture7GetInfoER10_D3DFORMATRiS2_RmS3_
+	// uintptr_t D3DBaseTexture_GetInfo_addr = (uintptr_t)so_symbol(&so_mod, "_ZNK14D3DBaseTexture7GetInfoER10_D3DFORMATRiS2_RmS3_");
+	// if (D3DBaseTexture_GetInfo_addr == NULL) {
+	// 	log_error("D3DBaseTexture_GetInfo not found\n");
+	// } else {
+	// 	logv_error("D3DBaseTexture_GetInfo found at %p\n", D3DBaseTexture_GetInfo_addr);
+	// 	//d3d_base_texture_get_info_hook = hook_addr(D3DBaseTexture_GetInfo_addr, (uintptr_t)&d3d_base_texture_get_info);
+	// }
 
 	// bool XGIsSwizzledFormat(int param_1)
 	// uintptr_t XGIsSwizzledFormat_addr = (uintptr_t)so_symbol(&so_mod, "XGIsSwizzledFormat");
@@ -442,12 +537,12 @@ void so_patch(void) {
 	// I had to rename the sampler field in the shaders to "sam" cause in Cg it's a reserved keyword
 
 	uintptr_t sampler = so_mod.text_base + 0x0009719f;
-	// Print the original string to see if we're at the right place
-	logv_error("Original sampler string: %s\n", (char *)sampler);
-	// Patch the string
-	kuKernelCpuUnrestrictedMemcpy((void *)sampler, "plersam", 8);
-	// Print the new string to see if it was patched correctly
-	logv_error("Patched sampler string: %s\n", (char *)sampler);
+	// // Print the original string to see if we're at the right place
+	// logv_error("Original sampler string: %s\n", (char *)sampler);
+	// // Patch the string
+	// kuKernelCpuUnrestrictedMemcpy((void *)sampler, "plersam", 8);
+	// // Print the new string to see if it was patched correctly
+	// logv_error("Patched sampler string: %s\n", (char *)sampler);
 
 
 	sampler = so_mod.text_base + 0x0008d0e9 + 23;
@@ -465,6 +560,19 @@ void so_patch(void) {
 	kuKernelCpuUnrestrictedMemcpy((void *)sampler, "plersam", 7);
 	// Print the new string to see if it was patched correctly
 	logv_error("Patched sampler string #3: %s\n", (char *)sampler);
+
+	
+	uintptr_t addressToPatch = so_mod.text_base + 0x001fb260 - 0x00010000;
+	// Print the next 8 bytes to see if we're at the right place
+	logv_error("Original bytes at %p: %x %x %x %x %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3), *(uint8_t *)(addressToPatch + 4), *(uint8_t *)(addressToPatch + 5), *(uint8_t *)(addressToPatch + 6), *(uint8_t *)(addressToPatch + 7));
+	// Patch the bytes with 01 00 71 e3 61 ff ff 0a
+	//kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x01\x00\x71\xe3\x61\xff\xff\x0a", 8);
+
+	// Patch the bytes with NOPs
+	kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x00\x00\x00\x00\x00\x00\x00\x00", 8);
+
+	// Print the new bytes to see if it was patched correctly
+	logv_error("Patched bytes at %p: %x %x %x %x %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3), *(uint8_t *)(addressToPatch + 4), *(uint8_t *)(addressToPatch + 5), *(uint8_t *)(addressToPatch + 6), *(uint8_t *)(addressToPatch + 7));
 
 
 	// uintptr_t menuTexture = so_mod.text_base + 0x000a3a91 - 0x00010000;
@@ -505,9 +613,6 @@ void so_patch(void) {
 	// // undefined4 __thiscall JBE::File::Open(File *this,char *param_1,Mode param_2)
 	// _openFile_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE4File4OpenEPKcNS0_4ModeE"), (uintptr_t)&openFile);
 
-	// //_ZN3EXT6IsES31Ev
-	// //undefined4 EXT::IsES31(void)
-	// _isES31_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3EXT6IsES31Ev"), (uintptr_t)&isES31);
 
 	// // padInit
 	// _padInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z7padInitv"), (uintptr_t)&padInit);
@@ -548,10 +653,7 @@ void so_patch(void) {
 	
 	// // Kill ring edge particles spawning. Seems to not affect graphics in any way but helps in Money Pit.
 	// hook_addr((uintptr_t)so_symbol(&so_mod, "_Z24I_CreateRingEdgeParticleP7FVECTORS0_S0_P7FMATRIX"), (uintptr_t)&ret0);
-	
-	// // Unlock stages that aren't unlockable on Android port
-	// stage_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z18S_CheckUsefulStagei"), (uintptr_t)&S_CheckUsefulStage);
-	
+
 	// // Prevent game from crashing when attempting to exit it
 	// hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN11SoundOpenSL8shutdownEv"), (uintptr_t)&exit_process);
 }
