@@ -76,6 +76,45 @@ int main() {
 	activity->callbacks->onWindowFocusChanged(activity, 1);
 	log_info("onWindowFocusChanged() passed");
 
+	void (*inputDeviceAdded)(JNIEnv *env, jclass clazz, jint device_id, jint device_type) = (void *) so_symbol(&so_mod_jbejni, "Java_com_jbe_Activity_inputDeviceAdded");
+	if (inputDeviceAdded == NULL)
+	{
+		log_error("inputDeviceAdded is NULL");
+	}
+	else
+	{
+		log_info("inputDeviceAdded is not NULL");
+
+		/*
+		enum Device {
+			NONE,           // 0
+			SIXAXIS,        // 1
+			XB360,        // 2      
+			XB360_GENERIC,  // 3
+			WII,            // 4
+			NYKO_PLAYPAD,       // 5
+			NYKO_PLAYPAD_PRO,   // 6      
+			OUYA,               // 7
+			MOGA_PRO_HID,       // 8
+			BROADCOM_HID,       // 9
+			RED_SAMURAI,        // 10
+			SHIELD,             // 11
+			MOJO,               // 12
+			AMAZON,             // 13
+			NEXUS_PLAYER,       // 14
+			PS4,                // 15
+			FORGE_SERVAL,       // 16
+			UNKNOWN,        // 17
+			COUNT           // 18
+    	}
+		*/
+
+		// The second parameter is the device type corresponding to the enum above as found in the decompiled java code
+		// You can try with other values but I couldn't find one that shows the proper PS button icons or has bindings that make sense. Still experimenting
+
+		inputDeviceAdded(&jni, (void *)0x42424242, 0, 15);
+	}
+
 	log_info("Main  thread shutting down");
 
 
