@@ -72,7 +72,7 @@ DIR* opendir_soloader(char* name);
 int stat_soloader(char *pathname, stat64_bionic *statbuf);
 int fstat_soloader(int fd, void *statbuf);
 
-struct dirent * readdir_soloader(DIR * dir);
+struct dirent64_bionic * readdir_soloader(DIR * dir);
 int readdir_r_soloader(DIR *dirp, dirent64_bionic *entry, dirent64_bionic **result);
 
 int close_soloader(int fd);

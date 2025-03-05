@@ -120,10 +120,21 @@ DIR* opendir_soloader(char* _pathname) {
     return ret;
 }
 
-struct dirent * readdir_soloader(DIR * dir) {
+struct dirent64_bionic * readdir_soloader(DIR * dir) {
+    static struct dirent64_bionic dirent_tmp;
+
     struct dirent* ret = readdir(dir);
-    log_debug("[io] readdir()");
-    return ret;
+    logv_debug("[io] readdir(%p): %p", dir, ret);
+
+    if (ret) {
+        dirent64_bionic* entry_tmp = dirent_newlib_to_dirent_bionic(ret);
+        memcpy(&dirent_tmp, entry_tmp, sizeof(dirent64_bionic));
+        free(entry_tmp);
+        logv_debug("  [io] readdir(%p): %s", dir, dirent_tmp.d_name);
+        return &dirent_tmp;
+    }
+
+    return NULL;
 }
 
 int readdir_r_soloader(DIR *dirp, dirent64_bionic *entry, dirent64_bionic **result) {
