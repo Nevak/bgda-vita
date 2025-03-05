@@ -315,15 +315,15 @@ void glBindAttribLocation_wrapper(GLuint program, GLuint index, const GLchar *na
 	logv_info("glBindAttribLocation(%i, %i, %s) called", program, index, name);
 	glBindAttribLocation(program, index, name);
 
-	// Test with glGetAttribLocation
-	GLint loc = glGetAttribLocation(program, name);
-	if (loc == -1) {
-		log_error("glBindAttribLocation failed");
-	}
-	else
-	{
-		logv_info("glBindAttribLocation successful at %i", loc);
-	}
+	// // Test with glGetAttribLocation
+	// GLint loc = glGetAttribLocation(program, name);
+	// if (loc == -1) {
+	// 	log_error("glBindAttribLocation failed");
+	// }
+	// else
+	// {
+	// 	logv_info("glBindAttribLocation successful at %i", loc);
+	// }
 }
 
 // glCompileShader_wrapper
@@ -350,7 +350,7 @@ void glCompileShader_wrapper(GLuint shader) {
 
 // glAttachShader_wrapper
 void glAttachShader_wrapper(GLuint program, GLuint shader) {
-	logv_info("glAttachShader(%i, %i) called", program, shader);
+	logv_info("glAttachShader(%i, %i) was called", program, shader);
 	glAttachShader(program, shader);
 }
 
@@ -359,7 +359,7 @@ void glShaderSource_wrapper(GLuint shader, GLsizei count, const GLchar **string,
 	logv_info("glShaderSource(%i, %i, %p, %p) called", shader, count, string, length);
 	// // Debug the address of the shader
 	// logv_info("shader address: %p", *string);
-	// // Also log the shader source
+	// Also log the shader source
 	// for (int i = 0; i < count; i++) {
 	// 	logv_info("shader source: %s", string[i]);
 	// }
@@ -479,11 +479,21 @@ void glGenTextures_fake(GLsizei n, GLuint *textures) {
 	glGenTextures(n, textures);
 }
 
-/* JBE::InputPF::ProcessDeviceChanges(void (*)(void*, int, int), void (*)(void*, int), void*) */
-void ProcessDeviceChanges(void *param_1, void *param_2, void *param_3) {
- 	log_error("unimpl: JBE_InputPF_ProcessDeviceChanges");
-}
+// sscanf_fake
+int sscanf_fake(const char *str, const char *format, ...) {
+	logv_error("sscanf(%s, %s) called", str, format);
+	va_list args;
+	va_start(args, format);
+	#ifdef USE_SCELIBC_IO
+	int res = sceLibcBridge_sscanf(str, format, args);
+	#else
+	int res = sscanf(str, format, args);
+	#endif
+	va_end(args);
 
+	
+	return res;
+}
 
 void app_dummy(void)
 {
@@ -577,14 +587,26 @@ GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
 
 // glLinkProgram_fake
 void glLinkProgram_fake(GLuint program) {
-	//logv_info("glLinkProgram(%i) called", program);
+	logv_info("glLinkProgram(%i) called", program);
 	glLinkProgram(program);
 }
 
 // glGetAttribLocation_fake
 GLint glGetAttribLocation_fake(GLuint program, const GLchar *name) {
-	//logv_info("glGetAttribLocation(%i, %s) called", program, name);
+	logv_error("glGetAttribLocation(%i, %s) called", program, name);
 	return glGetAttribLocation(program, name);
+}
+
+// glGetActiveUniform_fake
+void glGetActiveUniform_fake(GLuint program, GLuint index, GLsizei bufSize, GLsizei *length, GLint *size, GLenum *type, GLchar *name) {
+	logv_info("glGetActiveUniform(%i, %i, %i, %p, %p, %p, %p) called", program, index, bufSize, length, size, type, name);
+	glGetActiveUniform(program, index, bufSize, length, size, type, name);
+
+	// Log the results
+	logv_info("  length = %i", *length);
+	logv_info("  size = %i", *size);
+	logv_info("  type = 0x%x", *type);
+	logv_info("  name = %s", name);
 }
 
 // glViewport_fake
@@ -1019,19 +1041,19 @@ so_default_dynlib default_dynlib[] = {
 
 
 		// OpenGL
-		{ "glActiveTexture", (uintptr_t)&glActiveTexture_fake },
+		{ "glActiveTexture", (uintptr_t)&glActiveTexture },
 		{ "glAlphaFuncx", (uintptr_t)&glAlphaFuncx },
 		{ "glAttachShader", (uintptr_t)&glAttachShader_wrapper },
-		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation_wrapper },
+		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation },
 		{ "glBindBuffer", (uintptr_t)&glBindBuffer },
 		{ "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
 		{ "glBindRenderbuffer", (uintptr_t)&glBindRenderbuffer },
-		{ "glBindTexture", (uintptr_t)&glBindTexture_fake },
+		{ "glBindTexture", (uintptr_t)&glBindTexture },
 		{ "glBlendEquation", (uintptr_t)&glBlendEquation },
 		{ "glBlendEquationSeparate", (uintptr_t)&glBlendEquationSeparate },
 		{ "glBlendFunc", (uintptr_t)&glBlendFunc },
 		{ "glBlendFuncSeparate", (uintptr_t)&glBlendFuncSeparate },
-		{ "glBufferData", (uintptr_t)&glBufferData_fake },
+		{ "glBufferData", (uintptr_t)&glBufferData },
 		{ "glBufferSubData", (uintptr_t)&glBufferSubData },
 		{ "glCheckFramebufferStatus", (uintptr_t)&glCheckFramebufferStatus },
 		{ "glClear", (uintptr_t)&glClear },
@@ -1043,8 +1065,8 @@ so_default_dynlib default_dynlib[] = {
 		{ "glColor4x", (uintptr_t)&glColor4x },
 		{ "glColorMask", (uintptr_t)&glColorMask },
 		{ "glColorPointer", (uintptr_t)&glColorPointer },
-		{ "glCompileShader", (uintptr_t)&glCompileShader_soloader },
-		{ "glCompressedTexImage2D", (uintptr_t)&glCompressedTexImage2D_fake },
+		{ "glCompileShader", (uintptr_t)&glCompileShader },
+		{ "glCompressedTexImage2D", (uintptr_t)&glCompressedTexImage2D },
 		{ "glCompressedTexSubImage2D", (uintptr_t)&glCompressedTexSubImage2D_fake },
 		{ "glCopyTexImage2D", (uintptr_t)&glCopyTexImage2D },
 		{ "glCopyTexSubImage2D", (uintptr_t)&glCopyTexSubImage2D },
@@ -1080,7 +1102,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glGenTextures", (uintptr_t)&glGenTextures },
 		{ "glGetActiveAttrib", (uintptr_t)&glGetActiveAttrib },
 		{ "glGetActiveUniform", (uintptr_t)&glGetActiveUniform },
-		{ "glGetAttribLocation", (uintptr_t)&glGetAttribLocation_fake },
+		{ "glGetAttribLocation", (uintptr_t)&glGetAttribLocation },
 		{ "glGetError", (uintptr_t)&glGetError },
 		{ "glGetFloatv", (uintptr_t)&glGetFloatv },
 		{ "glGetIntegerv", (uintptr_t)&glGetIntegerv },
@@ -1095,7 +1117,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glLightx", (uintptr_t)&ret0 },
 		{ "glLightxv", (uintptr_t)&glLightxv },
 		{ "glLineWidth", (uintptr_t)&glLineWidth },
-		{ "glLinkProgram", (uintptr_t)&glLinkProgram_fake },
+		{ "glLinkProgram", (uintptr_t)&glLinkProgram },
 		{ "glLoadMatrixf", (uintptr_t)&glLoadMatrixf },
 		{ "glLoadMatrixx", (uintptr_t)&glLoadMatrixx },
 		{ "glMaterialx", (uintptr_t)&ret0 },
@@ -1110,7 +1132,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glRenderbufferStorage", (uintptr_t)&glRenderbufferStorage },
 		{ "glScissor", (uintptr_t)&glScissor },
 		{ "glShadeModel", (uintptr_t)&glShadeModel },
-		{ "glShaderSource", (uintptr_t)&glShaderSource_soloader },
+		{ "glShaderSource", (uintptr_t)&glShaderSource },
 		{ "glStencilFunc", (uintptr_t)&glStencilFunc },
 		{ "glStencilFuncSeparate", (uintptr_t)&glStencilFuncSeparate },
 		{ "glStencilMask", (uintptr_t)&glStencilMask },
@@ -1139,7 +1161,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glUniformMatrix2fv", (uintptr_t)&glUniformMatrix2fv },
 		{ "glUniformMatrix3fv", (uintptr_t)&glUniformMatrix3fv },
 		{ "glUniformMatrix4fv", (uintptr_t)&glUniformMatrix4fv },
-		{ "glUseProgram", (uintptr_t)&glUseProgram_fake },
+		{ "glUseProgram", (uintptr_t)&glUseProgram },
 		{ "glVertexAttrib4f", (uintptr_t)&glVertexAttrib4f },
 		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
 		{ "glVertexPointer", (uintptr_t)&glVertexPointer },
