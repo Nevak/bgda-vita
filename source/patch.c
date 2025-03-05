@@ -562,17 +562,18 @@ void so_patch(void) {
 	logv_error("Patched sampler string #3: %s\n", (char *)sampler);
 
 	
-	uintptr_t addressToPatch = so_mod.text_base + 0x001fb260 - 0x00010000;
+	// Will delete: patch for fixing comparison > -1 for uniform locations
+	//uintptr_t addressToPatch = so_mod.text_base + 0x001fb260 - 0x00010000;
 	// Print the next 8 bytes to see if we're at the right place
-	logv_error("Original bytes at %p: %x %x %x %x %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3), *(uint8_t *)(addressToPatch + 4), *(uint8_t *)(addressToPatch + 5), *(uint8_t *)(addressToPatch + 6), *(uint8_t *)(addressToPatch + 7));
-	// Patch the bytes with 01 00 71 e3 61 ff ff 0a
+	//logv_error("Original bytes at %p: %x %x %x %x %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3), *(uint8_t *)(addressToPatch + 4), *(uint8_t *)(addressToPatch + 5), *(uint8_t *)(addressToPatch + 6), *(uint8_t *)(addressToPatch + 7));
+	// Patch the bytes with 01 00 71 e3 61 ff ff 0a ( != -1 instead of > -1)
 	//kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x01\x00\x71\xe3\x61\xff\xff\x0a", 8);
 
 	// Patch the bytes with NOPs
-	kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x00\x00\x00\x00\x00\x00\x00\x00", 8);
+	// kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x00\x00\x00\x00\x00\x00\x00\x00", 8);
 
 	// Print the new bytes to see if it was patched correctly
-	logv_error("Patched bytes at %p: %x %x %x %x %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3), *(uint8_t *)(addressToPatch + 4), *(uint8_t *)(addressToPatch + 5), *(uint8_t *)(addressToPatch + 6), *(uint8_t *)(addressToPatch + 7));
+	//logv_error("Patched bytes at %p: %x %x %x %x %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3), *(uint8_t *)(addressToPatch + 4), *(uint8_t *)(addressToPatch + 5), *(uint8_t *)(addressToPatch + 6), *(uint8_t *)(addressToPatch + 7));
 
 
 	// uintptr_t menuTexture = so_mod.text_base + 0x000a3a91 - 0x00010000;
