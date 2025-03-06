@@ -130,7 +130,7 @@ struct dirent64_bionic * readdir_soloader(DIR * dir) {
         dirent64_bionic* entry_tmp = dirent_newlib_to_dirent_bionic(ret);
         memcpy(&dirent_tmp, entry_tmp, sizeof(dirent64_bionic));
         free(entry_tmp);
-        logv_debug("  [io] readdir(%p): %s", dir, dirent_tmp.d_name);
+        //logv_debug("  [io] readdir(%p): %s", dir, dirent_tmp.d_name);
         return &dirent_tmp;
     }
 

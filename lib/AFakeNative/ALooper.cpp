@@ -289,7 +289,6 @@ void rebuildEpollLocked(internal_ALooper * self) {
 #define LOOPER_GET_SELF \
     ALooper * __self = ALooper_forThread(); \
     if (!__self) { \
-        printf("%s: could not get looper for thread.\n", __func__); \
         return ALOOPER_POLL_ERROR; \
     }                   \
     internal_ALooper * self = (internal_ALooper *) __self;

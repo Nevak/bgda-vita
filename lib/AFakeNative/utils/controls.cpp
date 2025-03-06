@@ -242,7 +242,7 @@ static ButtonMapping mapping[] = {
 		{ SCE_CTRL_CIRCLE,	AKEYCODE_BUTTON_B },
 		{ SCE_CTRL_SQUARE,	AKEYCODE_BUTTON_X },
 		{ SCE_CTRL_TRIANGLE,  AKEYCODE_BUTTON_Y },
-		{ SCE_CTRL_L1,		AKEYCODE_BUTTON_A },
+		{ SCE_CTRL_L1,		AKEYCODE_BUTTON_L1 },
 		{ SCE_CTRL_R1,		AKEYCODE_BUTTON_R1 },
 		{ SCE_CTRL_START,	 AKEYCODE_BUTTON_START },
 		{ SCE_CTRL_SELECT,	AKEYCODE_BUTTON_SELECT },
@@ -297,84 +297,23 @@ void pollPad() {
 
 	for (auto & i : mapping) {
 		if (pressed_buttons & i.sce_button) {
-			if (i.sce_button == SCE_CTRL_LEFT) {
-				pad.lx = 0;
-			} else if (i.sce_button == SCE_CTRL_RIGHT) {
-				pad.lx = 255;
-			} else if (i.sce_button == SCE_CTRL_DOWN) {
-				pad.ly = 255;
-			} else if (i.sce_button == SCE_CTRL_UP) {
-				pad.ly = 0;
-			} else if (i.sce_button == SCE_CTRL_R1) {
-				inputEvent e;
-				e.source = AINPUT_SOURCE_GAMEPAD;
-				e.keycode = AKEYCODE_BUTTON_Y;
-				e.action = AKEY_EVENT_ACTION_DOWN;
-				e.type = AINPUT_EVENT_TYPE_KEY;
+			inputEvent e;
+			e.source = AINPUT_SOURCE_GAMEPAD;
+			e.keycode = i.android_button;
+			e.action = AKEY_EVENT_ACTION_DOWN;
+			e.type = AINPUT_EVENT_TYPE_KEY;
 
-				AInputEvent* aie = AInputEvent_create(&e);
-				AInputQueue_enqueueEvent(inputQueue, aie);
-				
-				e.keycode = AKEYCODE_BUTTON_B;
-				aie = AInputEvent_create(&e);
-				AInputQueue_enqueueEvent(inputQueue, aie);
-				
-				e.keycode = AKEYCODE_BUTTON_X;
-				aie = AInputEvent_create(&e);
-				AInputQueue_enqueueEvent(inputQueue, aie);
-			} else {
-				inputEvent e;
-				e.source = i.sce_button == SCE_CTRL_SELECT ? AINPUT_SOURCE_KEYBOARD : AINPUT_SOURCE_GAMEPAD;
-				e.keycode = i.android_button;
-				e.action = AKEY_EVENT_ACTION_DOWN;
-				e.type = AINPUT_EVENT_TYPE_KEY;
-
-				AInputEvent* aie = AInputEvent_create(&e);
-				AInputQueue_enqueueEvent(inputQueue, aie);
-			}
+			AInputEvent* aie = AInputEvent_create(&e);
+			AInputQueue_enqueueEvent(inputQueue, aie);
 		} else if (released_buttons & i.sce_button) {
-			if (i.sce_button != SCE_CTRL_LEFT && 
-				i.sce_button != SCE_CTRL_RIGHT &&
-				i.sce_button != SCE_CTRL_UP &&
-				i.sce_button != SCE_CTRL_DOWN) {
-				if (i.sce_button == SCE_CTRL_R1) {
-					inputEvent e;
-					e.source = AINPUT_SOURCE_GAMEPAD;
-					e.keycode = AKEYCODE_BUTTON_Y;
-					e.action = AKEY_EVENT_ACTION_UP;
-					e.type = AINPUT_EVENT_TYPE_KEY;
+			inputEvent e;
+			e.source = AINPUT_SOURCE_GAMEPAD;
+			e.keycode = i.android_button;
+			e.action = AKEY_EVENT_ACTION_UP;
+			e.type = AINPUT_EVENT_TYPE_KEY;
 
-					AInputEvent *aie = AInputEvent_create(&e);
-					AInputQueue_enqueueEvent(inputQueue, aie);
-					
-					e.keycode = AKEYCODE_BUTTON_B;
-					aie = AInputEvent_create(&e);
-					AInputQueue_enqueueEvent(inputQueue, aie);
-					
-					e.keycode = AKEYCODE_BUTTON_X;
-					aie = AInputEvent_create(&e);
-					AInputQueue_enqueueEvent(inputQueue, aie);
-				} else {
-					inputEvent e;
-					e.source = i.sce_button == SCE_CTRL_SELECT ? AINPUT_SOURCE_KEYBOARD : AINPUT_SOURCE_GAMEPAD;
-					e.keycode = i.android_button;
-					e.action = AKEY_EVENT_ACTION_UP;
-					e.type = AINPUT_EVENT_TYPE_KEY;
-
-					AInputEvent *aie = AInputEvent_create(&e);
-					AInputQueue_enqueueEvent(inputQueue, aie);
-				}
-			}
-		} else if (current_buttons & i.sce_button) {
-			if (i.sce_button == SCE_CTRL_LEFT) {
-				pad.lx = 0;
-			} else if (i.sce_button == SCE_CTRL_RIGHT) {
-				pad.lx = 255;
-			} else if (i.sce_button == SCE_CTRL_DOWN) {
-				pad.ly = 255;
-			} else if (i.sce_button == SCE_CTRL_UP) {
-				pad.ly = 0;
-			}
+			AInputEvent *aie = AInputEvent_create(&e);
+			AInputQueue_enqueueEvent(inputQueue, aie);
 		}
 	}
 	

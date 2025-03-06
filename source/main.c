@@ -112,7 +112,7 @@ int main() {
 		// The second parameter is the device type corresponding to the enum above as found in the decompiled java code
 		// You can try with other values but I couldn't find one that shows the proper PS button icons or has bindings that make sense. Still experimenting
 
-		inputDeviceAdded(&jni, (void *)0x42424242, 0, 15);
+		inputDeviceAdded(&jni, (void *)0x42424242, 0, 2);
 	}
 
 	log_info("Main  thread shutting down");
