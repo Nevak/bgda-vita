@@ -22,6 +22,8 @@
 extern "C" {
 #endif
 extern so_module so_mod;
+extern so_module so_mod_libxmv;
+
 #ifdef __cplusplus
 };
 #endif
@@ -32,12 +34,12 @@ extern so_module so_mod;
 so_hook achieve_hook, stage_hook, takamatsu_hook, takamatsu2_hook, lumpLoad_hook, memPrintFree_hook, listInit_hook;
 
 
-int setAchieve(void *this, int id, int unlock) {
-	printf("setAchieve(%i, %i)\n", id, unlock);
-	trophies_unlock(id + 1);
+// int setAchieve(void *this, int id, int unlock) {
+// 	printf("setAchieve(%i, %i)\n", id, unlock);
+// 	trophies_unlock(id + 1);
 	
-	return SO_CONTINUE(int, achieve_hook, this, id, unlock);
-}
+// 	return SO_CONTINUE(int, achieve_hook, this, id, unlock);
+// }
 
 int ret0() { return 0; }
 int ret1() { return 1; }
@@ -106,13 +108,6 @@ void ShaderManager_LoadProgram(void *thisptr, void *param_1, int param_2, void *
 	log_error("ShaderManager_LoadProgram returned");
 }
 
-// gameLoop
-so_hook gameLoop_hook;
-void gameLoop() {
-	log_error("gameLoop()");
-	SO_CONTINUE(void *, gameLoop_hook);
-	log_error("gameLoop returned");
-}
 
 // machMpegLoop
 so_hook machMpegLoop_hook;
@@ -203,13 +198,6 @@ int xg_bytes_per_pixel_from_format(int param_1) {
 	int returnval = SO_CONTINUE(int, xg_bytes_per_pixel_from_format_hook, param_1);
 	logv_error("xg_bytes_per_pixel_from_format returned %i\n", returnval);
 	return returnval;
-}
-
-so_hook texProcessDecompress_hook;
-void texProcessDecompress() {
-	log_error("texProcessDecompress()\n");
-	SO_CONTINUE(void *, texProcessDecompress_hook);
-	log_error("texProcessDecompress returned\n");
 }
 
 so_hook pixel_program_data_init_hook;
@@ -336,29 +324,281 @@ void pixel_stage_shader_ctr(void *thisptr, char *param_1) {
 	log_error("PixelStageShader::PixelStageShader returned\n");
 }
 
+so_hook av_log_hook;
+//void av_log(int *param_1,int log_type, char* format, ...)
+void av_log(void *param_1, int log_type, char *format, ...) {
+	// // take the variable arguments
+	// va_list args;
+	// // print the entire message
+	// char string[512];
+	
+	// va_start(args, format);
+    
+    // sceClibVsnprintf(string, sizeof(string), format, args);
+    // va_end(args);
+
+	// logv_error("av_log(%p, %i, %s)\n", param_1, log_type, string);
+
+	// //SO_CONTINUE(void *, av_log_hook, param_1, log_type, format);
+
+
+}
+
+
+so_hook hasNEON_hook;
+int hasNEON() {
+	log_error("hasNEON()\n");
+	int ret = SO_CONTINUE(int, hasNEON_hook);
+	logv_error("hasNEON returned value %i\n", ret);
+	return ret;
+}
+
+so_hook gameLoop_hook;
+void gameLoop() {
+	float timeNow = sceKernelGetProcessTimeWide();
+	SO_CONTINUE(void *, gameLoop_hook);
+	float timeAfter = sceKernelGetProcessTimeWide();
+	logv_error("gameLoop took %f ms\n", (timeAfter - timeNow) / 1000);
+}
+
+so_hook machFrameStart_hook;
+float lastTime = 0;
+uint32_t frameCount = 0;
+void machFrameStart() {
+	float timeBefore = sceKernelGetProcessTimeWide();
+	SO_CONTINUE(void *, machFrameStart_hook);
+	float timeAfter = sceKernelGetProcessTimeWide();
+
+	float deltaTime = timeAfter - timeBefore;
+	if (deltaTime > 100) {
+		logv_error("#%d frame machFrameStart took %f ms\n", frameCount, deltaTime / 1000);
+	}
+
+	float timeNow = sceKernelGetProcessTimeWide();
+	//float deltaTime = timeNow - lastTime;
+	lastTime = timeNow;
+	frameCount++;
+	// if (deltaTime > 50000) {
+	// 	logv_error("#%d frame machFrameStart took %f ms\n", frameCount, deltaTime / 1000);
+	// }
+}
+
+so_hook machFrameEnd_hook;
+void machFrameEnd(int param_1) {
+	float timeBefore = sceKernelGetProcessTimeWide();
+	SO_CONTINUE(void *, machFrameEnd_hook, param_1);
+	float timeAfter = sceKernelGetProcessTimeWide();
+	float deltaTimeIn = timeAfter - timeBefore;
+	if (deltaTimeIn > 1000) {
+		logv_error("#%d frame machFrameEnd(%d) took %f ms\n", frameCount, param_1, deltaTimeIn / 1000);
+	}
+
+	//float timeNow = sceKernelGetProcessTimeWide();
+	//float deltaTime = timeNow - lastTime;
+	//lastTime = timeNow;
+	//frameCount++;
+	// if (deltaTime > 100) {
+	// 	logv_error("#%d frame machFrameEnd(%d) TOTAL took %f ms\n", frameCount, param_1, deltaTime / 1000);
+	// }
+}
+
+so_hook objectDrawDelayedDrawObjects_hook;
+void objectDrawDelayedDrawObjects() {
+	float timeNow = sceKernelGetProcessTimeWide();
+	SO_CONTINUE(void *, objectDrawDelayedDrawObjects_hook);
+	float timeAfter = sceKernelGetProcessTimeWide();
+	if (timeAfter - timeNow > 1000) {
+		logv_error("objectDrawDelayedDrawObjects took %f ms\n", (timeAfter - timeNow) / 1000);
+	}
+}
+
+so_hook SND_Frame_hook;
+void SND_Frame() {
+// 	float timeNow = sceKernelGetProcessTimeWide();
+// 	SO_CONTINUE(void *, SND_Frame_hook);
+// 	float timeAfter = sceKernelGetProcessTimeWide();
+// 	if (timeAfter - timeNow > 10000) {
+// 		logv_error("SND_Frame took %f ms\n", (timeAfter - timeNow) / 1000);
+// 	}
+}
+
+so_hook animFrame_hook;
+void animFrame() {
+	float timeNow = sceKernelGetProcessTimeWide();
+	SO_CONTINUE(void *, animFrame_hook);
+	float timeAfter = sceKernelGetProcessTimeWide();
+	if (timeAfter - timeNow > 1) {
+		logv_error("animFrame took %f ms\n", (timeAfter - timeNow) / 1000);
+	}
+}
+
+so_hook cdProcess_hook;
+void cdProcess(int param_1) {
+	float timeNow = sceKernelGetProcessTimeWide();
+	SO_CONTINUE(void *, cdProcess_hook, param_1);
+	float timeAfter = sceKernelGetProcessTimeWide();
+	if (timeAfter - timeNow > 1) {
+		logv_error("cdProcess took %f ms\n", (timeAfter - timeNow) / 1000);
+	}
+}
+
+so_hook texProcessDecompress_hook;
+void texProcessDecompress() {
+	float timeNow = sceKernelGetProcessTimeWide();
+	SO_CONTINUE(void *, texProcessDecompress_hook);
+	float timeAfter = sceKernelGetProcessTimeWide();
+	if (timeAfter - timeNow > 1) {
+		logv_error("texProcessDecompress took %f ms\n", (timeAfter - timeNow) / 1000);
+	}
+}
+
+so_hook worldPlotRouteProcess_hook;
+void worldPlotRouteProcess(int param_1) {
+	float timeNow = sceKernelGetProcessTimeWide();
+	SO_CONTINUE(void *, worldPlotRouteProcess_hook, param_1);
+	float timeAfter = sceKernelGetProcessTimeWide();
+	if (timeAfter - timeNow > 1) {
+		logv_error("worldPlotRouteProcess took %f ms\n", (timeAfter - timeNow) / 1000);
+	}
+}
+
+extern uint32_t world_elements_count;
+so_hook gameLoadWorld_hook;
+void gameLoadWorld(char *param_1) {
+	world_elements_count = 0;
+	logv_error("gameLoadWorld(%s)\n", param_1);
+	SO_CONTINUE(void *, gameLoadWorld_hook, param_1);
+	logv_error("gameLoadWorld(%s) loaded %d elements\n", param_1, world_elements_count);
+}
+
+extern int log_allocs;
+so_hook d3d_create_texture2_hook;
+void *d3d_create_texture2(int param_1, int param_2, int param_3, int param_4, unsigned int param_5, int param_6) {
+	void *returnval = NULL;
+	world_elements_count++;
+
+	returnval = SO_CONTINUE(void *, d3d_create_texture2_hook, param_1, param_2, param_3, param_4, param_5, param_6);
+
+	return returnval;
+}
+
+so_hook machHostOpen_hook;
+void machHostOpen(char *param_1, char *param_2) {
+	logv_error("machHostOpen(%s, %s)\n", param_1, param_2);
+	SO_CONTINUE(void *, machHostOpen_hook, param_1, param_2);
+}
+
+so_hook renderTouchIcons_hook;
+void renderTouchIcons(void *param_1) {
+
+}
+
+so_hook usingTouchscreen_hook;
+bool usingTouchscreen() {
+	return false;
+}
+
+so_hook updateCheats_hook;
+void updateCheats() {
+
+}
+
+so_hook frontEndDoControllerScreenInput_hook;
+void frontEndDoControllerScreenInput(int *param_1, int *param_2) {
+
+}
+
+so_hook lump_set_discardable_hook;
+void lump_set_discardable(char *param_1) {
+	logv_error("lump_set_discardable(%s)\n", param_1);
+	SO_CONTINUE(void *, lump_set_discardable_hook, param_1);
+}
+
+so_hook lumpClear_hook;
+void lumpClear(int param_1) {
+	logv_error("lumpClear(%i)\n", param_1);
+	SO_CONTINUE(void *, lumpClear_hook, param_1);
+}
+
+so_hook worldFreeWorld_hook;
+void worldFreeWorld(void *param_1) {
+	logv_error("worldFreeWorld(%p)\n", param_1);
+	SO_CONTINUE(void *, worldFreeWorld_hook, param_1);
+}
+
+so_hook d3d_resource_release_hook;
+void d3d_resource_release(void *thisptr) {
+	logv_error("d3d_resource_release(%p)\n", thisptr);
+	SO_CONTINUE(void *, d3d_resource_release_hook, thisptr);
+}
+
+so_hook d3d_delete_resource_async_hook;
+void d3d_delete_resource_async(void *thisptr) {
+	logv_error("d3d_delete_resource_async(%p)\n", thisptr);
+	SO_CONTINUE(void *, d3d_delete_resource_async_hook, thisptr);
+}
+
+so_hook inputRender_hook;
+void inputRender(void *thisptr) {	
+}
+
+so_hook virtualControlsCtor_hook;
+void virtualControlsCtor(void *thisptr) {
+	log_error("virtualControlsCtor()\n");
+}
+
+so_hook virtualControlsRender_hook;
+void virtualControlsRender(void *thisptr) {
+	//logv_error("virtualControlsRender()\n");
+	//SO_CONTINUE(void *, virtualControlsRender_hook);
+}
+
+so_hook d3dDevice_swap_hook;
+void d3dDevice_swap(uint param_1) {
+	float timeNow = sceKernelGetProcessTimeWide();
+	SO_CONTINUE(void *, d3dDevice_swap_hook, param_1);
+	float timeAfter = sceKernelGetProcessTimeWide();
+	if (timeAfter - timeNow > 10000) {
+		logv_error("d3dDevice_swap(%d) took %f ms\n", param_1, (timeAfter - timeNow) / 1000);
+	}
+}
+
+so_hook systemUpdate_hook;
+void systemUpdate() {
+	float timeNow = sceKernelGetProcessTimeWide();
+	SO_CONTINUE(void *, systemUpdate_hook);
+	float timeAfter = sceKernelGetProcessTimeWide();
+	if (timeAfter - timeNow > 10000) {
+		logv_error("system_update took %f ms\n", (timeAfter - timeNow) / 1000);
+	}
+}
+
+so_hook d3d_set_gamma_ramp_hook;
+void d3d_set_gamma_ramp(void *thisptr, void *param_1) {
+	logv_error("d3d_set_gamma_ramp(%p, %p)\n", thisptr, param_1);
+	SO_CONTINUE(void *, d3d_set_gamma_ramp_hook, thisptr, param_1);
+}
+
+so_hook touchControllerUpdate_hook;
+// JBE::TouchController::Update(TouchController *this,int *param_1,uint param_2,int param_3)
+void touchControllerUpdate(void *thisptr, int *param_1, unsigned int param_2, int param_3) {
+
+}
+
+so_hook d3dDeviceReadCommand_hook;
+void d3dDeviceReadCommand(void *thisptr) {
+	logv_error("d3dDeviceReadCommand(%p)\n", thisptr);
+	SO_CONTINUE(void *, d3dDeviceReadCommand_hook, thisptr);
+}
+
 void so_patch(void) {
 
 	log_error("Patching .so functions\n");
 
 	
-	
-
-	//_ZN3EXT6IsES31Ev
-	//undefined4 EXT::IsES31(void)
-	//isES31_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3EXT6IsES31Ev"), (uintptr_t)&isES31);
-
-	//_ZN3EXT5IsES3Ev
-	//undefined4 EXT::IsES3(void)
-	//isES3_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3EXT5IsES3Ev"), (uintptr_t)&isES3);
-
-	// _Z7MC_Initi MC_Init
-	//MC_Init_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z7MC_Initi"), (uintptr_t)&MC_Init);
-
-	// _ZN16PixelStageShaderC1EPKc
-	//pixel_stage_shader_ctr_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN16PixelStageShaderC1EPKc"), (uintptr_t)&pixel_stage_shader_ctr);
-
 	// _Z11coreAddTaskPFvvEiPKc coreAddTask
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
+
 
 	// _ZN3JBE9D3DDevice11SwapToFrontEi
 	//swap_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice11SwapToFrontEi"), (uintptr_t)&swap);
@@ -372,6 +612,288 @@ void so_patch(void) {
 		//d3d_buffer_to_ogl_hook = hook_addr(d3d_buffer_to_ogl_addr, (uintptr_t)&d3d_buffer_to_ogl);
 	}
 
+	//_Z14worldFreeWorldP12_worldHeader
+	uintptr_t worldFreeWorld_addr = (uintptr_t)so_symbol(&so_mod, "_Z14worldFreeWorldP12_worldHeader");
+	if (worldFreeWorld_addr == NULL) {
+		log_error("worldFreeWorld not found\n");
+	} else {
+		logv_error("worldFreeWorld found at %p\n", worldFreeWorld_addr);
+		//worldFreeWorld_hook = hook_addr(worldFreeWorld_addr, (uintptr_t)&worldFreeWorld);
+	}
+
+	//D3DDevice_Swap
+	uintptr_t swap_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_Swap");
+	if (swap_addr == NULL) {
+		log_error("D3DDevice_Swap not found\n");
+	} else {
+		logv_error("D3DDevice_Swap found at %p\n", swap_addr);
+		//d3dDevice_swap_hook = hook_addr(swap_addr, (uintptr_t)&d3dDevice_swap);
+	}
+
+	// _ZN3JBE9D3DDevice11ReadCommandEv
+	uintptr_t d3dDeviceReadCommand_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice11ReadCommandEv");
+	if (d3dDeviceReadCommand_addr == NULL) {
+		log_error("d3dDeviceReadCommand not found\n");
+	} else {
+		logv_error("d3dDeviceReadCommand found at %p\n", d3dDeviceReadCommand_addr);
+		//d3dDeviceReadCommand_hook = hook_addr(d3dDeviceReadCommand_addr, (uintptr_t)&d3dDeviceReadCommand);
+	}
+
+	// _Z9lumpCleari
+	uintptr_t lumpClear_addr = (uintptr_t)so_symbol(&so_mod, "_Z9lumpCleari");
+	if (lumpClear_addr == NULL) {
+		log_error("lumpClear not found\n");
+	} else {
+		logv_error("lumpClear found at %p\n", lumpClear_addr);
+		//lumpClear_hook = hook_addr(lumpClear_addr, (uintptr_t)&lumpClear);
+	}
+
+	// _Z18lumpSetDiscardablePKc
+	uintptr_t lump_set_discardable_addr = (uintptr_t)so_symbol(&so_mod, "_Z18lumpSetDiscardablePKc");
+	if (lump_set_discardable_addr == NULL) {
+		log_error("lump_set_discardable not found\n");
+	} else {
+		logv_error("lump_set_discardable found at %p\n", lump_set_discardable_addr);
+		//lump_set_discardable_hook = hook_addr(lump_set_discardable_addr, (uintptr_t)&lump_set_discardable);
+	}
+
+	// _ZN3JBE5Input6RenderEv
+	uintptr_t inputRender_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE5Input6RenderEv");
+	if (inputRender_addr == NULL) {
+		log_error("inputRender not found\n");
+	} else {
+		logv_error("inputRender found at %p\n", inputRender_addr);
+		inputRender_hook = hook_addr(inputRender_addr, (uintptr_t)&inputRender);
+	}
+
+	// _ZN15VirtualControlsC2Ev
+	uintptr_t virtualControlsCtor_addr = (uintptr_t)so_symbol(&so_mod, "_ZN15VirtualControlsC2Ev");
+	if (virtualControlsCtor_addr == NULL) {
+		log_error("virtualControlsCtor not found\n");
+	} else {
+		logv_error("virtualControlsCtor found at %p\n", virtualControlsCtor_addr);
+		//virtualControlsCtor_hook = hook_addr(virtualControlsCtor_addr, (uintptr_t)&virtualControlsCtor);
+	}
+
+	// D3DDevice_SetGammaRamp
+	uintptr_t d3d_set_gamma_ramp_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetGammaRamp");
+	if (d3d_set_gamma_ramp_addr == NULL) {
+		log_error("D3DDevice_SetGammaRamp not found\n");
+	} else {
+		logv_error("D3DDevice_SetGammaRamp found at %p\n", d3d_set_gamma_ramp_addr);
+		//d3d_set_gamma_ramp_hook = hook_addr(d3d_set_gamma_ramp_addr, (uintptr_t)&d3d_set_gamma_ramp);
+	}
+
+	// _ZN15VirtualControls6RenderEv
+	uintptr_t virtualControlsRender_addr = (uintptr_t)so_symbol(&so_mod, "_ZN15VirtualControls6RenderEv");
+	if (virtualControlsRender_addr == NULL) {
+		log_error("virtualControlsRender not found\n");
+	} else {
+		logv_error("virtualControlsRender found at %p\n", virtualControlsRender_addr);
+		virtualControlsRender_hook = hook_addr(virtualControlsRender_addr, (uintptr_t)&virtualControlsRender);
+	}
+
+	// _ZN14CommonControls12UpdateCheatsEv
+	uintptr_t updateCheats_addr = (uintptr_t)so_symbol(&so_mod, "_ZN14CommonControls12UpdateCheatsEv");
+	if (updateCheats_addr == NULL) {
+		log_error("updateCheats not found\n");
+	} else {
+		logv_error("updateCheats found at %p\n", updateCheats_addr);
+		//updateCheats_hook = hook_addr(updateCheats_addr, (uintptr_t)&updateCheats);
+	}
+
+	// _Z31frontEndDoControllerScreenInputRiS_
+	uintptr_t frontEndDoControllerScreenInput_addr = (uintptr_t)so_symbol(&so_mod, "_Z31frontEndDoControllerScreenInputRiS_");
+	if (frontEndDoControllerScreenInput_addr == NULL) {
+		log_error("frontEndDoControllerScreenInput not found\n");
+	} else {
+		logv_error("frontEndDoControllerScreenInput found at %p\n", frontEndDoControllerScreenInput_addr);
+		frontEndDoControllerScreenInput_hook = hook_addr(frontEndDoControllerScreenInput_addr, (uintptr_t)&frontEndDoControllerScreenInput);
+	}
+
+	// _ZN14CommonControls16UsingTouchscreenEv
+	uintptr_t usingTouchscreen_addr = (uintptr_t)so_symbol(&so_mod, "_ZN14CommonControls16UsingTouchscreenEv");
+	if (usingTouchscreen_addr == NULL) {
+		log_error("usingTouchscreen not found\n");
+	} else {
+		logv_error("usingTouchscreen found at %p\n", usingTouchscreen_addr);
+		usingTouchscreen_hook = hook_addr(usingTouchscreen_addr, (uintptr_t)&usingTouchscreen);
+	}
+
+	// _ZN3JBE6System6UpdateEv
+	uintptr_t systemUpdate_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE6System6UpdateEv");
+	if (systemUpdate_addr == NULL) {
+		log_error("systemUpdate not found\n");
+	} else {
+		logv_error("systemUpdate found at %p\n", systemUpdate_addr);
+		//systemUpdate_hook = hook_addr(systemUpdate_addr, (uintptr_t)&systemUpdate);
+	}
+
+	// _ZN3JBE15TouchController6UpdateERKiji
+	uintptr_t touchControllerUpdate_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE15TouchController6UpdateERKiji");
+	if (touchControllerUpdate_addr == NULL) {
+		log_error("touchControllerUpdate not found\n");
+	} else {
+		logv_error("touchControllerUpdate found at %p\n", touchControllerUpdate_addr);
+		//touchControllerUpdate_hook = hook_addr(touchControllerUpdate_addr, (uintptr_t)&touchControllerUpdate);
+	}
+
+	//_ZN14CommonControls16RenderTouchIconsEP4Menu
+	uintptr_t renderTouchIcons_addr = (uintptr_t)so_symbol(&so_mod, "_ZN14CommonControls16RenderTouchIconsEP4Menu");
+	if (renderTouchIcons_addr == NULL) {
+		log_error("renderTouchIcons not found\n");
+	} else {
+		logv_error("renderTouchIcons found at %p\n", renderTouchIcons_addr);
+		renderTouchIcons_hook = hook_addr(renderTouchIcons_addr, (uintptr_t)&renderTouchIcons);
+	}
+
+	// D3DBaseTexture *D3DDevice_CreateTexture2(int param_1,int param_2,undefined4 param_3,int param_4,uint param_5,undefined4 param_6)
+	uintptr_t d3d_create_texture2_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_CreateTexture2");
+	if (d3d_create_texture2_addr == NULL) {
+		log_error("D3DDevice_CreateTexture2 not found\n");
+	} else {
+		logv_error("D3DDevice_CreateTexture2 found at %p\n", d3d_create_texture2_addr);
+		//d3d_create_texture2_hook = hook_addr(d3d_create_texture2_addr, (uintptr_t)&d3d_create_texture2);
+	}
+
+	// uint D3DResource_Release(uint *param_1)
+	// uintptr_t d3d_resource_release_addr = (uintptr_t)so_symbol(&so_mod, "D3DResource_Release");
+	// if (d3d_resource_release_addr == NULL) {
+	// 	log_error("D3DResource_Release not found\n");
+	// } else {
+	// 	logv_error("D3DResource_Release found at %p\n", d3d_resource_release_addr);
+	// 	d3d_resource_release_hook = hook_addr(d3d_resource_release_addr, (uintptr_t)&d3d_resource_release);
+	// }
+
+	// // _ZN3JBE9D3DDevice19DeleteResourceAsyncEm
+	// uintptr_t d3d_delete_resource_async_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice19DeleteResourceAsyncEm");
+	// if (d3d_delete_resource_async_addr == NULL) {
+	// 	log_error("D3DDevice_DeleteResourceAsync not found\n");
+	// } else {
+	// 	logv_error("D3DDevice_DeleteResourceAsync found at %p\n", d3d_delete_resource_async_addr);
+	// 	d3d_delete_resource_async_hook = hook_addr(d3d_delete_resource_async_addr, (uintptr_t)&d3d_delete_resource_async);
+	// }
+
+
+	// _Z12machHostOpenPKcS0_
+	uintptr_t machHostOpen_addr = (uintptr_t)so_symbol(&so_mod, "_Z12machHostOpenPKcS0_");
+	if (machHostOpen_addr == NULL) {
+		log_error("machHostOpen not found\n");
+	} else {
+		logv_error("machHostOpen found at %p\n", machHostOpen_addr);
+		//machHostOpen_hook = hook_addr(machHostOpen_addr, (uintptr_t)&machHostOpen);
+	}
+	
+
+	// _ZN3JBE8SystemPF7HasNEONEv
+	uintptr_t hasNEON_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE8SystemPF7HasNEONEv");
+	if (hasNEON_addr == NULL) {
+		log_error("hasNEON not found\n");
+	} else {
+		logv_error("hasNEON found at %p\n", hasNEON_addr);
+		//hasNEON_hook = hook_addr(hasNEON_addr, (uintptr_t)&hasNEON);
+	}
+
+	//_Z13gameLoadWorldPc
+	uintptr_t gameLoadWorld_addr = (uintptr_t)so_symbol(&so_mod, "_Z13gameLoadWorldPc");
+	if (gameLoadWorld_addr == NULL) {
+		log_error("gameLoadWorld not found\n");
+	} else {
+		logv_error("gameLoadWorld found at %p\n", gameLoadWorld_addr);
+		//gameLoadWorld_hook = hook_addr(gameLoadWorld_addr, (uintptr_t)&gameLoadWorld);
+	}
+
+	// _Z28objectDrawDelayedDrawObjectsv
+	uintptr_t objectDrawDelayedDrawObjects_addr = (uintptr_t)so_symbol(&so_mod, "_Z28objectDrawDelayedDrawObjectsv");
+	if (objectDrawDelayedDrawObjects_addr == NULL) {
+		log_error("objectDrawDelayedDrawObjects not found\n");
+	} else {
+		logv_error("objectDrawDelayedDrawObjects found at %p\n", objectDrawDelayedDrawObjects_addr);
+		//objectDrawDelayedDrawObjects_hook = hook_addr(objectDrawDelayedDrawObjects_addr, (uintptr_t)&objectDrawDelayedDrawObjects);
+	}
+
+	// _Z9SND_Framev
+	uintptr_t SND_Frame_addr = (uintptr_t)so_symbol(&so_mod, "_Z9SND_Framev");
+	if (SND_Frame_addr == NULL) {
+		log_error("SND_Frame not found\n");
+	} else {
+		logv_error("SND_Frame found at %p\n", SND_Frame_addr);
+		//SND_Frame_hook = hook_addr(SND_Frame_addr, (uintptr_t)&SND_Frame);
+	}
+
+	// _Z9animFramev
+	uintptr_t animFrame_addr = (uintptr_t)so_symbol(&so_mod, "_Z9animFramev");
+	if (animFrame_addr == NULL) {
+		log_error("animFrame not found\n");
+	} else {
+		logv_error("animFrame found at %p\n", animFrame_addr);
+		//animFrame_hook = hook_addr(animFrame_addr, (uintptr_t)&animFrame);
+	}
+
+	//_Z9cdProcessi
+	uintptr_t cdProcess_addr = (uintptr_t)so_symbol(&so_mod, "_Z9cdProcessi");
+	if (cdProcess_addr == NULL) {
+		log_error("cdProcess not found\n");
+	} else {
+		logv_error("cdProcess found at %p\n", cdProcess_addr);
+		//cdProcess_hook = hook_addr(cdProcess_addr, (uintptr_t)&cdProcess);
+	}
+
+	// _Z20texProcessDecompressv
+	uintptr_t texProcessDecompress_addr = (uintptr_t)so_symbol(&so_mod, "_Z20texProcessDecompressv");
+	if (texProcessDecompress_addr == NULL) {
+		log_error("texProcessDecompress not found\n");
+	} else {
+		logv_error("texProcessDecompress found at %p\n", texProcessDecompress_addr);
+		//texProcessDecompress_hook = hook_addr(texProcessDecompress_addr, (uintptr_t)&texProcessDecompress);
+	}
+
+	// _Z21worldPlotRouteProcessi
+	uintptr_t worldPlotRouteProcess_addr = (uintptr_t)so_symbol(&so_mod, "_Z21worldPlotRouteProcessi");
+	if (worldPlotRouteProcess_addr == NULL) {
+		log_error("worldPlotRouteProcess not found\n");
+	} else {
+		logv_error("worldPlotRouteProcess found at %p\n", worldPlotRouteProcess_addr);
+		//worldPlotRouteProcess_hook = hook_addr(worldPlotRouteProcess_addr, (uintptr_t)&worldPlotRouteProcess);
+	}
+
+	// 
+
+	//av_log
+	uintptr_t av_log_addr = (uintptr_t)so_symbol(&so_mod_libxmv, "av_log");
+	if (av_log_addr == NULL) {
+		log_error("av_log not found\n");
+	} else {
+		logv_error("av_log found at %p\n", av_log_addr);
+		//av_log_hook = hook_addr(av_log_addr, (uintptr_t)&av_log);
+	}
+
+	// _Z8gameLoopv
+	uintptr_t gameLoop_addr = (uintptr_t)so_symbol(&so_mod, "_Z8gameLoopv");
+	if (gameLoop_addr == NULL) {
+		log_error("gameLoop not found\n");
+	} else {
+		logv_error("gameLoop found at %p\n", gameLoop_addr);
+		//gameLoop_hook = hook_addr(gameLoop_addr, (uintptr_t)&gameLoop);
+	}
+
+	// _Z14machFrameStartv
+	uintptr_t machFrameStart_addr = (uintptr_t)so_symbol(&so_mod, "_Z14machFrameStartv");
+	if (machFrameStart_addr == NULL) {
+		log_error("machFrameStart not found\n");
+	} else {
+		logv_error("machFrameStart found at %p\n", machFrameStart_addr);
+		//machFrameStart_hook = hook_addr(machFrameStart_addr, (uintptr_t)&machFrameStart);
+	}
+
+	// machFrameEnd
+	uintptr_t machFrameEnd_addr = (uintptr_t)so_symbol(&so_mod, "_Z12machFrameEndi");
+	if (machFrameEnd_addr == NULL) {
+		log_error("machFrameEnd not found\n");
+	} else {
+		logv_error("machFrameEnd found at %p\n", machFrameEnd_addr);
+		//machFrameEnd_hook = hook_addr(machFrameEnd_addr, (uintptr_t)&machFrameEnd);
+	}
 
 	// _Z16lumpFindResourcePKcS0_
 	uintptr_t lumpFindResource_addr = (uintptr_t)so_symbol(&so_mod, "_Z16lumpFindResourcePKcS0_");
@@ -446,60 +968,6 @@ void so_patch(void) {
 		//xg_link_program_hook = hook_addr(XGLinkProgram_addr, (uintptr_t)&xg_link_program);
 	}
 
-	// _Z20texProcessDecompressv
-	// uintptr_t texProcessDecompress_addr = (uintptr_t)so_symbol(&so_mod, "_Z20texProcessDecompressv");
-	// if (texProcessDecompress_addr == NULL) {
-	// 	log_error("texProcessDecompress not found\n");
-	// } else {
-	// 	logv_error("texProcessDecompress found at %p\n", texProcessDecompress_addr);
-	// 	texProcessDecompress_hook = hook_addr(texProcessDecompress_addr, (uintptr_t)&texProcessDecompress);
-	// }
-
-
-	// _Z26PVRTTextureLoadFromPointerPKvPjS0_bjS0_
-	// uintptr_t PVRTTextureLoadFromPointer_addr = (uintptr_t)so_symbol(&so_mod, "_Z26PVRTTextureLoadFromPointerPKvPjS0_bjS0_");
-	// if (PVRTTextureLoadFromPointer_addr == NULL) {
-	// 	log_error("PVRTTextureLoadFromPointer not found\n");
-	// } else {
-	// 	logv_error("PVRTTextureLoadFromPointer found at %p\n", PVRTTextureLoadFromPointer_addr);
-	// 	pvr_texture_load_from_pointer_hook = hook_addr(PVRTTextureLoadFromPointer_addr, (uintptr_t)&pvr_texture_load_from_pointer);
-	// }
-
-	// // _Z20PVRTErrorOutputDebugPKcz
-	// uintptr_t PVRTErrorOutputDebug_addr = (uintptr_t)so_symbol(&so_mod, "_Z20PVRTErrorOutputDebugPKcz");
-	// if (PVRTErrorOutputDebug_addr == NULL) {
-	// 	log_error("PVRTErrorOutputDebug not found\n");
-	// } else {
-	// 	logv_error("PVRTErrorOutputDebug found at %p\n", PVRTErrorOutputDebug_addr);
-	// 	//pvr_error_output_debug_hook = hook_addr(PVRTErrorOutputDebug_addr, (uintptr_t)&pvr_error_output_debug);
-	// }
-
-	// //_ZNK14D3DBaseTexture7GetInfoER10_D3DFORMATRiS2_RmS3_
-	// uintptr_t D3DBaseTexture_GetInfo_addr = (uintptr_t)so_symbol(&so_mod, "_ZNK14D3DBaseTexture7GetInfoER10_D3DFORMATRiS2_RmS3_");
-	// if (D3DBaseTexture_GetInfo_addr == NULL) {
-	// 	log_error("D3DBaseTexture_GetInfo not found\n");
-	// } else {
-	// 	logv_error("D3DBaseTexture_GetInfo found at %p\n", D3DBaseTexture_GetInfo_addr);
-	// 	//d3d_base_texture_get_info_hook = hook_addr(D3DBaseTexture_GetInfo_addr, (uintptr_t)&d3d_base_texture_get_info);
-	// }
-
-	// bool XGIsSwizzledFormat(int param_1)
-	// uintptr_t XGIsSwizzledFormat_addr = (uintptr_t)so_symbol(&so_mod, "XGIsSwizzledFormat");
-	// if (XGIsSwizzledFormat_addr == NULL) {
-	// 	log_error("XGIsSwizzledFormat not found\n");
-	// } else {
-	// 	logv_error("XGIsSwizzledFormat found at %p\n", XGIsSwizzledFormat_addr);
-	// 	xg_is_swizzled_format_hook = hook_addr(XGIsSwizzledFormat_addr, (uintptr_t)&xg_is_swizzled_format);
-	// }
-	// //bool XGIsCompressedFormat(uint param_1)
-	// uintptr_t XGIsCompressedFormat_addr = (uintptr_t)so_symbol(&so_mod, "XGIsCompressedFormat");
-	// if (XGIsCompressedFormat_addr == NULL) {
-	// 	log_error("XGIsCompressedFormat not found\n");
-	// } else {
-	// 	logv_error("XGIsCompressedFormat found at %p\n", XGIsCompressedFormat_addr);
-	// 	xg_is_compressed_format_hook = hook_addr(XGIsCompressedFormat_addr, (uintptr_t)&xg_is_compressed_format);
-	// }
-
  	// undefined4 XGBytesPerPixelFromFormat(undefined4 param_1)
 	uintptr_t XGBytesPerPixelFromFormat_addr = (uintptr_t)so_symbol(&so_mod, "XGBytesPerPixelFromFormat");
 	if (XGBytesPerPixelFromFormat_addr == NULL) {
@@ -508,154 +976,76 @@ void so_patch(void) {
 		logv_error("XGBytesPerPixelFromFormat found at %p\n", XGBytesPerPixelFromFormat_addr);
 		//xg_bytes_per_pixel_from_format_hook = hook_addr(XGBytesPerPixelFromFormat_addr, (uintptr_t)&xg_bytes_per_pixel_from_format);
 	}
-	
-	// _Z8lumpLoadPKc	
-	//lumpLoad_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8lumpLoadPKc"), (uintptr_t)&lumpLoad);
-
-	// _Z12machMpegLoopPKcS0_PFivEiS0_S0_ibb machMpegLoop
-	// uintptr_t machMpegLoop_addr = (uintptr_t)so_symbol(&so_mod, "_Z12machMpegLoopPKcS0_PFivEiS0_S0_ibb");
-	// if (machMpegLoop_addr == NULL) {
-	// 	log_error("machMpegLoop not found\n");
-	// } else {
-	// 	logv_error("machMpegLoop found at %p\n", machMpegLoop_addr);
-	// 	machMpegLoop_hook = hook_addr(machMpegLoop_addr, (uintptr_t)&machMpegLoop);
-	// }
-
-	// 2106a0
-	// undefined4 XMVDecoder_CreateDecoderForFile(undefined4 param_1,undefined4 param_2,undefined4 param_3)
-	// uintptr_t XMVDecoder_CreateDecoderForFile_addr = so_mod.text_base + 0x1106a0;
-	// if (XMVDecoder_CreateDecoderForFile_addr == NULL) {
-	// 	log_error("XMVDecoder_CreateDecoderForFile not found\n");
-	// } else {
-	// 	logv_error("XMVDecoder_CreateDecoderForFile found at %p\n", XMVDecoder_CreateDecoderForFile_addr);
-	// 	//hook_addr(XMVDecoder_CreateDecoderForFile_addr, (uintptr_t)&ret0);
-	// }
-
-
-	// Patch the hardcoded "sampler" string in the text section
-	// This is used in the shader manager to load the sampler
-	// I had to rename the sampler field in the shaders to "sam" cause in Cg it's a reserved keyword
-
-	uintptr_t sampler = so_mod.text_base + 0x0009719f;
-	// // Print the original string to see if we're at the right place
-	// logv_error("Original sampler string: %s\n", (char *)sampler);
-	// // Patch the string
-	// kuKernelCpuUnrestrictedMemcpy((void *)sampler, "plersam", 8);
-	// // Print the new string to see if it was patched correctly
-	// logv_error("Patched sampler string: %s\n", (char *)sampler);
-
-
-	sampler = so_mod.text_base + 0x0008d0e9 + 23;
-	// Print the original string to see if we're at the right place
-	logv_error("Original sampler string #2: %s\n", (char *)sampler);
-	// Patch the string
-	kuKernelCpuUnrestrictedMemcpy((void *)sampler, "plersam", 7);
-	// Print the new string to see if it was patched correctly
-	logv_error("Patched sampler string #2: %s\n", (char *)sampler);
-
-	sampler = so_mod.text_base + 0x0008d0e9 + 99;
-	// Print the original string to see if we're at the right place
-	logv_error("Original sampler string #3: %s\n", (char *)sampler);
-	// Patch the string
-	kuKernelCpuUnrestrictedMemcpy((void *)sampler, "plersam", 7);
-	// Print the new string to see if it was patched correctly
-	logv_error("Patched sampler string #3: %s\n", (char *)sampler);
-
-	
-	// Will delete: patch for fixing comparison > -1 for uniform locations
-	//uintptr_t addressToPatch = so_mod.text_base + 0x001fb260 - 0x00010000;
-	// Print the next 8 bytes to see if we're at the right place
-	//logv_error("Original bytes at %p: %x %x %x %x %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3), *(uint8_t *)(addressToPatch + 4), *(uint8_t *)(addressToPatch + 5), *(uint8_t *)(addressToPatch + 6), *(uint8_t *)(addressToPatch + 7));
-	// Patch the bytes with 01 00 71 e3 61 ff ff 0a ( != -1 instead of > -1)
-	//kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x01\x00\x71\xe3\x61\xff\xff\x0a", 8);
-
-	// Patch the bytes with NOPs
-	// kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x00\x00\x00\x00\x00\x00\x00\x00", 8);
-
-	// Print the new bytes to see if it was patched correctly
-	//logv_error("Patched bytes at %p: %x %x %x %x %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3), *(uint8_t *)(addressToPatch + 4), *(uint8_t *)(addressToPatch + 5), *(uint8_t *)(addressToPatch + 6), *(uint8_t *)(addressToPatch + 7));
-
-
-	// uintptr_t menuTexture = so_mod.text_base + 0x000a3a91 - 0x00010000;
-	// // Print the original string to see if we're at the right place
-	// logv_error("Original menuTexture string: %s\n", (char *)menuTexture);
-	// // Patch the string and add the null terminator cause original string was longer "frontendmenulong.tex"
-	// kuKernelCpuUnrestrictedMemcpy((void *)menuTexture, "frontendmenu.tex", 17);
-	// // Print the new string to see if it was patched correctly
-	// logv_error("Patched menuTexture string: %s\n", (char *)menuTexture);
-
-
-	// _ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE
-	//ShaderManager_LoadProgram_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE13ShaderManager11LoadProgramERNS_13ShaderProgramERKNS0_9VertexDefEiRKNS0_8PixelDefEjPFiRNS_9ContainerINS_4Util10AlignedPtrIKcEEE8IteratorEE"), (uintptr_t)&ShaderManager_LoadProgram);
-
-	//memPrintFree_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z12memPrintFreev"), (uintptr_t)&memPrintFree);
-	// // "_Z8listInitv"
-	// listInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8listInitv"), (uintptr_t)&listInit);
-	// // _Z8machInitv
-	// _machInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8machInitv"), (uintptr_t)&machInit);
-	// // undefined4 QueryPerformanceFrequency(undefined4 *param_1)
-	// _queryPerformanceFrequency_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "QueryPerformanceFrequency"), (uintptr_t)&queryPerformanceFrequency);
-
-	
-	// // void Direct3DCreate8(void)
-	// uintptr_t addr = (uintptr_t)so_symbol(&so_mod, "Direct3DCreate8");
-	// if (addr == NULL) {
-	// 	printf("Direct3DCreate8 not found\n");
-	// } else {
-	// 	printf("Direct3DCreate8 found at %p\n", addr);
-	// 	_direct3DCreate8_hook = hook_addr(addr, (uintptr_t)&direct3DCreate8);
-	// }
 
 
 
-	// void CreateFileA(byte *param_1,int param_2)
-	// _createFile_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "CreateFileA"), (uintptr_t)&createFile);
-	// //_ZN3JBE4File4OpenEPKcNS0_4ModeE
-	// // undefined4 __thiscall JBE::File::Open(File *this,char *param_1,Mode param_2)
-	// _openFile_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE4File4OpenEPKcNS0_4ModeE"), (uintptr_t)&openFile);
+	// Patch the initial heap allocation of the game to use 0x2800000 bytes instead of 0x4000000
 
+	// uintptr_t addressToPatch = so_mod.text_base + 0x001827f4 - 0x00010000;
+	// // Print the next 4 bytes to see if we're at the right place
+	// logv_error("Bytes at %p: %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3));
+	// // Patch the bytes with 05 04 A0 E3
+	// kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x0A\x05\xA0\xE3", 4);
+	// // Print the new bytes to see if it was patched correctly
+	// logv_error("Patched bytes at %p: %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3));
 
-	// // padInit
-	// _padInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z7padInitv"), (uintptr_t)&padInit);
-	// // cdInit
-	// _cdInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z6cdInitv"), (uintptr_t)&cdInit);
-	// // emathInit
-	// _emathInit_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z9emathInitv"), (uintptr_t)&emathInit);
+	// addressToPatch = so_mod.text_base + 0x001827fc - 0x00010000;
+	// // Print the next 4 bytes to see if we're at the right place
+	// logv_error("Bytes at %p: %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3));
+	// // Patch the bytes with 05 14 A0 E3
+	// kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x0A\x15\xA0\xE3", 4);
+	// // Print the new bytes to see if it was patched correctly
+	// logv_error("Patched bytes at %p: %x %x %x %x\n", addressToPatch, *(uint8_t *)addressToPatch, *(uint8_t *)(addressToPatch + 1), *(uint8_t *)(addressToPatch + 2), *(uint8_t *)(addressToPatch + 3));
 	
 
-	// // Trophies support
-	// achieve_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN7Achieve10setAchieveEii"), (uintptr_t)&setAchieve);
-	
-	// // Disable anything stage related for Takamatsu Castle to not tank framerate
-	// I_HeapKaraLoop = so_symbol(&so_mod, "I_HeapKaraLoop");
-	// takamatsu_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z17I_TakamatsuSummerv"), (uintptr_t)&TakamatsuSummer);
-	// takamatsu2_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z17I_TakamatsuWinterv"), (uintptr_t)&TakamatsuWinter);
-	
-	// // Kill "PertBoss" spawning in Money Pit. No idea what this is but seems to help with framerate tanking
-	// uint16_t instr16 = 0xd0c9; // beq #0xffffff96
-	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10eb7c), &instr16, 2);
-	
-	// // Killing S/N-Fire elements in Money Pit. Seems to help framerate with little changes to the actual stage
-	// uint32_t instr32 = 0xaf41f43f;
-	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10e55e), &instr32, 4);
-	// instr32 = 0xaf35f43f;
-	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10e702), &instr32, 4);
-	// instr32 = 0xaf3df43f;
-	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10e90e), &instr32, 4);
-	// instr32 = 0xaf3ff43f;
-	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10eaf6), &instr32, 4);
-	// instr32 = 0xaf4ef47f;
-	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10ed64), &instr32, 4);
-	// instr32 = 0xaf54f47f;
-	// kuKernelCpuUnrestrictedMemcpy((void *)(so_mod.text_base + 0x10ef6c), &instr32, 4);
-	
-	// // Paralyze mice in Money Pit to save on framerate taxing
-	// hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11I_ObjMouse0v"), (uintptr_t)&ret0);
-	
-	// // Kill ring edge particles spawning. Seems to not affect graphics in any way but helps in Money Pit.
-	// hook_addr((uintptr_t)so_symbol(&so_mod, "_Z24I_CreateRingEdgeParticleP7FVECTORS0_S0_P7FMATRIX"), (uintptr_t)&ret0);
 
-	// // Prevent game from crashing when attempting to exit it
-	// hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN11SoundOpenSL8shutdownEv"), (uintptr_t)&exit_process);
+	uintptr_t addresses[] = {
+		0x0009caf1,
+		0x000a326a,
+		0x000a1733,
+		0x0009b060,
+		0x000a0523,
+		0x000a9bde,
+		0x000a327c,
+		0x0009e89e,
+		0x0009dda3,
+		0x000a4da4,
+		0x000a7e89,
+		0x0009cb02,
+		0x0009dd92,
+		0x000ac2b3,
+		0x000ab86c,
+		0x0009e8b5,
+		0x000a328c,
+		0x000a2a2c,
+		0x000a1745,
+		0x0009b044,
+		0x0009b9ae,
+		0x0009f9bb,
+		//0x000a61ab, // "arrowA.tex",
+		0x000ab861,  // "arrowB.tex"
+		0x000a6a40,  // cancelButtonA.tex
+		0x000ad677,   // cancelButtonB.tex
+		//0x000a3fa2,	// legal2.tex	
+		//0x00a3a91	//frontendmenulong.tex	"frontendmenulong.tex"	ds
+	};
+
+	char* stringToPatch = "arrowA.tex";
+	for(int i = 0; i < sizeof(addresses) / sizeof(uintptr_t); i++) {
+		uintptr_t addressToPatch = so_mod.text_base + addresses[i] - 0x00010000;
+		
+		// print original string
+		logv_error("Original string at %p: %s\n", addressToPatch, (char *)addressToPatch);
+		kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, stringToPatch, strlen(stringToPatch)+1);
+		// print new string
+		logv_error("Patched string at %p: %s\n", addressToPatch, (char *)addressToPatch);
+	}
 }
 
+void patch_address_with_string(uintptr_t address, char *string) {
+	// print original string
+	logv_error("Original string at %p: %s\n", address, (char *)address);
+	kuKernelCpuUnrestrictedMemcpy((void *)address, string, strlen(string));
+	// print new string
+	logv_error("Patched string at %p: %s\n", address, (char *)address);
+}

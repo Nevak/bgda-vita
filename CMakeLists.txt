@@ -52,8 +52,8 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   add_definitions(-DDEBUG_SOLOADER)
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--allow-multiple-definition -O0 -fno-inline -g -ffast-math -mfloat-abi=softfp -Wno-deprecated")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -O0 -fno-inline -g")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -fno-inline -ffast-math -mfloat-abi=softfp -Wno-deprecated ")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q,--wrap,memcpy,--wrap,memset,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -O3 -fno-inline")
 
 add_executable(${CMAKE_PROJECT_NAME}
 			   source/main.c
@@ -77,7 +77,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   source/utils/logger.c
 			   source/utils/settings.c
 			   source/utils/utils.c
-			   source/utils/trophies.c
+			   #source/utils/trophies.c
 			   lib/falso_jni/FalsoJNI.c
 			   lib/falso_jni/FalsoJNI_ImplBridge.c
 			   lib/falso_jni/FalsoJNI_Logger.c
@@ -114,14 +114,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 target_link_libraries(${CMAKE_PROJECT_NAME}
 					  -Wl,--whole-archive pthread -Wl,--no-whole-archive
 					  stdc++
-					  OpenSLES
 					  openal
-					  sndfile
-					  vorbisfile
-					  vorbis
-					  ogg
-					  vorbisenc
-					  FLAC
 					  vitaGL
 					  vitashark
 					  SceShaccCgExt
@@ -134,14 +127,13 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  kubridge_stub
 					  SceHid_stub
 					  SceTouch_stub
-					  SceMotion_stub
+					  #SceMotion_stub
 					  SceAppMgr_stub
 					  SceAppUtil_stub
 					  SceAudio_stub
 					  SceAudioIn_stub
 					  SceCommonDialog_stub
 					  SceSysmodule_stub
-					  SceNpTrophy_stub
 					  ${CMAKE_BINARY_DIR}/lib/libc_bridge/stubs/libSceLibcBridge_stub.a
 					  SceDisplay_stub
 					  SceKernelDmacMgr_stub
@@ -187,7 +179,7 @@ add_custom_target(send_kvdb
 
 add_custom_target(dump
 				  COMMAND ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump.sh ${PSVITAIP}
-				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 24
+				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 128
 				  )
 
 add_custom_target(reboot

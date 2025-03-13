@@ -73,7 +73,7 @@ void controls_init(AInputQueue * queue) {
 void * controls_poll(void * arg) {
 	while (1) {
 		pollPad();
-		pollTouch();
+		//pollTouch();
 		sceKernelDelayThread(16666);
 	}
 }

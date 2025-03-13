@@ -3,6 +3,7 @@
 #include <cstdio>
 #include "ANativeWindow.h"
 #include "utils/logger.h"
+#include "utils/utils.h"
 
 typedef struct nativeWindow {
     int dummy;
@@ -18,11 +19,11 @@ ANativeWindow * ANativeWindow_create() {
 }
 
 int32_t ANativeWindow_getWidth(ANativeWindow* window) {
-    return 960;
+    return SCREEN_W;
 }
 
 int32_t ANativeWindow_getHeight(ANativeWindow* window) {
-    return 544;
+    return SCREEN_H;
 }
 
 int32_t ANativeWindow_getFormat(ANativeWindow* window) {

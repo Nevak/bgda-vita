@@ -254,27 +254,34 @@ jobject getISO3Language(jmethodID id, va_list args) {
 	JavaDynArray * ret = jda_alloc(3, FIELD_TYPE_BYTE);
 	char *arr = ret->array;
 	
+	
 	int res;
 	sceAppUtilSystemParamGetInt(SCE_SYSTEM_PARAM_ID_LANG, &res);
+	
+	printf("getISO3Language(%d)\n", res);
+
 	switch (res) {
-	case SCE_SYSTEM_PARAM_LANG_JAPANESE:
-		strcpy(arr, "jpn");
-		break;
-	case SCE_SYSTEM_PARAM_LANG_SPANISH:
-		strcpy(arr, "spa");
-		break;
-	case SCE_SYSTEM_PARAM_LANG_FRENCH:
-		strcpy(arr, "fra");
-		break;
-	case SCE_SYSTEM_PARAM_LANG_GERMAN:
-		strcpy(arr, "deu");
-		break;
-	default:
-		strcpy(arr, "eng");
-		break;
+		case SCE_SYSTEM_PARAM_LANG_JAPANESE:
+			strcpy(arr, "jpn");
+			break;
+		case SCE_SYSTEM_PARAM_LANG_SPANISH:
+			strcpy(arr, "spa");
+			break;
+		case SCE_SYSTEM_PARAM_LANG_FRENCH:
+			strcpy(arr, "fra");
+			break;
+		case SCE_SYSTEM_PARAM_LANG_GERMAN:
+			strcpy(arr, "deu");
+			break;
+		default:
+			printf("default\n");
+			strcpy(arr, "eng");
+			break;
 	}
 	
-	return (jobject)ret;
+	printf("getISO3Language() %s\n", arr);
+
+	return (jobject)arr;
 }
 
 jobject getSubLibPath(jmethodID id, va_list args) {

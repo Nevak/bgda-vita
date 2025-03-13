@@ -39,7 +39,7 @@
 #include "dll_psp2.h"
 
 
-#include <SLES/OpenSLES.h>
+//#include <SLES/OpenSLES.h>
 
 #include <sys/stat.h>
 #include <sys/unistd.h>
@@ -651,15 +651,70 @@ void glEnableVertexAttribArray_fake(GLuint index) {
 	glEnableVertexAttribArray(index);
 }
 
+// Keep a list of big allocations
+// #define MAX_ALLOCS 100
+// static void *allocs[MAX_ALLOCS];
+// static size_t alloc_sizes[MAX_ALLOCS];
+// static size_t alloc_count = 0;
+
+extern int log_allocs;
+extern uint32_t world_elements_count;
+// malloc_fake
+void *malloc_fake(size_t size) {
+	void* res = malloc(size);
+	// if (log_allocs == 1) {
+	// 	// Log the allocation
+	// 	logv_info("malloc(%zu) called. Returning %p", size, res);
+	// 	// Store the allocation
+	// 	if (alloc_count < MAX_ALLOCS) {
+	// 		allocs[alloc_count] = res;
+	// 		alloc_sizes[alloc_count] = size;
+	// 		alloc_count++;
+	// 	}
+	// 	else {
+	// 		log_error("Too many allocations to track");
+	// 	}
+	// }
+	if (res == NULL) {
+		logv_error("malloc failed for size %zu bytes. Total elements count: %d", size, world_elements_count);
+	}
+}
+
+// free_fake
+void free_fake(void *ptr) {
+	if (ptr == NULL) {
+		return;
+	}
+	//logv_info("free(%p) called", ptr);
+	// Check if this is a big allocation
+	// for (size_t i = 0; i < alloc_count; i++) {
+	// 	if (allocs[i] == ptr) {
+	// 		// Log the deallocation
+	// 		logv_info("free(%p) called for size %zu bytes", ptr, alloc_sizes[i]);
+	// 		// Remove the allocation
+	// 		allocs[i] = NULL;
+	// 		alloc_sizes[i] = 0;
+	// 		// Shift the rest of the array
+	// 		for (size_t j = i; j < alloc_count - 1; j++) {
+	// 			allocs[j] = allocs[j + 1];
+	// 			alloc_sizes[j] = alloc_sizes[j + 1];
+	// 		}
+	// 		alloc_count--;
+	// 		return;
+	// 	}
+	// }
+	free(ptr);
+}
+
 so_default_dynlib default_dynlib[] = {
 		// OpenSLES
-		{ "slCreateEngine", (uintptr_t)&slCreateEngine },
-		{ "SL_IID_ENGINE", (uintptr_t)&SL_IID_ENGINE },
-		{ "SL_IID_PLAY", (uintptr_t)&SL_IID_PLAY },
-		{ "SL_IID_BUFFERQUEUE", (uintptr_t)&SL_IID_BUFFERQUEUE },
-		{ "SL_IID_VOLUME", (uintptr_t)&SL_IID_VOLUME },
-		{ "SL_IID_SEEK", (uintptr_t)&SL_IID_SEEK },
-		{ "SL_IID_PLAYBACKRATE", (uintptr_t)&SL_IID_PLAYBACKRATE },
+		// { "slCreateEngine", (uintptr_t)&slCreateEngine },
+		// { "SL_IID_ENGINE", (uintptr_t)&SL_IID_ENGINE },
+		// { "SL_IID_PLAY", (uintptr_t)&SL_IID_PLAY },
+		// { "SL_IID_BUFFERQUEUE", (uintptr_t)&SL_IID_BUFFERQUEUE },
+		// { "SL_IID_VOLUME", (uintptr_t)&SL_IID_VOLUME },
+		// { "SL_IID_SEEK", (uintptr_t)&SL_IID_SEEK },
+		// { "SL_IID_PLAYBACKRATE", (uintptr_t)&SL_IID_PLAYBACKRATE },
 		
 		// Common C/C++ internals
 		{ "_ZNSt8bad_castD1Ev", (uintptr_t)&_ZNSt8bad_castD1Ev },
@@ -784,13 +839,13 @@ so_default_dynlib default_dynlib[] = {
 		{ "ANativeWindow_getHeight", (uintptr_t)&ANativeWindow_getHeight },
 		{ "ANativeWindow_getWidth", (uintptr_t)&ANativeWindow_getWidth },
 		{ "ANativeWindow_setBuffersGeometry", (uintptr_t)&ANativeWindow_setBuffersGeometry },
-		{ "ASensorEventQueue_disableSensor", (uintptr_t)&ASensorEventQueue_disableSensor },
-		{ "ASensorEventQueue_enableSensor", (uintptr_t)&ASensorEventQueue_enableSensor },
-		{ "ASensorEventQueue_getEvents", (uintptr_t)&ASensorEventQueue_getEvents },
-		{ "ASensorEventQueue_setEventRate", (uintptr_t)&ASensorEventQueue_setEventRate },
-		{ "ASensorManager_createEventQueue", (uintptr_t)&ASensorManager_createEventQueue },
-		{ "ASensorManager_getDefaultSensor", (uintptr_t)&ASensorManager_getDefaultSensor },
-		{ "ASensorManager_getInstance", (uintptr_t)&ASensorManager_getInstance },
+		{ "ASensorEventQueue_disableSensor", (uintptr_t)&ret0 },
+		{ "ASensorEventQueue_enableSensor", (uintptr_t)&ret0 },
+		{ "ASensorEventQueue_getEvents", (uintptr_t)&ret0 },
+		{ "ASensorEventQueue_setEventRate", (uintptr_t)&ret0 },
+		{ "ASensorManager_createEventQueue", (uintptr_t)&ret0 },
+		{ "ASensorManager_getDefaultSensor", (uintptr_t)&ret0 },
+		{ "ASensorManager_getInstance", (uintptr_t)&ret0 },
 		
 		{ "AStorageManager_new", (uintptr_t)&AStorageManager_new },
 		{ "AStorageManager_getMountedObbPath", (uintptr_t)&AStorageManager_getMountedObbPath },
@@ -910,7 +965,7 @@ so_default_dynlib default_dynlib[] = {
 		// Memory
 		{ "calloc", (uintptr_t)&calloc },
 		{ "free", (uintptr_t)&free },
-		{ "malloc", (uintptr_t)&malloc },
+		{ "malloc", (uintptr_t)&malloc_fake },
 		{ "memalign", (uintptr_t)&memalign },
 		{ "memcmp", (uintptr_t)&memcmp },
 		{ "memcpy", (uintptr_t)&memcpy },
@@ -1043,7 +1098,7 @@ so_default_dynlib default_dynlib[] = {
 		// OpenGL
 		{ "glActiveTexture", (uintptr_t)&glActiveTexture },
 		{ "glAlphaFuncx", (uintptr_t)&glAlphaFuncx },
-		{ "glAttachShader", (uintptr_t)&glAttachShader_wrapper },
+		{ "glAttachShader", (uintptr_t)&glAttachShader },
 		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation },
 		{ "glBindBuffer", (uintptr_t)&glBindBuffer },
 		{ "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
@@ -1111,7 +1166,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glGetShaderInfoLog", (uintptr_t)&glGetShaderInfoLog },
 		{ "glGetShaderiv", (uintptr_t)&glGetShaderiv },
 		{ "glGetString", (uintptr_t)&glGetString },
-		{ "glGetUniformLocation", (uintptr_t)&glGetUniformLocation_fake },
+		{ "glGetUniformLocation", (uintptr_t)&glGetUniformLocation },
 		{ "glHint", (uintptr_t)&glHint },
 		{ "glLightModelxv", (uintptr_t)&glLightModelxv },
 		{ "glLightx", (uintptr_t)&ret0 },
@@ -1166,6 +1221,8 @@ so_default_dynlib default_dynlib[] = {
 		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
 		{ "glVertexPointer", (uintptr_t)&glVertexPointer },
 		{ "glViewport", (uintptr_t)&glViewport_fake },
+		{ "glDrawArraysInstanced", (uintptr_t)&glDrawArraysInstanced },
+		{ "glDrawElementsInstanced", (uintptr_t)&glDrawElementsInstanced },
 
 		// By Raul
 		{ "glGetShaderPrecisionFormat", (uintptr_t)&ret0 },

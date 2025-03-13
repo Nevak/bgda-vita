@@ -1,7 +1,7 @@
-cd /vita-dev/vitaGL 
+cd /vita-dev/vitaGL
 make clean
-make SOFTFP_ABI=1 LOG_ERRORS=1 HAVE_GLSL_SUPPORT=0 HAVE_SHARK_LOG=1 NO_DEBUG=1 SAFE_UNIFORMS=1 install 
-cd /vita-dev/soulcalibur_vita/build 
-cmake .. -DCMAKE_BUILD_TYPE=Debug 
+make HAVE_WRAPPED_ALLOCATORS=1 HAVE_PROFILING=0 SOFTFP_ABI=1 LOG_ERRORS=0 HAVE_GLSL_SUPPORT=1 USE_SCRATCH_MEMORY=0 CIRCULAR_VERTEX_POOL=0 HAVE_SHARK_LOG=0 NO_DEBUG=1 HAVE_DEBUGGER=1 SAFE_UNIFORMS=1 STORE_DEPTH_STENCIL=1 HAVE_TEXTURE_CACHE=1 install 
+cd /vita-dev/soulcalibur_vita/build
+cmake ..
 make clean
 make send

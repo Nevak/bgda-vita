@@ -9,6 +9,7 @@
 
  #include "utils/glutil.h"
  #include "utils/logger.h"
+ #include "utils/utils.h"
  
  #include <string.h>
  #include <stdlib.h>
@@ -64,10 +65,10 @@
              *value = 0;
              break;
          case EGL_WIDTH:
-             *value = 960;
+             *value = SCREEN_W;
              break;
          case EGL_HEIGHT:
-             *value = 544;
+             *value = SCREEN_H;
              break;
          case EGL_TEXTURE_FORMAT:
              *value = EGL_TEXTURE_RGBA;
