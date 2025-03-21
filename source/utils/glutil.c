@@ -46,8 +46,8 @@
  }
  
  void gl_init() {
-    vglSetVertexPoolSize(8 * 1024 * 1024);
-    vglSetParamBufferSize(12 * 1024 * 1024);
+    vglSetVertexPoolSize(2 * 1024 * 1024);
+    vglSetParamBufferSize(2 * 1024 * 1024);
     vglUseTripleBuffering(GL_FALSE);
     vglSetSemanticBindingMode(VGL_MODE_POSTPONED);
     //vglInitWithCustomThreshold(0, 960, 544, 18 * 1024 * 1024, 0, 20 * 1024 * 1024, 0, SCE_GXM_MULTISAMPLE_NONE);

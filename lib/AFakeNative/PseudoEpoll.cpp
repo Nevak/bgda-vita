@@ -313,6 +313,10 @@ done:
     return eventsReported;
 }
 
+// Declare read_delegate to be used from external
+extern "C" ssize_t read_delegate(int fd, void *buf, size_t count);
+
+
 ssize_t pseudo_read(int fd, void *buf, size_t count) {
     if (is_eventfd(fd)) {
         return pseudo_eventfd_read(fd, buf, count);
@@ -320,7 +324,7 @@ ssize_t pseudo_read(int fd, void *buf, size_t count) {
         return pseudo_pipe_read(fd, buf, count);
     } else {
         // not eventfd or pipe, fallback to normal read
-        return read(fd, buf, count);
+        return read_delegate(fd, buf, count);
     }
 }
 

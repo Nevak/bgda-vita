@@ -21,12 +21,48 @@
 #define SCE_FIOS_PARAMS_INITIALIZER { 0, sizeof(SceFiosParams), 0, 0, 2, 1, 0, 0, 256 * 1024, 2, 0, 0, 0, 0, 0, SCE_FIOS_BUFFER_INITIALIZER, SCE_FIOS_BUFFER_INITIALIZER, SCE_FIOS_BUFFER_INITIALIZER, SCE_FIOS_BUFFER_INITIALIZER, NULL, NULL, NULL, { 66, 189, 66 }, { 0x40000, 0, 0x40000}, { 8 * 1024, 16 * 1024, 8 * 1024}}
 #define SCE_FIOS_RAM_CACHE_CONTEXT_INITIALIZER { sizeof(SceFiosRamCacheContext), 0, (64 * 1024), NULL, NULL, 0, {0, 0, 0} }
 
+
+
+typedef int64_t SceFiosTime;
+
+typedef int32_t SceFiosFH;
+typedef int32_t SceFiosDH;
+typedef uint64_t SceFiosDate;
+typedef int64_t SceFiosOffset;
+typedef int64_t SceFiosSize;
+
+typedef enum SceFiosWhence {
+    SCE_FIOS_SEEK_SET = 0,
+    SCE_FIOS_SEEK_CUR = 1,
+    SCE_FIOS_SEEK_END = 2
+} SceFiosWhence;  
+
+typedef struct SceFiosPsarcDearchiverContext
+{
+	size_t size;
+	size_t  workBufferSize;
+	void *pWorkBuffer;
+	intptr_t flags;
+	intptr_t reserved[3];
+} SceFiosPsarcDearchiverContext;
+
 typedef enum SceFiosThreadType {
     SCE_FIOS_IO_THREAD = 0,
     SCE_FIOS_DECOMPRESSOR_THREAD = 1,
     SCE_FIOS_CALLBACK_THREAD = 2,
     SCE_FIOS_THREAD_TYPES = 3
 } SceFiosThreadType;
+
+typedef struct SceFiosOpAttr {
+    SceFiosTime deadline;
+    void *pCallback;
+    void *pCallbackContext;
+    int32_t priority : 8;
+    uint32_t opflags : 24;
+    uint32_t userTag;
+    void *userPtr;
+    void *pReserved;
+} SceFiosOpAttr;
 
 typedef struct SceFiosRamCacheContext {
     size_t sizeOfContext;
@@ -77,6 +113,13 @@ void sceFiosTerminate();
 int sceFiosIOFilterAdd(int index, void *pFilterCallback, void *pFilterContext);
 void sceFiosIOFilterCache();
 
+void sceFiosIOFilterPsarcDearchiver();
+SceFiosSize sceFiosFHReadSync(const SceFiosOpAttr *attr, SceFiosFH fh, void *data, SceFiosSize size);
+SceFiosOffset sceFiosFHSeek(SceFiosFH fh, SceFiosOffset offset, SceFiosWhence whence);
+int32_t sceFiosFilenoToFH(int fileno);
+int sceFiosFHOpenSync(const SceFiosOpAttr *attr, SceFiosFH *fh, const char *path, const void *params);
+int32_t sceFiosFileGetSizeSync(const void *pAttr, const char *pPath);
 int fios_init(void);
+SceFiosSize sceFiosFHGetSize(SceFiosFH fh);
 
 #endif

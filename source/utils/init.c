@@ -16,6 +16,9 @@
 #include "utils/logger.h"
 #include "utils/utils.h"
 #include "utils/settings.h"
+#include "utils/ogg_patch.h"
+#include "utils/vorbis_patch.h"
+#include "utils/ffmpeg_patch.h"
 
 #include "dynlib.h"
 #include "patch.h"
@@ -118,6 +121,9 @@ void soloader_init_all() {
     log_info("so_resolve() passed.");
 
     so_patch();
+    patch_ogg();
+    patch_vorbis();
+    //patch_ffmpeg();
     log_info("so_patch() passed.");
 
     so_flush_caches(&so_mod);

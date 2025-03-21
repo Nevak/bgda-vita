@@ -37,7 +37,7 @@
 #include <locale.h>
 #include <poll.h>
 #include "dll_psp2.h"
-
+#include <fios/fios.h>
 
 //#include <SLES/OpenSLES.h>
 
@@ -180,10 +180,7 @@ int AAsset_getLength() {
 	log_error("unimpl: AAsset_getLength");
 	return 0;
 }
-int AAsset_openFileDescriptor() {
-	log_error("unimpl: AAsset_openFileDescriptor");
-	return 0;
-}
+
 int AAssetDir_close() {
 	log_error("unimpl: AAssetDir_close");
 	return 0;
@@ -400,64 +397,16 @@ void glCompressedTexImage2D_fake(GLenum target, GLint level, GLenum internalform
 
 // glTexImage2D_fake
 void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) {
-	logv_error("glTexImage2D(%i, %i, format:0x%x, w:%i, h:%i, %i, format0x%x, type:0x%x, %p) called", 
-		target, level, internalformat, width, height, border, format, type, pixels);
-    
-	// Generate one random color (RGBA). 
-	// You may want to call srand() once, in some init code.
-	unsigned char r = 0;
-	unsigned char g = 256;
-	unsigned char b = 0;
-	unsigned char a = 255;
-
-
-	// 2) Check format/type pairs and fill
-	if (type == GL_UNSIGNED_BYTE && (format == GL_RGBA || format == GL_BGRA)) {
-		// Cast away 'const' to overwrite the buffer
-		unsigned char *fakePixels = NULL;
-		size_t totalPixels = (size_t)width * (size_t)height;
-		size_t totalBytes = totalPixels * 4; // 4 bytes per pixel
-		fakePixels = (unsigned char *)malloc(totalBytes);
-		
-		if (format == GL_RGBA) {
-			log_error("FAKE:   Filling RGBA with GL_UNSIGNED_BYTE.\n");
-			// RGBA means index 0=R, 1=G, 2=B, 3=A
-			//size_t totalPixels = (size_t)width * (size_t)height;
-			for (size_t i = 0; i < totalPixels; i++) {
-				fakePixels[i*4 + 0] = r;
-				fakePixels[i*4 + 1] = g;
-				fakePixels[i*4 + 2] = b;
-				fakePixels[i*4 + 3] = a;
-			}
-		}
-		else if (format == GL_BGRA) {
-			log_error("FAKE:   Filling BGRA with GL_UNSIGNED_BYTE.\n");
-			// BGRA means index 0=B, 1=G, 2=R, 3=A
-			//size_t totalPixels = (size_t)width * (size_t)height;
-			for (size_t i = 0; i < totalPixels; i++) {
-				fakePixels[i*4 + 0] = b;
-				fakePixels[i*4 + 1] = g;
-				fakePixels[i*4 + 2] = r;
-				fakePixels[i*4 + 3] = a;
-			}
-		}
-		else {
-			// Unhandled format for debug
-			logv_error("FAKE:   Unhandled format=0x%x with GL_UNSIGNED_BYTE.\n", (unsigned)format);
-		}
-
-		// Call the real glTexImage2D with the fake data
-		log_error("FAKE:   Calling real glTexImage2D.\n");
-		glTexImage2D(target, level, internalformat, width, height, border, format, type, fakePixels);
-		free(fakePixels);
+	
+	// if (target == GL_TEXTURE_2D && format == 0x80e1 && width != SCREEN_W && height != SCREEN_H && type == 0x1401) {
+	// 	internalformat = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+	// 	logv_error("glTexImage2D(%i, %i, format:0x%x, w:%i, h:%i, %i, format0x%x, type:0x%x, %p) called", 
+	// 		target, level, internalformat, width, height, border, format, type, pixels);
+	// }
+	if (level > 0)
+	{
 		return;
 	}
-	else {
-		// Other type combos not handled here
-		logv_error("FAKE:   Unhandled format=0x%x, type=0x%x.\n", (unsigned)format, (unsigned)type);
-	}
-
-	log_error("FAKE:   Calling real glTexImage2D.\n");
 	glTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
 }
 
@@ -659,24 +608,88 @@ void glEnableVertexAttribArray_fake(GLuint index) {
 
 extern int log_allocs;
 extern uint32_t world_elements_count;
+extern uint32_t frameCount;
 // malloc_fake
 void *malloc_fake(size_t size) {
 	void* res = malloc(size);
-	// if (log_allocs == 1) {
-	// 	// Log the allocation
-	// 	logv_info("malloc(%zu) called. Returning %p", size, res);
-	// 	// Store the allocation
-	// 	if (alloc_count < MAX_ALLOCS) {
-	// 		allocs[alloc_count] = res;
-	// 		alloc_sizes[alloc_count] = size;
-	// 		alloc_count++;
-	// 	}
-	// 	else {
-	// 		log_error("Too many allocations to track");
-	// 	}
-	// }
+	if (log_allocs == 1) {
+		// Log the allocation
+		logv_info("[#%d] malloc(%zu) called. Returning %p", frameCount, size, res);
+
+		// try to get the backtrace with __builtin_return_address()
+		void * addr = __builtin_return_address(0);
+		logv_info("  backtrace: %p", addr);
+
+
+		// Read 24 addresses from the stack pointer
+		// void * stackp =  __builtin_stack_address();
+		// for (int i = 0; i < 24; i++) {
+		// 	void * addr = stackp + i * sizeof(void*);
+		// 	logv_info("  stack[%d]: %p", i, addr);
+		// }
+
+
+		
+
+		// Cause a crash to see the dump and backtrace
+		// void (*crash)() = NULL;
+		// crash();
+
+		// // Store the allocation
+		// if (alloc_count < MAX_ALLOCS) {
+		// 	allocs[alloc_count] = res;
+		// 	alloc_sizes[alloc_count] = size;
+		// 	alloc_count++;
+		// }
+		// else {
+		// 	log_error("Too many allocations to track");
+		// }
+	}
 	if (res == NULL) {
 		logv_error("malloc failed for size %zu bytes. Total elements count: %d", size, world_elements_count);
+	}
+}
+
+ssize_t read_delegate(int fd, void *buf, size_t count) {
+	SceFiosFH* fiosH = sceFiosFHToFileno(fd);
+	if (fiosH == 0xffffffff)
+	{
+		//logv_error("non-fios read(fd=0x%x, 0x%p, %zu) delegate called", fd, buf, count);
+		return read(fd, buf, count);
+	}
+	else
+	{
+		//logv_error("read(fd=0x%x, 0x%p, %zu) delegate called .fiosH=0x%x", fd, buf, count, fiosH);
+		//uint32_t read = 0;
+		int res = sceFiosFHReadSync(NULL, fiosH, buf, count);
+		//logv_error("read(fd=0x%x, 0x%p, %zu) delegate called .fiosH=0x%x, read=0x%x, res=%i", fd, buf, count, fiosH, read, res);
+		return res;
+	}
+}
+
+extern int retOpen;
+//lseek_delegate
+off_t lseek_delegate(int fd, off_t offset, int whence) {
+	//logv_error("lseek(0x%i, %i, %i) delegate called", fd, offset, whence);
+	SceFiosFH* fiosH = sceFiosFHToFileno(fd);
+	if (fiosH == 0xffffffff)
+	{
+		//logv_error("non-fios lseek(fd=0x%x, 0x%x, %i) delegate called", fd, offset, whence);
+		int res = lseek(fd, offset, whence);
+		// if (fd == retOpen)
+		// {
+		// 	logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. res=%i", fd, offset, whence, res);
+		// }
+		//logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. res=%i", fd, offset, whence, res);
+		return res;
+	}
+	else
+	{
+		//logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. fiosH=0x%x", fd, offset, whence, fiosH);
+		//uint32_t pos = 0;
+		int res = sceFiosFHSeek(fiosH, offset, whence);
+		//logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. fiosH=0x%x, pos=0x%x, res=0x%i", fd, offset, whence, fiosH, pos, res);
+		return res;
 	}
 }
 
@@ -984,7 +997,10 @@ so_default_dynlib default_dynlib[] = {
 		{ "fclose", (uintptr_t)&fclose_soloader },
 		{ "fcntl", (uintptr_t)&fcntl_soloader },
 		{ "fopen", (uintptr_t)&fopen_soloader },
+		//{ "fread", (uintptr_t)&fread_soloader },
 		{ "fstat", (uintptr_t)&fstat_soloader },
+		//{ "fseek", (uintptr_t)&fseek_soloader },
+		//{ "ftell", (uintptr_t)&ftell_soloader },
 		{ "fsync", (uintptr_t)&fsync_soloader },
 		{ "ioctl", (uintptr_t)&ioctl_soloader },
 		{ "open", (uintptr_t)&open_soloader },
@@ -995,7 +1011,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "rewinddir", (uintptr_t)&rewinddir },
 
 
-		#ifdef USE_SCELIBC_IO
+		//#ifdef USE_SCELIBC_IO
 			{ "fdopen", (uintptr_t)&sceLibcBridge_fdopen },
 			{ "feof", (uintptr_t)&sceLibcBridge_feof },
 			{ "ferror", (uintptr_t)&sceLibcBridge_ferror },
@@ -1005,11 +1021,11 @@ so_default_dynlib default_dynlib[] = {
 			{ "fgets", (uintptr_t)&sceLibcBridge_fgets },
 			{ "fputc", (uintptr_t)&sceLibcBridge_fputc },
 			{ "fputs", (uintptr_t)&sceLibcBridge_fputs },
-			{ "fread", (uintptr_t)&sceLibcBridge_fread },
+			{ "fread", (uintptr_t)&fread_soloader },
 			{ "freopen", (uintptr_t)&sceLibcBridge_freopen },
-			{ "fseek", (uintptr_t)&sceLibcBridge_fseek },
+			{ "fseek", (uintptr_t)&fseek_soloader },
 			{ "fsetpos", (uintptr_t)&sceLibcBridge_fsetpos },
-			{ "ftell", (uintptr_t)&sceLibcBridge_ftell },
+			{ "ftell", (uintptr_t)&ftell_soloader },
 			{ "fwrite", (uintptr_t)&sceLibcBridge_fwrite },
 			{ "getc", (uintptr_t)&sceLibcBridge_getc },
 			{ "getwc", (uintptr_t)&sceLibcBridge_getwc },
@@ -1020,32 +1036,32 @@ so_default_dynlib default_dynlib[] = {
 			{ "setvbuf", (uintptr_t)&sceLibcBridge_setvbuf },
 			{ "ungetc", (uintptr_t)&sceLibcBridge_ungetc },
 			{ "ungetwc", (uintptr_t)&sceLibcBridge_ungetwc },
-		#else
-			{ "fdopen", (uintptr_t)&fdopen },
-			{ "feof", (uintptr_t)&feof },
-			{ "ferror", (uintptr_t)&ferror },
-			{ "fflush", (uintptr_t)&fflush },
-			{ "fgetc", (uintptr_t)&fgetc },
-			{ "fgetpos", (uintptr_t)&fgetpos },
-			{ "fgets", (uintptr_t)&fgets },
-			{ "fputc", (uintptr_t)&fputc },
-			{ "fputs", (uintptr_t)&fputs },
-			{ "fread", (uintptr_t)&fread },
-			{ "freopen", (uintptr_t)&freopen },
-			{ "fseek", (uintptr_t)&fseek },
-			{ "fsetpos", (uintptr_t)&fsetpos },
-			{ "ftell", (uintptr_t)&ftell },
-			{ "fwrite", (uintptr_t)&fwrite },
-			{ "getc", (uintptr_t)&getc },
-			{ "getwc", (uintptr_t)&getwc },
-			{ "putc", (uintptr_t)&putc },
-			{ "putchar", (uintptr_t)&putchar },
-			{ "puts", (uintptr_t)&puts },
-			{ "putwc", (uintptr_t)&putwc },
-			{ "setvbuf", (uintptr_t)&setvbuf },
-			{ "ungetc", (uintptr_t)&ungetc },
-			{ "ungetwc", (uintptr_t)&ungetwc },
-		#endif
+		//#else
+			// { "fdopen", (uintptr_t)&fdopen },
+			// { "feof", (uintptr_t)&feof },
+			// { "ferror", (uintptr_t)&ferror },
+			// { "fflush", (uintptr_t)&fflush },
+			// { "fgetc", (uintptr_t)&fgetc },
+			// { "fgetpos", (uintptr_t)&fgetpos },
+			// { "fgets", (uintptr_t)&fgets },
+			// { "fputc", (uintptr_t)&fputc },
+			// { "fputs", (uintptr_t)&fputs },
+			// { "fread", (uintptr_t)&fread },
+			// { "freopen", (uintptr_t)&freopen },
+			// { "fseek", (uintptr_t)&fseek },
+			// { "fsetpos", (uintptr_t)&fsetpos },
+			// { "ftell", (uintptr_t)&ftell },
+			// { "fwrite", (uintptr_t)&fwrite },
+			// { "getc", (uintptr_t)&getc },
+			// { "getwc", (uintptr_t)&getwc },
+			// { "putc", (uintptr_t)&putc },
+			// { "putchar", (uintptr_t)&putchar },
+			// { "puts", (uintptr_t)&puts },
+			// { "putwc", (uintptr_t)&putwc },
+			// { "setvbuf", (uintptr_t)&setvbuf },
+			// { "ungetc", (uintptr_t)&ungetc },
+			// { "ungetwc", (uintptr_t)&ungetwc },
+		//#endif
 
 		{ "access", (uintptr_t)&access },
 		{ "chdir", (uintptr_t)&chdir },
@@ -1056,7 +1072,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "ftello", (uintptr_t)&ftello },
 		{ "ftruncate", (uintptr_t)&ftruncate },
 		{ "getcwd", (uintptr_t)&getcwd },
-		{ "lseek", (uintptr_t)&lseek },
+		{ "lseek", (uintptr_t)&lseek_delegate },
 		//{ "lstat", (uintptr_t)&lstat },
 		{ "mkdir", (uintptr_t)&mkdir },
 		{ "pipe", (uintptr_t)&pseudo_pipe },
@@ -1082,17 +1098,11 @@ so_default_dynlib default_dynlib[] = {
 		{ "vswprintf", (uintptr_t)&vswprintf },
 		{ "printf", (uintptr_t)&sceClibPrintf },
 
-		#ifdef USE_SCELIBC_IO
-			{ "fprintf", (uintptr_t)&sceLibcBridge_fprintf },
-			{ "fscanf", (uintptr_t)&sceLibcBridge_fscanf },
-			{ "sscanf", (uintptr_t)&sceLibcBridge_sscanf },
-			{ "vfprintf", (uintptr_t)&sceLibcBridge_vfprintf },
-		#else
-			{ "fprintf", (uintptr_t)&fprintf },
-			{ "fscanf", (uintptr_t)&fscanf },
-			{ "sscanf", (uintptr_t)&sscanf },
-			{ "vfprintf", (uintptr_t)&vfprintf },
-		#endif
+		
+		{ "fprintf", (uintptr_t)&sceLibcBridge_fprintf },
+		{ "fscanf", (uintptr_t)&sceLibcBridge_fscanf },
+		{ "sscanf", (uintptr_t)&sceLibcBridge_sscanf },
+		{ "vfprintf", (uintptr_t)&sceLibcBridge_vfprintf },
 
 
 		// OpenGL
@@ -1196,7 +1206,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glTexCoordPointer", (uintptr_t)&glTexCoordPointer },
 		{ "glTexEnvx", (uintptr_t)&glTexEnvx },
 		{ "glTexEnvxv", (uintptr_t)&glTexEnvxv },
-		{ "glTexImage2D", (uintptr_t)&glTexImage2D },
+		{ "glTexImage2D", (uintptr_t)&glTexImage2D_fake },
 		{ "glTexParameterf", (uintptr_t)&glTexParameterf },
 		{ "glTexParameteri", (uintptr_t)&glTexParameteri },
 		{ "glTexSubImage2D", (uintptr_t)&glTexSubImage2D },

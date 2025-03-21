@@ -34,7 +34,26 @@ AAssetManager * AAssetManager_create() {
 }
 
 AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename, int mode) {
+
+
+    // if filename ends with .xmf, return nullptr
+    if (strstr(filename, ".xmf") != nullptr) {
+        return nullptr;
+    }
+
+    ALOGD("[AAssetManager] AAssetManager_open(%p, %s, %i)", mgr, filename, mode);
+    // remove .xmf extension if it exists from the filename by getting rid of the last 4 characters
+    // char filename_no_ext[256];
+    // strncpy(filename_no_ext, filename, strlen(filename) - 4);
+    // filename_no_ext[strlen(filename) - 4] = '\0';
+    
+    //print return address
+    ALOGD("AAssetManager_open called from %p", __builtin_return_address(0));
     std::string realp = std::string(DATA_PATH) + std::string("assets/") + std::string(filename);
+
+    
+
+    ALOGD("[AAssetManager] AAssetManager_open real path: %s", realp.c_str());
 
     auto * a = (aAsset *) malloc(sizeof(aAsset));
     a->filename = (char *) malloc(realp.length() + 1);
@@ -52,8 +71,34 @@ AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename, int mode) {
         a = nullptr;
     }
 
+    // log return value
+    ALOGD("[AAssetManager] AAssetManager_open returns %p", a);
+
     //ALOGD("[AAssetManager] AAssetManager_open(%p, %s, %i): %p", mgr, realp.c_str(), mode, a);
     return (AAsset *) a;
+}
+
+int AAsset_openFileDescriptor(AAsset* asset, off_t* outStart, off_t* outLength) {
+    if (!asset) {
+        return -1;
+    }
+
+    auto * a = (aAsset *) asset;
+
+#ifdef USE_SCELIBC_IO
+    //log_error("UNIMPLEMENTED!!!");
+    auto ret = NULL;
+    //auto ret = (off_t) sceLibcBridge_fseek(a->f, offset, whence);
+#else
+    auto ret = fileno(a->f);
+    *outStart = 0;
+
+    fseek(a->f, 0L, SEEK_END);
+    *outLength = ftell(a->f);
+    fseek(a->f, 0L, SEEK_SET);
+#endif
+
+    return ret;
 }
 
 // AAssetDir* AAssetManager_openDir() {

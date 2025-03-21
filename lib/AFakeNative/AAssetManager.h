@@ -90,6 +90,8 @@ int AAsset_read(AAsset* asset, void* buf, size_t count);
  */
 off_t AAsset_seek(AAsset* asset, off_t offset, int whence);
 
+int AAsset_openFileDescriptor(AAsset* asset, off_t* outStart, off_t* outLength);
+
 #ifdef __cplusplus
 };
 #endif

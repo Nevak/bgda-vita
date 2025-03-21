@@ -71,6 +71,9 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   source/reimpl/mem.c
 			   source/reimpl/pthr.c
 			   source/reimpl/sys.c
+			   source/utils/ogg_patch.c
+			   source/utils/vorbis_patch.c
+			   #source/utils/ffmpeg_patch.c
 			   source/utils/dialog.c
 			   source/utils/glutil.c
 			   source/utils/init.c
@@ -114,7 +117,21 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 target_link_libraries(${CMAKE_PROJECT_NAME}
 					  -Wl,--whole-archive pthread -Wl,--no-whole-archive
 					  stdc++
+					  OpenSLES
+					  sndfile
+					  vorbis
+					  vorbisenc
+					  vorbisfile
+					  ogg
+					  FLAC
+					#   mbedtls
 					  openal
+					#   avcodec
+					#   avfilter
+					#   avformat
+					#   avutil
+					#   swresample
+					#   swscale
 					  vitaGL
 					  vitashark
 					  SceShaccCgExt

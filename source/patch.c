@@ -363,21 +363,24 @@ void gameLoop() {
 
 so_hook machFrameStart_hook;
 float lastTime = 0;
+float startTime = 0;
 uint32_t frameCount = 0;
 void machFrameStart() {
 	float timeBefore = sceKernelGetProcessTimeWide();
 	SO_CONTINUE(void *, machFrameStart_hook);
 	float timeAfter = sceKernelGetProcessTimeWide();
+	frameCount++;
+	
+	startTime = timeBefore;
 
 	float deltaTime = timeAfter - timeBefore;
-	if (deltaTime > 100) {
-		logv_error("#%d frame machFrameStart took %f ms\n", frameCount, deltaTime / 1000);
+	if (deltaTime > 20000) {
+		logv_error("#%d frame machFrameStart self took %f ms\n", frameCount, deltaTime / 1000);
 	}
 
-	float timeNow = sceKernelGetProcessTimeWide();
+	//float timeNow = sceKernelGetProcessTimeWide();
 	//float deltaTime = timeNow - lastTime;
-	lastTime = timeNow;
-	frameCount++;
+	//lastTime = timeNow;
 	// if (deltaTime > 50000) {
 	// 	logv_error("#%d frame machFrameStart took %f ms\n", frameCount, deltaTime / 1000);
 	// }
@@ -387,19 +390,24 @@ so_hook machFrameEnd_hook;
 void machFrameEnd(int param_1) {
 	float timeBefore = sceKernelGetProcessTimeWide();
 	SO_CONTINUE(void *, machFrameEnd_hook, param_1);
-	float timeAfter = sceKernelGetProcessTimeWide();
-	float deltaTimeIn = timeAfter - timeBefore;
-	if (deltaTimeIn > 1000) {
-		logv_error("#%d frame machFrameEnd(%d) took %f ms\n", frameCount, param_1, deltaTimeIn / 1000);
+	float timeNow = sceKernelGetProcessTimeWide();
+	float deltaTimeIn = timeNow - timeBefore;
+	if (deltaTimeIn > 20000) {
+		logv_error("#%d frame machFrameEnd(%d) self took %f ms\n", frameCount, param_1, deltaTimeIn / 1000);
 	}
 
-	//float timeNow = sceKernelGetProcessTimeWide();
-	//float deltaTime = timeNow - lastTime;
-	//lastTime = timeNow;
+//	float timeNow = sceKernelGetProcessTimeWide();
+	float deltaTime = timeNow - lastTime;
+	lastTime = timeNow;
 	//frameCount++;
-	// if (deltaTime > 100) {
-	// 	logv_error("#%d frame machFrameEnd(%d) TOTAL took %f ms\n", frameCount, param_1, deltaTime / 1000);
-	// }
+	if (deltaTime > 20000) {
+	 	logv_error("#%d frame end-to-end took %f ms\n", frameCount, deltaTime / 1000);
+	}
+
+	deltaTime = timeNow - startTime;
+	if (deltaTime > 20000) {
+		logv_error("#%d frame start-to-end took %f ms\n", frameCount, deltaTime / 1000);
+	}
 }
 
 so_hook objectDrawDelayedDrawObjects_hook;
@@ -472,20 +480,12 @@ void gameLoadWorld(char *param_1) {
 }
 
 extern int log_allocs;
-so_hook d3d_create_texture2_hook;
-void *d3d_create_texture2(int param_1, int param_2, int param_3, int param_4, unsigned int param_5, int param_6) {
-	void *returnval = NULL;
-	world_elements_count++;
 
-	returnval = SO_CONTINUE(void *, d3d_create_texture2_hook, param_1, param_2, param_3, param_4, param_5, param_6);
-
-	return returnval;
-}
 
 so_hook machHostOpen_hook;
-void machHostOpen(char *param_1, char *param_2) {
+int machHostOpen(char *param_1, char *param_2) {
 	logv_error("machHostOpen(%s, %s)\n", param_1, param_2);
-	SO_CONTINUE(void *, machHostOpen_hook, param_1, param_2);
+	return SO_CONTINUE(void *, machHostOpen_hook, param_1, param_2);
 }
 
 so_hook renderTouchIcons_hook;
@@ -591,11 +591,666 @@ void d3dDeviceReadCommand(void *thisptr) {
 	SO_CONTINUE(void *, d3dDeviceReadCommand_hook, thisptr);
 }
 
+so_hook ogg_alloc_hook;
+void *ogg_alloc(int size) {
+	if (log_allocs == 1)
+	{
+		logv_error("ogg_alloc(%u)\n", size);
+	}
+
+	void *returnval = NULL;
+	returnval = SO_CONTINUE(void *, ogg_alloc_hook, size);
+	return returnval;
+}
+
+so_hook d3d_create_texture2_hook;
+void *d3d_create_texture2(int param_1, int param_2, int param_3, int param_4, unsigned int param_5, int param_6) {
+	void *returnval = NULL;
+	world_elements_count++;
+
+	returnval = SO_CONTINUE(void *, d3d_create_texture2_hook, param_1, param_2, param_3, param_4, param_5, param_6);
+
+	return returnval;
+}
+
+// _ZN3JBE7AudioPF12StreamThread10ThreadFuncEv
+so_hook audio_thread_hook;
+void audio_thread() {
+	log_error("audio_thread()\n");
+	while (1) {
+		if (log_allocs == 1)
+		{
+			log_error("audio_thread\n");
+			// crash the game
+			void *ptr = NULL;
+			*(int *)ptr = 0;
+		}
+		usleep(0x40 * 1000);
+	}
+}
+
+so_hook writeConfigDirect_hook;
+void writeConfigDirect() {
+	log_error("writeConfigDirect()\n");
+	//SO_CONTINUE(void *, writeConfigDirect_hook);
+}
+
+so_hook lowestPowerof2NotLessThan_hook;
+int lowestPowerof2NotLessThan(int dimension) {
+
+	// 0x98521dcc -> width
+	// 0x98521dec -> height
+
+	// print the caller address
+	uintptr_t caller = __builtin_return_address(0);
+	if (caller != 0x98521dec) {
+		return SO_CONTINUE(int, lowestPowerof2NotLessThan_hook, dimension);
+	}
+
+    // Snap to 64-byte multiple
+    int alignment = 64;
+    int aligned = (dimension + (alignment - 1)) & ~(alignment - 1);
+    // Ensure at least 64 in dimension
+    if (aligned < 64) aligned = 64;
+    return aligned;
+}
+
+
+/* worldAllocateSegments(_worldHeader*) */
+#define LOC(x) (int *)(so_mod.text_base + x - 0x00010000)
+#define CONCAT22(high16, low16) ( \
+    ( ((uint32_t)(high16) & 0xFFFF) << 16 ) | \
+      ((uint32_t)(low16)  & 0xFFFF)          \
+)
+#define CONCAT44(high32, low32) ( \
+    ( ((uint64_t)(high32) & 0xFFFFFFFFULL) << 32 ) | \
+      (  (uint64_t)(low32)  & 0xFFFFFFFFULL )        \
+)
+
+
+static inline int UnsignedSaturate8(int x) {
+    if (x < 0)   return 0;
+    if (x > 255) return 255;
+    return x;
+}
+
+// machHostSeek
+static int (*machHostSeek)(int, int, int) = NULL;
+// _Z12machHostReadiPvi
+static int (*machHostRead)(int, void *, int) = NULL;
+// _Z13machHostClosei
+static void (*machHostClose)(int) = NULL;
+// _Z16lockLoadingMutexb
+static void (*lockLoadingMutex)(bool) = NULL;
+// _Z19releaseLoadingMutexv
+static void (*releaseLoadingMutex)(void) = NULL;
+// D3DDevice_CreatePalette2
+static uint32_t (*D3DDevice_CreatePalette2)(int) = NULL;
+// D3DPalette_Lock2
+static int (*D3DPalette_Lock2)(uint32_t, int) = NULL;
+// D3DDevice_CreateTexture2
+static uint32_t (*D3DDevice_CreateTexture2)(int, int, int, int, int, int, int) = NULL;
+// D3DTexture_LockRect
+static void (*D3DTexture_LockRect)(void *, int, int *, void *, int) = NULL;
+// D3DTexture_UnlockRect
+static void (*D3DTexture_UnlockRect)(uint32_t, int) = NULL;
+
+
+
+typedef struct _worldHeader _worldHeader, *P_worldHeader;
+
+struct _worldHeader { /* PlaceHolder Structure */
+    int field0_0x0;
+    uint8_t field1_0x4;
+    uint8_t field2_0x5;
+    uint8_t field3_0x6;
+    uint8_t field4_0x7;
+    uint8_t field5_0x8;
+    uint8_t field6_0x9;
+    uint8_t field7_0xa;
+    uint8_t field8_0xb;
+    uint8_t field9_0xc;
+    uint8_t field10_0xd;
+    uint8_t field11_0xe;
+    uint8_t field12_0xf;
+    uint8_t field13_0x10;
+    uint8_t field14_0x11;
+    uint8_t field15_0x12;
+    uint8_t field16_0x13;
+    uint8_t field17_0x14;
+    uint8_t field18_0x15;
+    uint8_t field19_0x16;
+    uint8_t field20_0x17;
+    uint8_t field21_0x18;
+    uint8_t field22_0x19;
+    uint8_t field23_0x1a;
+    uint8_t field24_0x1b;
+    uint8_t field25_0x1c;
+    uint8_t field26_0x1d;
+    uint8_t field27_0x1e;
+    uint8_t field28_0x1f;
+    uint8_t field29_0x20;
+    uint8_t field30_0x21;
+    uint8_t field31_0x22;
+    uint8_t field32_0x23;
+    int field33_0x24;
+    uint8_t field34_0x28;
+    uint8_t field35_0x29;
+    uint8_t field36_0x2a;
+    uint8_t field37_0x2b;
+    uint8_t field38_0x2c;
+    uint8_t field39_0x2d;
+    uint8_t field40_0x2e;
+    uint8_t field41_0x2f;
+    uint8_t field42_0x30;
+    uint8_t field43_0x31;
+    uint8_t field44_0x32;
+    uint8_t field45_0x33;
+    uint8_t field46_0x34;
+    uint8_t field47_0x35;
+    uint8_t field48_0x36;
+    uint8_t field49_0x37;
+    uint8_t field50_0x38;
+    uint8_t field51_0x39;
+    uint8_t field52_0x3a;
+    uint8_t field53_0x3b;
+    uint8_t field54_0x3c;
+    uint8_t field55_0x3d;
+    uint8_t field56_0x3e;
+    uint8_t field57_0x3f;
+    uint8_t field58_0x40;
+    uint8_t field59_0x41;
+    uint8_t field60_0x42;
+    uint8_t field61_0x43;
+    uint8_t field62_0x44;
+    uint8_t field63_0x45;
+    uint8_t field64_0x46;
+    uint8_t field65_0x47;
+    uint8_t field66_0x48;
+    uint8_t field67_0x49;
+    uint8_t field68_0x4a;
+    uint8_t field69_0x4b;
+    uint8_t field70_0x4c;
+    uint8_t field71_0x4d;
+    uint8_t field72_0x4e;
+    uint8_t field73_0x4f;
+    uint8_t field74_0x50;
+    uint8_t field75_0x51;
+    uint8_t field76_0x52;
+    uint8_t field77_0x53;
+    uint8_t field78_0x54;
+    uint8_t field79_0x55;
+    uint8_t field80_0x56;
+    uint8_t field81_0x57;
+    int field82_0x58;
+    int field83_0x5c;
+    uint8_t field84_0x60;
+    uint8_t field85_0x61;
+    uint8_t field86_0x62;
+    uint8_t field87_0x63;
+    int field88_0x64;
+    uint8_t field89_0x68;
+    uint8_t field90_0x69;
+    uint8_t field91_0x6a;
+    uint8_t field92_0x6b;
+    uint8_t field93_0x6c;
+    uint8_t field94_0x6d;
+    uint8_t field95_0x6e;
+    uint8_t field96_0x6f;
+    uint8_t field97_0x70;
+    uint8_t field98_0x71;
+    uint8_t field99_0x72;
+    uint8_t field100_0x73;
+    int field101_0x74;
+};
+
+void worldAllocateSegments(_worldHeader *param_1)
+{
+	uint uVar1;
+	char *pcVar2;
+	int iVar3;
+	uint uVar4;
+	void *pvVar5;
+	int iVar6;
+	int *piVar7;
+	int iVar8;
+	int iVar9;
+	int iVar10;
+	int iVar11;
+	uint32_t uVar12;
+	int iVar13;
+	char cVar14;
+	uint16_t *puVar15;
+	int iVar16;
+	int iVar17;
+	int iVar18;
+	int iVar19;
+	int iVar20;
+	int totalPixels;
+	int iVar22;
+	uint uVar23;
+	int *piVar24;
+	short *psVar25;
+	uint8_t *pbVar26;
+	int iVar27;
+	int iVar28;
+	uint64_t *puVar29;
+	int iVar30;
+	int iVar31;
+	int iVar32;
+	int iVar33;
+	int iVar34;
+	int iVar35;
+	int iVar36;
+	int *piVar37;
+	void *__ptr;
+	uint uVar38;
+	bool bVar39;
+	float fVar40;
+	int iVar41;
+	int local_650;
+	uint32_t local_598;
+	uint32_t uStack_594;
+	uint64_t uStack_590;
+	uint64_t local_588;
+	uint64_t uStack_580;
+	uint64_t local_578;
+	uint64_t uStack_570;
+	uint64_t local_568;
+	uint64_t uStack_560;
+	uint64_t local_558;
+	uint64_t uStack_550;
+	uint64_t local_548;
+	uint64_t uStack_540;
+	uint64_t local_538;
+	uint64_t uStack_530;
+	uint64_t local_528;
+	uint64_t uStack_520;
+	uint64_t local_518;
+	uint64_t uStack_510;
+	uint64_t local_508;
+	uint64_t uStack_500;
+	uint64_t local_4f8;
+	uint64_t uStack_4f0;
+	uint64_t local_4e8;
+	uint64_t uStack_4e0;
+	uint64_t local_4d8;
+	uint64_t uStack_4d0;
+	uint64_t local_4c8;
+	uint64_t uStack_4c0;
+	uint64_t local_4b8;
+	uint64_t uStack_4b0;
+	uint64_t local_4a8;
+	uint64_t uStack_4a0;
+	short asStack_498 [512];
+	char acStack_98 [80];
+
+
+	// coreCurrentWorld is at 0x0054cad8 in so_mod
+	char * coreCurrentWorld = LOC(0x0054cad8);
+	logv_error("worldAllocateSegments: coreCurrentWorld: %s\n", coreCurrentWorld);
+	
+	iVar3 = param_1->field0_0x0;
+	if (0 < iVar3) {
+
+		logv_error("worldAllocateSegments: iVar3: %i\n", iVar3);
+
+		iVar27 = 0;
+		iVar19 = 0;
+		do {
+			if ((*(ushort *)(param_1->field33_0x24 + iVar27 + 0x30) & 0x800) != 0) {	
+				sprintf((char *)asStack_498,"%s.lmp",*(uint32_t *)(param_1->field33_0x24 + iVar27));
+				logv_error("worldAllocateSegments: will load %s\n", (char *)asStack_498);
+				lumpLoad((char *)asStack_498);
+				iVar3 = param_1->field0_0x0;
+			}
+
+			iVar19 = iVar19 + 1;
+			iVar27 = iVar27 + 0x38;
+		} while (iVar19 < iVar3);
+	}
+	if (param_1->field101_0x74 == 0) {
+		param_1->field101_0x74 = 1;
+		iVar27 = param_1->field82_0x58;
+		iVar36 = param_1->field83_0x5c;
+		iVar19 = param_1->field88_0x64;
+
+		sprintf(acStack_98,"res\\%s.tex",coreCurrentWorld);
+		iVar3 = machHostOpen(acStack_98,"rb");
+		uVar4 = machHostSeek(iVar3,0,2);
+		pvVar5 = malloc(uVar4);
+		machHostSeek(iVar3,0,0);
+		machHostRead(iVar3,pvVar5,uVar4);
+		machHostClose(iVar3);
+
+		logv_error("worldAllocateSegments: uVar4: %u\n", uVar4);
+
+		if (iVar36 < iVar27) {
+			free(pvVar5);
+		}
+		else {
+			__ptr = (void *)0x0;
+			iVar3 = 0;
+			do {
+				iVar6 = *(int *)(iVar19 + iVar3 * 8 + 4);
+				bVar39 = iVar6 != 0;
+				if (bVar39) {
+					iVar6 = *(int *)(iVar19 + iVar3 * 8);
+				}
+				if (bVar39 && iVar6 != 0) {
+					iVar20 = *(int *)((int)pvVar5 + iVar6);
+					piVar7 = (int *)malloc(iVar20 * 0x38 | 4);
+					*(int **)(iVar19 + iVar3 * 8) = piVar7;
+					piVar24 = (int *)((int)pvVar5 + iVar6) + 0x10;
+					*piVar7 = iVar20;
+					__aeabi_memcpy4(*(int *)(iVar19 + iVar3 * 8) + 4,piVar24,iVar20 * 0x38);
+					if (0 < iVar20) {
+						local_650 = 0;
+						piVar7 = piVar24;
+						do {
+						iVar8 = piVar7[2];
+						iVar9 = *(int *)((int)piVar7 + iVar8);
+						iVar6 = iVar9 - (int)piVar24;
+						
+						logv_error("worldAllocateSegments: iVar9: %i\n", iVar9);
+						
+						*LOC(0x003f8a60) = (int)piVar24 + (int)piVar7 + iVar6 + 0x400;
+						*LOC(0x003f8a64) = (int)piVar24 + (int)piVar7 + iVar6 + 0xc04;
+						*LOC(0x003f8a68) = *LOC(0x003f8a64) + *(int *)((int)piVar24 + (int)piVar7 + iVar6 + 0xc00) * 2;
+						*LOC(0x003f8a6c) = *LOC(0x003f8a68) + 0x48;
+						
+						log_error("worldAllocateSegments passed LOCs\n");
+						
+						int actualHeight = (int)*(short *)piVar7;
+						iVar10 = lowestPowerof2NotLessThan((int)*(short *)piVar7);
+						iVar6 = iVar10;
+						if (iVar10 < 0x41) {
+							iVar6 = 0x40;
+						}
+						int actualWidth = (int)*(short *)((int)piVar7 + 2);
+						iVar11 = lowestPowerof2NotLessThan((int)*(short *)((int)piVar7 + 2));
+						if (__ptr != (void *)0x0) {
+							free(__ptr);
+						}
+						piVar37 = (int *)((int)piVar7 + iVar8) + 1;
+						totalPixels = iVar6 * iVar11;
+						__ptr = malloc(totalPixels + 0x19000);
+						__aeabi_memclr(__ptr,totalPixels);
+						iVar41 = *LOC(0x003f8a6c);
+						iVar34 = *LOC(0x003f8a68);
+						iVar8 = *LOC(0x003f8a64);
+						uVar4 = 0;
+						iVar13 = *(int *)(LOC(0x003f8a6c + 4));
+						puVar15 = (uint16_t *)((uint)asStack_498 | 2);
+						do {
+							if (iVar13 < (int)(uVar4 >> 7)) {
+							if ((int)(uVar4 >> 6) <= *(int *)(iVar41 + 8)) {
+								uVar38 = uVar4 >> 6;
+								iVar18 = 2;
+								goto LAB_00131f0c;
+							}
+							if ((int)(uVar4 >> 5) <= *(int *)(iVar41 + 0xc)) {
+								uVar38 = uVar4 >> 5;
+								iVar18 = 3;
+								goto LAB_00131f0c;
+							}
+							if ((int)(uVar4 >> 4) <= *(int *)(iVar41 + 0x10)) {
+								uVar38 = uVar4 >> 4;
+								iVar18 = 4;
+								goto LAB_00131f0c;
+							}
+							if ((int)(uVar4 >> 3) <= *(int *)(iVar41 + 0x14)) {
+								uVar38 = uVar4 >> 3;
+								iVar18 = 5;
+								goto LAB_00131f0c;
+							}
+							if ((int)(uVar4 >> 2) <= *(int *)(iVar41 + 0x18)) {
+								uVar38 = uVar4 >> 2;
+								iVar18 = 6;
+								goto LAB_00131f0c;
+							}
+							if ((int)(uVar4 >> 1) <= *(int *)(iVar41 + 0x1c)) {
+								uVar38 = uVar4 >> 1;
+								iVar18 = 7;
+								goto LAB_00131f0c;
+							}
+							iVar18 = 8;
+							uVar38 = uVar4;
+							if ((int)uVar4 <= *(int *)(iVar41 + 0x20)) goto LAB_00131f0c;
+							iVar18 = 0;
+							puVar15[-1] = 0;
+							}
+							else {
+							uVar38 = uVar4 >> 7;
+							iVar18 = 1;
+							LAB_00131f0c:
+							puVar15[-1] = *(uint16_t *)
+											(iVar8 + (*(int *)(iVar34 + iVar18 * 4) + uVar38) * 2);
+							}
+							uVar4 = uVar4 + 1;
+							*puVar15 = (short)iVar18;
+							iVar18 = *LOC(0x003f8a60);
+							puVar15 = puVar15 + 2;
+
+							//logv_error("worldAllocateSegments: uVar4: %u\n", uVar4);
+						} while (uVar4 != 0x100);
+						cVar14 = *(char *)piVar37;
+						if (cVar14 != -1) {
+							do {
+							iVar22 = (int)*(char *)((int)piVar37 + 1);
+							iVar16 = (int)cVar14;
+							pcVar2 = (char *)((int)piVar37 + 3);
+							cVar14 = *(char *)((int)piVar37 + 2);
+							piVar37 = piVar37 + 1;
+							iVar13 = (int)*pcVar2;
+							if (*pcVar2 < iVar22) {
+								iVar13 = iVar22;
+							}
+							iVar28 = 0;
+							do {
+								if (iVar16 <= cVar14) {
+									iVar17 = 0;
+									do {
+										iVar30 = *piVar37;
+										iVar35 = 0;
+										uVar38 = 0;
+										uVar4 = 0;
+										iVar31 = iVar17 + iVar16;
+										do {
+										puVar15 = (uint16_t *)((int)piVar7 + ((int)uVar4 >> 4) * 2 + iVar30);
+										uVar1 = CONCAT22(*puVar15,puVar15[1]) << (uVar4 & 0xf);
+										uVar23 = uVar1 >> 0x18;
+										psVar25 = asStack_498 + uVar23 * 2;
+										iVar32 = (int)asStack_498[uVar23 * 2 + 1];
+										if (iVar32 == 0) {
+											uVar1 = uVar1 >> 0x10;
+											iVar33 = 0;
+											do {
+											iVar32 = iVar33 * -4;
+											uVar23 = iVar33 + 7;
+											iVar33 = iVar33 + -1;
+											} while (*(int *)(iVar41 + 0x24 + iVar32) <
+													(int)(uVar1 >> (uVar23 & 0xff)));
+											iVar32 = 8 - iVar33;
+											psVar25 = (short *)(iVar8 + (*(int *)(iVar34 + 0x20 + iVar33 * -4) +
+																		(uVar1 >> (uVar23 & 0xff))) * 2);
+										}
+										uVar23 = (uint)*psVar25;
+										if (0xff < (int)uVar23) {
+											if ((int)uVar23 < 0x105) {
+											pbVar26 = (uint8_t *)((int)&local_598 + iVar35 + (char)(LOC(0x000b0128))[uVar23]);
+											}
+											else {
+											pbVar26 = (uint8_t *)(uVar23 + iVar18 + uVar38 * 8 + -0x105);
+											}
+											uVar23 = (uint)*pbVar26;
+										}
+										uVar38 = uVar23;
+										uVar4 = iVar32 + uVar4;
+										*(char *)((int)&local_598 + iVar35) = (char)uVar38;
+										iVar35 = iVar35 + 1;
+										} while (iVar35 != 0x100);
+										iVar17 = iVar17 + 1;
+										piVar37 = piVar37 + 1;
+										iVar30 = iVar31 * 0x10 + (iVar28 + iVar22) * iVar6 * 0x10;
+										*(uint64_t *)((int)__ptr + iVar30) = CONCAT44(uStack_594,local_598);
+										((uint64_t *)((int)__ptr + iVar30))[1] = uStack_590;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6);
+										*puVar29 = local_588;
+										puVar29[1] = uStack_580;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 2);
+										*puVar29 = local_578;
+										puVar29[1] = uStack_570;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 3);
+										*puVar29 = local_568;
+										puVar29[1] = uStack_560;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 4);
+										*puVar29 = local_558;
+										puVar29[1] = uStack_550;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 5);
+										*puVar29 = local_548;
+										puVar29[1] = uStack_540;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 6);
+										*puVar29 = local_538;
+										puVar29[1] = uStack_530;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 7);
+										*puVar29 = local_528;
+										puVar29[1] = uStack_520;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 8);
+										*puVar29 = local_518;
+										puVar29[1] = uStack_510;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 9);
+										*puVar29 = local_508;
+										puVar29[1] = uStack_500;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 10);
+										*puVar29 = local_4f8;
+										puVar29[1] = uStack_4f0;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 0xb);
+										*puVar29 = local_4e8;
+										puVar29[1] = uStack_4e0;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 0xc);
+										*puVar29 = local_4d8;
+										puVar29[1] = uStack_4d0;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 0xd);
+										*puVar29 = local_4c8;
+										puVar29[1] = uStack_4c0;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 0xe);
+										*puVar29 = local_4b8;
+										puVar29[1] = uStack_4b0;
+										puVar29 = (uint64_t *)((int)__ptr + iVar30 + iVar6 * 0xf);
+										*puVar29 = local_4a8;
+										puVar29[1] = uStack_4a0;
+									} while (iVar17 != (cVar14 - iVar16) + 1);
+								}
+								iVar28 = iVar28 + 1;
+							} while (iVar28 != (iVar13 - iVar22) + 1);
+							cVar14 = *(char *)piVar37;
+						} while (cVar14 != -1);
+					}
+					lockLoadingMutex(true);
+					iVar34 = 0;
+					iVar8 = *(int *)(iVar19 + iVar3 * 8);
+					uVar12 = D3DDevice_CreatePalette2(0);
+					iVar6 = D3DPalette_Lock2(uVar12,0);
+					do {
+						pbVar26 = (uint8_t *)((int)piVar7 + iVar34 + iVar9);
+						fVar40 = (float)(long long)(int)((uint)pbVar26[1] + (uint)*pbVar26 + (uint)pbVar26[2]) * 0.3333333;
+						iVar41 = (int)(fVar40 + ((float)(unsigned long)(uint)pbVar26[2] - fVar40) * 1.3 + 0.5);
+						iVar13 = (int)(fVar40 + ((float)(unsigned long)(uint)*pbVar26 - fVar40) * 1.3 + 0.5);
+						iVar18 = (int)(fVar40 + ((float)(unsigned long)(uint)pbVar26[1] - fVar40) * 1.3 + 0.5);
+						
+						// uVar4 = UnsignedSaturate(iVar41,8);
+						// UnsignedDoesSaturate(iVar41,8);
+						// iVar41 = UnsignedSaturate(iVar13,8);
+						// UnsignedDoesSaturate(iVar13,8);
+						// iVar13 = UnsignedSaturate(iVar18,8);
+						// UnsignedDoesSaturate(iVar18,8);
+
+						uVar4  = UnsignedSaturate8(iVar41);
+						iVar41 = UnsignedSaturate8(iVar13);
+						iVar13 = UnsignedSaturate8(iVar18);
+
+						*(uint *)(iVar6 + iVar34) =
+							uVar4 | (uint)pbVar26[3] << 0x18 | iVar41 << 0x10 | iVar13 << 8;
+						iVar34 = iVar34 + 4;
+					} while (iVar34 != 0x400);
+					iVar8 = iVar8 + local_650 * 0x38;
+					*(uint32_t *)(iVar8 + 0x14) = uVar12;
+					uVar12 = D3DDevice_CreateTexture2(iVar10,iVar11,1,0,0,0x8b,3);
+					logv_error("worldAllocateSegments: D3DDevice_CreateTexture2 passed return value: %i\n", uVar12);
+					//D3DTexture_LockRect(uVar12,0,&local_598,0,0);
+
+					int lockedRect[2];
+					D3DTexture_LockRect(uVar12, 0, lockedRect, NULL, 0);
+					int pitch    = lockedRect[0];
+					int ptrValue = lockedRect[1];
+
+					log_error("worldAllocateSegments: D3DTexture_LockRect passed \n");
+					logv_error("Will call __aeabi_memcpy with totalPixels: %i, __ptr: %p, uStack_594: %p\n", totalPixels, __ptr, uStack_594);
+					//__aeabi_memcpy(uStack_594,__ptr,totalPixels);
+					__aeabi_memcpy((void*)ptrValue, __ptr, totalPixels);
+
+					log_error("worldAllocateSegments: __aeabi_memcpy passed \n");
+					// // Pseudocode for a row-by-row copy:
+					// uint8_t* dst = (uint8_t*) uStack_594;   // from LockRect
+					// const uint8_t* src = (uint8_t*) __ptr;  // your CPU buffer
+					// int pitch = local_598;                 // from LockRect
+					// int rows = actualHeight;               // or however you track it
+					// int rowBytes = actualWidth;            // 1 byte per texel if palettized
+
+					// for (int y = 0; y < rows; ++y) {
+					// 	memcpy(dst, src, rowBytes);
+					// 	dst += pitch;
+					// 	src += rowBytes;
+					// }
+
+					D3DTexture_UnlockRect(uVar12,0);
+					*(uint32_t *)(iVar8 + 0x10) = uVar12;
+					releaseLoadingMutex();
+					local_650 = local_650 + 1;
+					piVar7 = piVar7 + 0xe;
+					} while (local_650 != iVar20);
+				}
+			}
+			iVar3 = iVar3 + 1;
+		} while (iVar3 != (iVar36 - iVar27) + 1);
+		free(pvVar5);
+		if (__ptr != (void *)0x0) {
+			free(__ptr);
+		}
+		}
+	}
+}
+
+
+so_hook worldAllocateSegments_hook;
+
 void so_patch(void) {
 
 	log_error("Patching .so functions\n");
 
 	
+	machHostSeek = (void (*)(int, int, int))so_symbol(&so_mod, "_Z12machHostSeekiii");
+	machHostRead = (void (*)(int, void *, int))so_symbol(&so_mod, "_Z12machHostReadiPvi");
+	machHostClose = (void (*)(int))so_symbol(&so_mod, "_Z13machHostClosei");
+	lockLoadingMutex = (void (*)(bool))so_symbol(&so_mod, "_Z16lockLoadingMutexb");
+	releaseLoadingMutex = (void (*)(void))so_symbol(&so_mod, "_Z19releaseLoadingMutexv");
+	D3DDevice_CreatePalette2 = (uint32_t (*)(int))so_symbol(&so_mod, "D3DDevice_CreatePalette2");
+	D3DPalette_Lock2 = (int (*)(uint32_t, int))so_symbol(&so_mod, "D3DPalette_Lock2");
+	D3DDevice_CreateTexture2 = (uint32_t (*)(int, int, int, int, int, int, int))so_symbol(&so_mod, "D3DDevice_CreateTexture2");
+	// void D3DTexture_LockRect(D3DTexture *pThis, UINT Level, D3DLOCKED_RECT *pLockedRect, CONST RECT *pRect, DWORD Flags);
+	D3DTexture_LockRect = (void (*)(void *, int, int *, void *, int))so_symbol(&so_mod, "D3DTexture_LockRect");
+	if (D3DTexture_LockRect == NULL) {
+		log_error("D3DTexture_LockRect not found\n");
+	} else {
+		logv_error("D3DTexture_LockRect found at %p\n", D3DTexture_LockRect);
+	}
+	// void D3DTexture_UnlockRect(D3DTexture *pThis, UINT Level)
+	D3DTexture_UnlockRect = (void (*)(uint32_t*, uint32_t))so_symbol(&so_mod, "D3DTexture_UnlockRect");
+
+	// _Z21worldAllocateSegmentsP12_worldHeader
+	worldAllocateSegments_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z21worldAllocateSegmentsP12_worldHeader"), (uintptr_t)&worldAllocateSegments);
+
 	// _Z11coreAddTaskPFvvEiPKc coreAddTask
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
 
@@ -612,6 +1267,33 @@ void so_patch(void) {
 		//d3d_buffer_to_ogl_hook = hook_addr(d3d_buffer_to_ogl_addr, (uintptr_t)&d3d_buffer_to_ogl);
 	}
 
+	//_Z25lowestPowerof2NotLessThani
+	uintptr_t lowestPowerof2NotLessThan_addr = (uintptr_t)so_symbol(&so_mod, "_Z25lowestPowerof2NotLessThani");
+	if (lowestPowerof2NotLessThan_addr == NULL) {
+		log_error("lowestPowerof2NotLessThan not found\n");
+	} else {
+		logv_error("lowestPowerof2NotLessThan found at %p\n", lowestPowerof2NotLessThan_addr);
+		lowestPowerof2NotLessThan_hook = hook_addr(lowestPowerof2NotLessThan_addr, (uintptr_t)&lowestPowerof2NotLessThan);
+	}
+
+	// _ZN3JBE7AudioPF12StreamThread10ThreadFuncEv
+	uintptr_t audio_thread_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE7AudioPF12StreamThread10ThreadFuncEv");
+	if (audio_thread_addr == NULL) {
+		log_error("audio_thread not found\n");
+	} else {
+		logv_error("audio_thread found at %p\n", audio_thread_addr);
+		//audio_thread_hook = hook_addr(audio_thread_addr, (uintptr_t)&audio_thread);
+	}
+
+	// _ogg_malloc
+	uintptr_t ogg_malloc_addr = (uintptr_t)so_symbol(&so_mod, "_ogg_malloc");
+	if (ogg_malloc_addr == NULL) {
+		log_error("ogg_malloc not found\n");
+	} else {
+		logv_error("ogg_malloc found at %p\n", ogg_malloc_addr);
+		//ogg_alloc_hook = hook_addr(ogg_malloc_addr, (uintptr_t)&ogg_alloc);
+	}
+
 	//_Z14worldFreeWorldP12_worldHeader
 	uintptr_t worldFreeWorld_addr = (uintptr_t)so_symbol(&so_mod, "_Z14worldFreeWorldP12_worldHeader");
 	if (worldFreeWorld_addr == NULL) {
@@ -620,6 +1302,16 @@ void so_patch(void) {
 		logv_error("worldFreeWorld found at %p\n", worldFreeWorld_addr);
 		//worldFreeWorld_hook = hook_addr(worldFreeWorld_addr, (uintptr_t)&worldFreeWorld);
 	}
+
+	// _Z17writeConfigDirectv
+	uintptr_t writeConfigDirect_addr = (uintptr_t)so_symbol(&so_mod, "_Z17writeConfigDirectv");
+	if (writeConfigDirect_addr == NULL) {
+		log_error("writeConfigDirect not found\n");
+	} else {
+		logv_error("writeConfigDirect found at %p\n", writeConfigDirect_addr);
+		writeConfigDirect_hook = hook_addr(writeConfigDirect_addr, (uintptr_t)&writeConfigDirect);
+	}
+
 
 	//D3DDevice_Swap
 	uintptr_t swap_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_Swap");
@@ -781,8 +1473,10 @@ void so_patch(void) {
 		log_error("machHostOpen not found\n");
 	} else {
 		logv_error("machHostOpen found at %p\n", machHostOpen_addr);
-		//machHostOpen_hook = hook_addr(machHostOpen_addr, (uintptr_t)&machHostOpen);
+		machHostOpen_hook = hook_addr(machHostOpen_addr, (uintptr_t)&machHostOpen);
 	}
+
+
 	
 
 	// _ZN3JBE8SystemPF7HasNEONEv
@@ -818,7 +1512,7 @@ void so_patch(void) {
 		log_error("SND_Frame not found\n");
 	} else {
 		logv_error("SND_Frame found at %p\n", SND_Frame_addr);
-		//SND_Frame_hook = hook_addr(SND_Frame_addr, (uintptr_t)&SND_Frame);
+		SND_Frame_hook = hook_addr(SND_Frame_addr, (uintptr_t)&SND_Frame);
 	}
 
 	// _Z9animFramev

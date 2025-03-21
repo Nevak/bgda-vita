@@ -82,5 +82,10 @@ int closedir_soloader(DIR* dir);
 int fcntl_soloader(int fd, int cmd, ...);
 
 int fsync_soloader(int fd);
+ssize_t read_soloader(int fd, void *buf, size_t count);
+size_t fread_soloader(void *p, size_t size, size_t num, FILE *f);
 
+//fstat_hook
+int fseek_soloader(FILE *f, int dist, int off);
+long ftell_soloader(FILE *f);
 #endif // SOLOADER_IO_H
