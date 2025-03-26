@@ -35,7 +35,7 @@ void *__wrap_memcpy (void *dst, const void *src, size_t num) { return sceClibMem
 void *__wrap_memset (void *ptr, int value, size_t num) { return sceClibMemset(ptr, value, num); };
 
 
-int _newlib_heap_size_user = 192 * 1024 * 1024;
+int _newlib_heap_size_user = 256 * 1024 * 1024;
 
 #ifdef USE_SCELIBC_IO
 int sceLibcHeapSize = 1 * 1024 * 1024;
