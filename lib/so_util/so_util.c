@@ -62,7 +62,6 @@ static so_module *head = NULL, *tail = NULL;
 
 so_hook hook_thumb(uintptr_t addr, uintptr_t dst) {
     so_hook h;
-    printf("THUMB HOOK\n");
     if (addr == 0)
         return h;
     h.thumb_addr = addr;
@@ -71,7 +70,6 @@ so_hook hook_thumb(uintptr_t addr, uintptr_t dst) {
         uint16_t nop = 0xbf00;
         kuKernelCpuUnrestrictedMemcpy((void *)addr, &nop, sizeof(nop));
         addr += 2;
-        printf("THUMB UNALIGNED\n");
     }
 
     h.addr = addr;
@@ -85,7 +83,6 @@ so_hook hook_thumb(uintptr_t addr, uintptr_t dst) {
 
 so_hook hook_arm(uintptr_t addr, uintptr_t dst) {
     so_hook h;
-    printf("ARM HOOK\n");
     if (addr == 0)
         return h;
     uint32_t hook[2];
