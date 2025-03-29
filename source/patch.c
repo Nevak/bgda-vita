@@ -738,25 +738,25 @@ void d3d_texture_lock_rect(uint32_t *pThis, uint32_t Level, int *pLockedRect, vo
 	// Call the original function
 	SO_CONTINUE(void *, d3d_texture_lock_rect_hook, pThis, Level, pLockedRect, pRect, Flags);
 
-	// call D3DBaseTexture_GetInfo
-	int format = 0;
-	int w = 0;
-	int h = 0;
-	int unk = 0;
-	int unk2 = 0;
-	D3DBaseTexture_GetInfo(pThis, &unk, &format, &unk2, &w, &h);
-	// log the width and height
-	logv_error("d3d_texture_lock_rect: w: %i, h: %i\n", w, h);
+	// // call D3DBaseTexture_GetInfo
+	// int format = 0;
+	// int w = 0;
+	// int h = 0;
+	// int unk = 0;
+	// int unk2 = 0;
+	// D3DBaseTexture_GetInfo(pThis, &unk, &format, &unk2, &w, &h);
+	// // log the width and height
+	// logv_error("d3d_texture_lock_rect: w: %i, h: %i\n", w, h);
 	// log the pitch
-	logv_error("d3d_texture_lock_rect: pLockedRect: %i\n", *pLockedRect);
+	logv_error("d3d_texture_lock_rect: pLockedRect: %i, stored at %p\n", *pLockedRect, pLockedRect);
 
-	int dimension = w;
-	int alignment = 4;
-	int aligned = (dimension + (alignment - 1)) & ~(alignment - 1);
-	if (aligned < alignment) 
-		aligned = alignment;
+	// int dimension = w;
+	// int alignment = 4;
+	// int aligned = (dimension + (alignment - 1)) & ~(alignment - 1);
+	// if (aligned < alignment) 
+	// 	aligned = alignment;
 
-	*pLockedRect = aligned;
+	// *pLockedRect = aligned;
 
 }
 
@@ -770,49 +770,21 @@ __attribute__((naked))
 __attribute__((target("arm")))
 void texture_copy(void *dst, void *src, size_t size)
 {
-    //__asm__ volatile (
-        // 1) Save callee-saved registers
-        //"push {r4-r11}\n"
-    //);
-
-
-    
-//    logv_error("texture_copy: dst: %p, src: %p, size: %d\n", dst, src, size);
-
-    // Call the real __aeabi_memcpy (since only this callsite is hooked)
-    //__aeabi_memcpy(dst, src, size);
-
-	//log_error("texture_copy: done\n");
-
-	uint32_t* pitchPtr = 0;
+	// Every local variable will increase the stack pointer by 4 bytes
+	uint32_t* stackPtr = 0;
 
 	__asm__ volatile (
-		// Force ARM mode if necessary
 		".arm\n"
 
-		"push {r0}\n"
-		// at this point we want 
-		//"ldr r0,[sp,#0xf0]\n"
-		//".word 0xf0009de5\n"
-		".word 0xe59d00f4\n"
+		"mov %0, sp\n"
 
-		"mov %0, r0\n"
-		"pop {r0}\n"
-
-        // 2) We’re in ARM mode. Save any registers you need, 
-        //    but let's do the minimal for demonstration:
         "push {r4-r11}\n"
 
         // 3) Grab arguments from r0, r1, r2 off the stack or directly 
-        //    (still in registers if we do it early enough).
-        //    But let's do it in C after we set up a proper frame:
-        "mov r4, r0\n"
-        "mov r5, r1\n"
-        "mov r6, r2\n"
-		// put whatever is in sp + 0xf0 into r7. We need to take into account that we pushed 8 registers so it's sp + 0xf0 - 0x20
-		//"ldr r7, [sp, #0xd0]\n"
-		"mov r7, %0\n"
-		
+        "mov r4, r0\n" // dest
+        "mov r5, r1\n" // src
+        "mov r6, r2\n" // len
+		"mov r7, %0\n" // stack pointer to r7
 
         // 4) Now call a small helper in C to do logging + call real memcpy
         "bl texture_copy_impl\n"
@@ -820,7 +792,7 @@ void texture_copy(void *dst, void *src, size_t size)
         // 5) Restore regs and return to the caller (the code after the BL)
         "pop {r4-r11}\n"
 
-		: "=r"(pitchPtr)
+		: "=r"(stackPtr)
     );
 
 	__asm__ volatile (
@@ -842,19 +814,83 @@ void texture_copy(void *dst, void *src, size_t size)
 // Actual logic in C
 void texture_copy_impl(void) {
     // r4,r5,r6 hold dest, src, len
-    void* dest;
+    uintptr_t* destPtr;
     void* src;
     size_t len;
-	uint32_t* pitch;
-    __asm__ volatile (
-        "mov %0, r4\n"
-        "mov %1, r5\n"
-        "mov %2, r6\n"
-		"mov %3, r7\n"
-        : "=r"(dest), "=r"(src), "=r"(len), "=r"(pitch)
-    );
+	uint32_t* stackPtr;
+	__asm__ volatile (
+		"mov %0, r4\n" // dest
+		"mov %1, r5\n" // src
+		"mov %2, r6\n" // len
+		"mov %3, r7\n" // stack pointer
+		
+		: "=r"(destPtr), "=r"(src), "=r"(len), "=r"(stackPtr)
+	);
 
-    logv_error("[hook] memcpy: dest=%p, src=%p, len=%u, *pitch=%u, pitch=%x\n", dest, src, len, *pitch, pitch);
+	// stackPtr : 0x918805b8
+	// pitchPtr : 0x91880710
+	// actualHeightPtr : 0x91880648
+	// actualWidthPtr : 0x9188064c
+
+	uint32_t* pitchPtr = (stackPtr + 0x56 - 0x2);
+	uint32_t* actualWidthPtr = (stackPtr + 0x25- 0x2);
+	uint32_t* actualHeightPtr = (stackPtr + 0x24- 0x2);
+	
+	logv_error("texture_copy_impl: stack: %p, pitchPtr: %p, actualWidthPtr: %p, actualHeightPtr: %p, destPtr: %p, src: %p, len: %u\n",
+		 stackPtr, pitchPtr, actualWidthPtr, actualHeightPtr, destPtr, src, len);
+	// texture_copy_impl: stack: 0x91880620, pitchPtr: 0x91880710, actualWidthPtr: 0x9188064c, actualHeightPtr: 0x91880648
+
+	
+	// 6) Call real memcpy *via function pointer*, NOT the symbol name
+	//real_memcpy(dest, src, len);
+
+	int pitch = *pitchPtr;
+	int actualHeight = *actualHeightPtr;
+	int actualWidth = *actualWidthPtr;
+
+	logv_error("texture_copy_impl: *destPtr=%p, src=%p, len=%u, stackPtr=%p, pitch=%i, actualHeight=%i, actualWidth=%i\n", *destPtr, src, len, stackPtr, pitch, actualHeight, actualWidth);
+	// texture_copy_impl: *destPtr=0x2ef, src=0x88735370, len=4805, stackPtr=0x91880620, pitch=128, actualHeight=31, actualWidth=155
+
+
+	// uint32_t* pitchPtr;
+	// uint32_t* actualWidthPtr;
+	// uint32_t* actualHeightPtr;
+    // __asm__ volatile (
+    //     "mov %0, r4\n"
+    //     "mov %1, r5\n"
+    //     "mov %2, r6\n"
+	// 	"mov %3, r7\n"
+	// 	"mov %4, r8\n"
+	// 	"mov %5, r9\n"
+    //     : "=r"(dest), "=r"(src), "=r"(len), "=r"(pitchPtr), "=r"(actualWidthPtr), "=r"(actualHeightPtr)
+    // );
+
+
+
+	// pritnt the addresses of pitchPtr, actualWidthPtr, actualHeightPtr
+	//logv_error("texture_copy_impl: stack: %p, pitchPtr: %p, actualWidthPtr: %p, actualHeightPtr: %p\n", stackPtr, &pitch, &actualWidth, &actualHeight);
+
+	
+	//logv_error("texture_copy_impl: dest=%p, src=%p, len=%u, stackPtr=%p, pitch=%i, actualHeight=%i, actualWidth=%i\n", dest, src, len, stackPtr, pitch, actualHeight, actualWidth);
+
+    //logv_error("[hook] memcpy: dest=%p, src=%p, len=%u, pitchPtr=0x0%x", dest, src, len, pitchPtr);
+	// Crash here on purpose
+ 	// void *ptr = NULL;
+	// *(int *)ptr = 0;
+
+	int rows = actualHeight;     
+	int rowBytes = actualWidth;  
+	//void *dest = *(uint32_t*)destPtr;
+	for (int y = 0; y < rows; ++y) {
+		//logv_error("copying row %d of %d from %p to %p, rowBytes=%d\n", y, rows, src, destPtr, rowBytes);
+		//memcpy(destPtr, src, rowBytes);
+		destPtr += pitch;
+		src += rowBytes;
+	}
+
+	__aeabi_memcpy(destPtr, src, len);
+
+	log_error("texture_copy_impl: done\n");	
 
     // 6) Call real memcpy *via function pointer*, NOT the symbol name
     //real_memcpy(dest, src, len);
@@ -922,7 +958,7 @@ void so_patch(void) {
 		log_error("D3DTexture_LockRect not found\n");
 	} else {
 		logv_error("D3DTexture_LockRect found at %p\n", d3d_texture_lock_rect_addr);
-		//d3d_texture_lock_rect_hook = hook_addr(d3d_texture_lock_rect_addr, (uintptr_t)&d3d_texture_lock_rect);
+		d3d_texture_lock_rect_hook = hook_addr(d3d_texture_lock_rect_addr, (uintptr_t)&d3d_texture_lock_rect);
 	}
 
 	// _ZN3JBE7AudioPF12StreamThread10ThreadFuncEv
