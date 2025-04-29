@@ -19,7 +19,7 @@
 
 #define SCREEN_W 960  
 #define SCREEN_H 544
-#define MEMORY_VITAGL_THRESHOLD_MB 8
+#define MEMORY_VITAGL_THRESHOLD_MB 16
 
 /**
  * Get Unix timestamp in milliseconds.

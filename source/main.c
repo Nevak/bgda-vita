@@ -46,28 +46,14 @@ so_module so_mod_libcpufeatues;
 so_module so_mod_jbejni;
 so_module so_mod_libcpp;
 so_module so_mod_libxmv;
-uint32_t world_elements_count = 0;
-
-
-
-void enable_cheats(){
-	// cheatOn = true
-	uintptr_t addressToPatch = so_mod.text_base + 0x0063ae86 - 0x00010000;
-	kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x01", 1);
-
-	// cheatUnlocked = true
-	addressToPatch = so_mod.text_base + 0x00293f1c - 0x00010000;
-	kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, "\x01", 1);
-
-	logv_error("Patched bytes at %p: %x\n", addressToPatch, *(uint8_t *)addressToPatch);
-}
-
 
 SceCtrlData pad_previous;
 
 #define DEFAULT_RAZOR_CAPTURE_PATH "ur0:data/librazorcapture_es4.suprx"
 
 int log_allocs = 0;
+float g_uvFactor = 1.0f;
+float g_uvFactorY = 1.0f;
 void input_thread_fn(SceSize args, void *argp) {
 	//log_error("Polling input");
 
@@ -78,25 +64,27 @@ void input_thread_fn(SceSize args, void *argp) {
 		SceCtrlData pad;
 		sceCtrlPeekBufferPositiveExt2(0, &pad, 1);
 	
-		if (pad.buttons & SCE_CTRL_L1 && !(pad_previous.buttons & SCE_CTRL_L1)) {
-			log_error("L1 pressed");
-			if (log_allocs == 0) {
-				log_error("Enabling log_allocs");
-				log_allocs = 1;
-				// world_elements_count = 0;
-				// uintptr_t addressToPatch = so_mod.text_base + 0x0013244c - 0x00010000;
-
-				// // NOP out 14*4 bytes = 56 bytes
-				// for (int i = 0; i < 56; i++) {
-				// 	kuKernelCpuUnrestrictedMemcpy((void *)(addressToPatch + i), "\x00", 1);
-				// }
-
-			} else {
-				log_error("Disabling log_allocs");
-				log_allocs = 0;
-			}			
+		if (pad.buttons & SCE_CTRL_L1 ) {
+			g_uvFactor += 0.001f;
+			logv_error("g_uvFactor: %f\n", g_uvFactor);
+		}
+		if (pad.buttons & SCE_CTRL_R1) {
+			g_uvFactor -= 0.001f;
+			logv_error("g_uvFactor: %f\n", g_uvFactor);
 		}
 
+		if (pad.buttons & SCE_CTRL_LEFT ) {
+			g_uvFactorY += 0.001f;
+			logv_error("g_uvFactorY: %f\n", g_uvFactor);
+		}
+		if (pad.buttons & SCE_CTRL_RIGHT) {
+			g_uvFactorY -= 0.001f;
+			logv_error("g_uvFactorY: %f\n", g_uvFactor);
+		}
+		if (pad.buttons & SCE_CTRL_CIRCLE) {
+			g_uvFactor = 1.0f;
+			g_uvFactorY = 1.0f;
+		}
 		pad_previous = pad;
 	}
 }
@@ -182,8 +170,8 @@ int main() {
 	}
 
 	// poll input in another thread
-	SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
-	sceKernelStartThread(input_thread, 0, NULL);
+	// SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
+	// sceKernelStartThread(input_thread, 0, NULL);
 
 
 	log_info("Main  thread shutting down");

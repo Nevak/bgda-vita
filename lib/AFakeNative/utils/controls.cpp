@@ -58,7 +58,7 @@ float coord_normalize(float val, float deadzone_min, float deadzone_max) {
 void controls_init(AInputQueue * queue) {
 	// Enable analog sticks and touchscreen
 	sceCtrlSetSamplingModeExt(SCE_CTRL_MODE_ANALOG_WIDE);
-	sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
+	sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, SCE_TOUCH_SAMPLING_STATE_START);
 
 	inputQueue = queue;
 
@@ -243,7 +243,9 @@ static ButtonMapping mapping[] = {
 		{ SCE_CTRL_SQUARE,	AKEYCODE_BUTTON_X },
 		{ SCE_CTRL_TRIANGLE,  AKEYCODE_BUTTON_Y },
 		{ SCE_CTRL_L1,		AKEYCODE_BUTTON_L1 },
+		{ SCE_CTRL_L2,		AKEYCODE_BUTTON_L2 },
 		{ SCE_CTRL_R1,		AKEYCODE_BUTTON_R1 },
+		{ SCE_CTRL_R2,		AKEYCODE_BUTTON_R2 },
 		{ SCE_CTRL_START,	 AKEYCODE_BUTTON_START },
 		{ SCE_CTRL_SELECT,	AKEYCODE_BUTTON_SELECT },
 };
@@ -254,10 +256,19 @@ float lx = 0, ly = 0, rx = 0, ry = 0, lastLx = 0, lastLy = 0, lastRx = 0, lastRy
 inputEvent stickInputEvent;
 int sticksDown = 0;
 float x_old = 0.0f, y_old = 0.0f, z_old = 0.0f, rz_old = 0.0f, hat_x_old = 0.0f, hat_y_old = 0.0f;
-bool ltPressed_old = false, rtPressed_old = false;
+bool ltPressed_old = false, rtPressed_old = false, lbPressed_old = false, rbPressed_old = false;
 
-void sendJoyEvent(float x, float y, float z, float rz, float hat_x, float hat_y, bool ltPressed, bool rtPressed) {
-	if (x != x_old || y != y_old || z != z_old || rz != rz_old || hat_x != hat_x_old || hat_y != hat_y_old || ltPressed != ltPressed_old || rtPressed != rtPressed_old) {
+void sendJoyEvent(float x, float y, float z, float rz, float hat_x, float hat_y, bool ltPressed, bool rtPressed, bool lbPressed, bool rbPressed) {
+	if (x != x_old 
+		|| y != y_old 
+		|| z != z_old 
+		|| rz != rz_old 
+		|| hat_x != hat_x_old 
+		|| hat_y != hat_y_old 
+		|| ltPressed != ltPressed_old 
+		|| rtPressed != rtPressed_old
+		|| lbPressed != lbPressed_old
+		|| rbPressed != rbPressed_old) {
 		stickInputEvent.source = AINPUT_SOURCE_JOYSTICK;
 		stickInputEvent.motion_ptrcount = sticksDown + 1;
 		stickInputEvent.motion_x[0] = x;
@@ -266,8 +277,9 @@ void sendJoyEvent(float x, float y, float z, float rz, float hat_x, float hat_y,
 		stickInputEvent.motion_rz[0] = rz;
 		stickInputEvent.motion_hat_x[0] = hat_x;
 		stickInputEvent.motion_hat_y[0] = hat_y;
-		stickInputEvent.motion_lt[0] = ltPressed ? 1.0 : 0.0;
-		stickInputEvent.motion_rt[0] = rtPressed ? 1.0 : 0.0;
+		stickInputEvent.motion_lt[0] = lbPressed || ltPressed ? 1.0 : 0.0;
+		stickInputEvent.motion_rt[0] = rbPressed || rtPressed ? 1.0 : 0.0;
+
 		stickInputEvent.motion_ptridx[0] = 0;
 		stickInputEvent.type = AINPUT_EVENT_TYPE_MOTION;
 
@@ -283,6 +295,8 @@ void sendJoyEvent(float x, float y, float z, float rz, float hat_x, float hat_y,
 		hat_y_old = hat_y;
 		ltPressed_old = ltPressed;
 		rtPressed_old = rtPressed;
+		lbPressed_old = lbPressed;
+		rbPressed_old = rbPressed;
 	}
 }
 
@@ -337,5 +351,7 @@ void pollPad() {
 				 0,
 				 0,
 				 current_buttons & SCE_CTRL_L1,
-				 current_buttons & SCE_CTRL_R1);
+				 current_buttons & SCE_CTRL_R1, 
+				 current_buttons & SCE_CTRL_L2,
+				 current_buttons & SCE_CTRL_R2);
 }

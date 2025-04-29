@@ -554,6 +554,7 @@ void worldAllocateSegments(_worldHeader *param_1)
 							iVar8 = iVar8 + local_650 * 0x38;
 							// Store the palette in the world (?) object for later use
 							*(uint32_t *)(iVar8 + 0x14) = pallette;
+							//https://github.com/mborgerson/xbox-includes/blob/0f8e2521684a1881fba93941dad4f34b8693769b/include/d3d8types.h#L903
 
 							//- 0x8B is  D3DRS_DXT1NOISEENABLE??
 							//   see: https://github.com/vncloudsco/original-xbox-kernel-source/blob/e19dd436a9add10da24e832ee14a6bf857b8a3a4/public/sdk/inc/d3d8types.h#L532

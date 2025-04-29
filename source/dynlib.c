@@ -289,89 +289,15 @@ void *dlsym_fake(void *restrict handle, const char *restrict symbol) {
 	// return NULL;
 }
 
-// glCreateProgram_wrapper
-GLuint glCreateProgram_wrapper(void) {
-	GLuint res = glCreateProgram();
-	logv_info("glCreateProgram() called, returning %i", res);
-	return res;
-}
-
-//glCreateShader_wrapper
-GLuint glCreateShader_wrapper(GLenum type) {
-	GLuint res = glCreateShader(type);
-	// Check for errors
-	if (res == 0) {
-		log_error("glCreateShader failed");
-	}
-	log_info("glCreateShader successful");
-	return res;
-}
-
-// glBindAttribLocation_wrapper
-void glBindAttribLocation_wrapper(GLuint program, GLuint index, const GLchar *name) {
-	logv_info("glBindAttribLocation(%i, %i, %s) called", program, index, name);
-	glBindAttribLocation(program, index, name);
-
-	// // Test with glGetAttribLocation
-	// GLint loc = glGetAttribLocation(program, name);
-	// if (loc == -1) {
-	// 	log_error("glBindAttribLocation failed");
-	// }
-	// else
-	// {
-	// 	logv_info("glBindAttribLocation successful at %i", loc);
-	// }
-}
-
-// glCompileShader_wrapper
-void glCompileShader_wrapper(GLuint shader) {
-	logv_info("glCompileShader(%i) called", shader);
-	glCompileShader(shader);
-	// Check for errors
-	GLint status = 0;
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-	if (status == GL_FALSE) {
-		GLint log_length = 0;
-		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
-		if (log_length > 0) {
-			char *log = malloc(log_length);
-			glGetShaderInfoLog(shader, log_length, NULL, log);
-			logv_error("Shader compilation failed: %s", log);
-			free(log);
-		}
-	}
-	else {
-		log_info("Shader compilation successful");
-	}
-}
-
-// glAttachShader_wrapper
-void glAttachShader_wrapper(GLuint program, GLuint shader) {
-	logv_info("glAttachShader(%i, %i) was called", program, shader);
-	glAttachShader(program, shader);
-}
-
-// glShaderSource_wrapper
-void glShaderSource_wrapper(GLuint shader, GLsizei count, const GLchar **string, const GLint *length) {
-	logv_info("glShaderSource(%i, %i, %p, %p) called", shader, count, string, length);
-	// // Debug the address of the shader
-	// logv_info("shader address: %p", *string);
-	// Also log the shader source
-	// for (int i = 0; i < count; i++) {
-	// 	logv_info("shader source: %s", string[i]);
-	// }
-	glShaderSource(shader, count, string, length);
-}
-
 // glTexParameterfv_fake
 void glTexParameterfv_fake(GLenum target, GLenum pname, const GLfloat *params) {
-	logv_info("glTexParameterfv(%i, %i, %p) called", target, pname, params);
+	logv_error("[UNIMPLEMENTED] glTexParameterfv(%i, %i, %p) called", target, pname, params);
 	//glTexParameterfv(target, pname, params);
 }
 
 // glBlendColor_wrap
 void glBlendColor_wrap(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) {
-	logv_info("glBlendColor(%f, %f, %f, %f) called", red, green, blue, alpha);
+	logv_error("[UNIMPLEMENTED] glBlendColor(%f, %f, %f, %f) called", red, green, blue, alpha);
 	//glBlendColor(red, green, blue, alpha);
 	return;
 }
@@ -383,17 +309,6 @@ int glCompressedTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GL
 	return 0;
 }
 
-// glCompressedTexImage2D_fake
-void glCompressedTexImage2D_fake(GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data) {
-	logv_info("glCompressedTexImage2D(%i, %i, %i, %i, %i, %i, %i, %p) called", target, level, internalformat, width, height, border, imageSize, data);
-	glCompressedTexImage2D(target, level, internalformat, width, height, border, imageSize, data);
-}
-
-// glTexSubImage2D_fake
-// void glTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) {
-// 	logv_info("glTexSubImage2D(%i, %i, %i, %i, %i, %i, %i, %i, %p) called", target, level, xoffset, yoffset, width, height, format, type, pixels);
-// 	glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
-// }
 
 // glTexImage2D_fake
 void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) {
@@ -410,244 +325,9 @@ void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei
 	glTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
 }
 
-// glActiveTexture_fake
-void glActiveTexture_fake(GLenum texture) {
-	logv_info("glActiveTexture(0x%x) called. Will override with location 0x84C0 for debug.", texture);
-	glActiveTexture(texture); // GL_TEXTURE0
-}
-
-//glBindTexture_fake
-void glBindTexture_fake(GLenum target, GLuint texture) {
-	//logv_info("glBindTexture(0x%x, 0x%x) called", target, texture);
- 	glBindTexture(target, texture);
-}
-
-// glGenTextures_fake
-void glGenTextures_fake(GLsizei n, GLuint *textures) {
-	logv_info("glGenTextures(%i, %p) called", n, textures);
-	glGenTextures(n, textures);
-}
-
-// sscanf_fake
-int sscanf_fake(const char *str, const char *format, ...) {
-	logv_error("sscanf(%s, %s) called", str, format);
-	va_list args;
-	va_start(args, format);
-	#ifdef USE_SCELIBC_IO
-	int res = sceLibcBridge_sscanf(str, format, args);
-	#else
-	int res = sscanf(str, format, args);
-	#endif
-	va_end(args);
-
-	
-	return res;
-}
-
 void app_dummy(void)
 {
 	return;
-}
-
-//glDrawArrays_fake
-void glDrawArrays_fake(GLenum mode, GLint first, GLsizei count) {
-	//logv_info("glDrawArrays(%i, %i, %i) called", mode, first, count);
-	glDrawArrays(mode, first, count);
-}
-
-//glUseProgram_fake
-void glUseProgram_fake(GLuint program) {
-	//logv_info("glUseProgram(%i) called", program);
-	glUseProgram(program);
-}
-
-// glUniform1i_fake
-void glUniform1i_fake(GLint location, GLint v0) {
-	logv_info("glUniform1i(%i, %i) called", location, v0);
-	glUniform1i(location, v0);
-}
-
-// glUiform1f_fake
-void glUniform1f_fake(GLint location, GLfloat v0) {
-	logv_info("glUniform1f(%i, %f) called", location, v0);
-	glUniform1f(location, v0);
-} 
-
-// glUniform1fv_fake
-void glUniform1fv_fake(GLint location, GLsizei count, const GLfloat *value) {
-	logv_info("glUniform1fv(%i, %i, %p) called", location, count, value);
-	glUniform1fv(location, count, value);
-}
-
-// glUniform1iv_fake
-void glUniform1iv_fake(GLint location, GLsizei count, const GLint *value) {
-	logv_info("glUniform1iv(%i, %i, %p) called", location, count, value);
-	glUniform1iv(location, count, value);
-}
-
-// glUniform2f_fake
-void glUniform2f_fake(GLint location, GLfloat v0, GLfloat v1) {
-	logv_info("glUniform2f(%i, %f, %f) called", location, v0, v1);
-	glUniform2f(location, v0, v1);
-}
-
-// glUniform2fv_fake
-void glUniform2fv_fake(GLint location, GLsizei count, const GLfloat *value) {
-	logv_info("glUniform2fv(%i, %i, %p) called", location, count, value);
-	glUniform2fv(location, count, value);
-}
-
-// glUniform2iv_fake
-void glUniform2iv_fake(GLint location, GLsizei count, const GLint *value) {
-	logv_info("glUniform2iv(%i, %i, %p) called", location, count, value);
-	glUniform2iv(location, count, value);
-}
-
-// glUniform3fv_fake
-void glUniform3fv_fake(GLint location, GLsizei count, const GLfloat *value) {
-	logv_info("glUniform3fv(%i, %i, %p) called", location, count, value);
-	for (int i = 0; i < count; i+=3) {
-		logv_info("  value[%i] = %f", i, value[i]);
-		logv_info("  value[%i] = %f", i+1, value[i+1]);
-		logv_info("  value[%i] = %f", i+2, value[i+2]);
-	}
-	glUniform3fv(location, count, value);
-}
-
-// glUniform4fv_fake
-void glUniform4fv_fake(GLint location, GLsizei count, const GLfloat *value) {
-	logv_info("glUniform4fv(%i, %i, %p) called", location, count, value);
-	for (int i = 0; i < count; i+=4) {
-		logv_info("  value[%i] = %f", i, value[i]);
-		logv_info("  value[%i] = %f", i+1, value[i+1]);
-		logv_info("  value[%i] = %f", i+2, value[i+2]);
-		logv_info("  value[%i] = %f", i+3, value[i+3]);
-	}
-	glUniform4fv(location, count, value);
-	logv_info("glUniform4fv(%i, %i, %p) done", location, count, value);
-}
-
-// glGetUniformLocation_fake
-GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
-	GLint res = glGetUniformLocation(program, name);
-	logv_info("glGetUniformLocation(%i, %s) called. Returning %i", program, name, res);
-	return res;
-}
-
-// glLinkProgram_fake
-void glLinkProgram_fake(GLuint program) {
-	logv_info("glLinkProgram(%i) called", program);
-	glLinkProgram(program);
-}
-
-// glGetAttribLocation_fake
-GLint glGetAttribLocation_fake(GLuint program, const GLchar *name) {
-	logv_error("glGetAttribLocation(%i, %s) called", program, name);
-	return glGetAttribLocation(program, name);
-}
-
-// glGetActiveUniform_fake
-void glGetActiveUniform_fake(GLuint program, GLuint index, GLsizei bufSize, GLsizei *length, GLint *size, GLenum *type, GLchar *name) {
-	logv_info("glGetActiveUniform(%i, %i, %i, %p, %p, %p, %p) called", program, index, bufSize, length, size, type, name);
-	glGetActiveUniform(program, index, bufSize, length, size, type, name);
-
-	// Log the results
-	logv_info("  length = %i", *length);
-	logv_info("  size = %i", *size);
-	logv_info("  type = 0x%x", *type);
-	logv_info("  name = %s", name);
-}
-
-// glViewport_fake
-void glViewport_fake(GLint x, GLint y, GLsizei width, GLsizei height) {
-	//logv_info("glViewport(%i, %i, %i, %i) called", x, y, width, height);
-	glViewport(x, y, width, height);
-}
-
-//  glVertexAttribPointer_fake
-void glVertexAttribPointer_fake(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid *pointer) {
-	//logv_info("glVertexAttribPointer(%i, %i, %i, %i, %i, %p) called", index, size, type, normalized, stride, pointer);
-	glVertexAttribPointer(index, size, type, normalized, stride, pointer);
-}
-
-// glBufferData_fake
-void glBufferData_fake(GLenum target, GLsizeiptr size, const GLvoid *data, GLenum usage) {
-	// logv_info("glBufferData(%i, %i, %p, %i) called", target, size, data, usage);
-    // if (data && size > 0) {
-    //     // Number of floats in the buffer:
-    //     size_t floatCount = size / sizeof(float);
-        
-    //     // Cast to float pointer
-    //     const float* floatData = (const float*) data;
-
-    //     // Print them out. Be mindful of how large 'floatCount' can be!
-    //     logv_info("Buffer contents as floats (count=%zu) Truncated: %s:", floatCount, floatCount > 100 ? "YES" : "NO");
-	// 	// print only the first 100 floats
-	// 	floatCount = floatCount > 100 ? 100 : floatCount;
-    //     for (size_t i = 0; i < floatCount; i++) {
-    //         logv_info("  [%3zu] = %f", i, floatData[i]);
-    //     }
-    // } else {
-    //     logv_info("No valid data to print (data=%p, size=%zd)", data, size);
-    // }
-
-	glBufferData(target, size, data, usage);
-}
-
-// glEnableVertexAttribArray_fake
-void glEnableVertexAttribArray_fake(GLuint index) {
-	//logv_info("glEnableVertexAttribArray(%i) called", index);
-	glEnableVertexAttribArray(index);
-}
-
-// Keep a list of big allocations
-// #define MAX_ALLOCS 100
-// static void *allocs[MAX_ALLOCS];
-// static size_t alloc_sizes[MAX_ALLOCS];
-// static size_t alloc_count = 0;
-
-extern int log_allocs;
-extern uint32_t world_elements_count;
-extern uint32_t frameCount;
-// malloc_fake
-void *malloc_fake(size_t size) {
-	void* res = malloc(size);
-	if (log_allocs == 1) {
-		// Log the allocation
-		logv_info("[#%d] malloc(%zu) called. Returning %p", frameCount, size, res);
-
-		// try to get the backtrace with __builtin_return_address()
-		void * addr = __builtin_return_address(0);
-		logv_info("  backtrace: %p", addr);
-
-
-		// Read 24 addresses from the stack pointer
-		// void * stackp =  __builtin_stack_address();
-		// for (int i = 0; i < 24; i++) {
-		// 	void * addr = stackp + i * sizeof(void*);
-		// 	logv_info("  stack[%d]: %p", i, addr);
-		// }
-
-
-		
-
-		// Cause a crash to see the dump and backtrace
-		// void (*crash)() = NULL;
-		// crash();
-
-		// // Store the allocation
-		// if (alloc_count < MAX_ALLOCS) {
-		// 	allocs[alloc_count] = res;
-		// 	alloc_sizes[alloc_count] = size;
-		// 	alloc_count++;
-		// }
-		// else {
-		// 	log_error("Too many allocations to track");
-		// }
-	}
-	if (res == NULL) {
-		logv_error("malloc failed for size %zu bytes. Total elements count: %d", size, world_elements_count);
-	}
 }
 
 ssize_t read_delegate(int fd, void *buf, size_t count) {
@@ -693,42 +373,8 @@ off_t lseek_delegate(int fd, off_t offset, int whence) {
 	}
 }
 
-// free_fake
-void free_fake(void *ptr) {
-	if (ptr == NULL) {
-		return;
-	}
-	//logv_info("free(%p) called", ptr);
-	// Check if this is a big allocation
-	// for (size_t i = 0; i < alloc_count; i++) {
-	// 	if (allocs[i] == ptr) {
-	// 		// Log the deallocation
-	// 		logv_info("free(%p) called for size %zu bytes", ptr, alloc_sizes[i]);
-	// 		// Remove the allocation
-	// 		allocs[i] = NULL;
-	// 		alloc_sizes[i] = 0;
-	// 		// Shift the rest of the array
-	// 		for (size_t j = i; j < alloc_count - 1; j++) {
-	// 			allocs[j] = allocs[j + 1];
-	// 			alloc_sizes[j] = alloc_sizes[j + 1];
-	// 		}
-	// 		alloc_count--;
-	// 		return;
-	// 	}
-	// }
-	free(ptr);
-}
 
 so_default_dynlib default_dynlib[] = {
-		// OpenSLES
-		// { "slCreateEngine", (uintptr_t)&slCreateEngine },
-		// { "SL_IID_ENGINE", (uintptr_t)&SL_IID_ENGINE },
-		// { "SL_IID_PLAY", (uintptr_t)&SL_IID_PLAY },
-		// { "SL_IID_BUFFERQUEUE", (uintptr_t)&SL_IID_BUFFERQUEUE },
-		// { "SL_IID_VOLUME", (uintptr_t)&SL_IID_VOLUME },
-		// { "SL_IID_SEEK", (uintptr_t)&SL_IID_SEEK },
-		// { "SL_IID_PLAYBACKRATE", (uintptr_t)&SL_IID_PLAYBACKRATE },
-		
 		// Common C/C++ internals
 		{ "_ZNSt8bad_castD1Ev", (uintptr_t)&_ZNSt8bad_castD1Ev },
 		{ "_ZNSt9exceptionD2Ev", (uintptr_t)&_ZNSt9exceptionD2Ev },
@@ -978,7 +624,7 @@ so_default_dynlib default_dynlib[] = {
 		// Memory
 		{ "calloc", (uintptr_t)&calloc },
 		{ "free", (uintptr_t)&free },
-		{ "malloc", (uintptr_t)&malloc_fake },
+		{ "malloc", (uintptr_t)&malloc },
 		{ "memalign", (uintptr_t)&memalign },
 		{ "memcmp", (uintptr_t)&memcmp },
 		{ "memcpy", (uintptr_t)&memcpy },
@@ -1230,7 +876,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glVertexAttrib4f", (uintptr_t)&glVertexAttrib4f },
 		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
 		{ "glVertexPointer", (uintptr_t)&glVertexPointer },
-		{ "glViewport", (uintptr_t)&glViewport_fake },
+		{ "glViewport", (uintptr_t)&glViewport },
 		{ "glDrawArraysInstanced", (uintptr_t)&glDrawArraysInstanced },
 		{ "glDrawElementsInstanced", (uintptr_t)&glDrawElementsInstanced },
 

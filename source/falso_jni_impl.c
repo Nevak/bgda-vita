@@ -65,6 +65,7 @@ NameToMethodID nameToMethodId[] = {
 	{ 49, "isPVRTraceActive", METHOD_TYPE_BOOLEAN },
 	{ 50, "initCloud", METHOD_TYPE_OBJECT },
 	{ 51, "getISO3Language", METHOD_TYPE_OBJECT },
+	{ 52, "initSocial", METHOD_TYPE_OBJECT },
 };
 
 void stringCatcher(jmethodID id, va_list args) {
@@ -399,6 +400,11 @@ jobject initCloud(jmethodID id, va_list args) {
     return NULL;
 }
 
+jobject initSocial(jmethodID id, va_list args) {
+	fjni_log_err("initSocial CALLED");
+	return NULL;
+}
+
 MethodsBoolean methodsBoolean[] = {
 	{ 4, expansionIsValid }, 
 	{ 10, hasJoyStickMethods }, 
@@ -454,6 +460,7 @@ MethodsObject methodsObject[] = {
 	{ 47, getAbsolutePath },
 	{ 50, initCloud },
 	{ 51, getISO3Language },
+	{ 52, initSocial },
 };
 
 MethodsVoid methodsVoid[] = {
