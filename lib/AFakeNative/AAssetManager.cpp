@@ -87,7 +87,7 @@ int AAsset_openFileDescriptor(AAsset* asset, off_t* outStart, off_t* outLength) 
 
 #ifdef USE_SCELIBC_IO
     //log_error("UNIMPLEMENTED!!!");
-    auto ret = NULL;
+    auto ret = 0;
     //auto ret = (off_t) sceLibcBridge_fseek(a->f, offset, whence);
 #else
     auto ret = fileno(a->f);

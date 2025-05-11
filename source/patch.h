@@ -18,6 +18,8 @@ extern "C" {
 #endif
 
 void so_patch();
+void __aeabi_memcpy_patched(void *dst, const void *src, int n);
+
 
 #ifdef __cplusplus
 };

@@ -28,6 +28,7 @@ extern so_module so_mod_libxmv;
 
 #include "utils/logger.h"
 #include <stdbool.h>
+#include <string.h>
 
 int ret0() { return 0; }
 int ret1() { return 1; }
@@ -76,7 +77,7 @@ void writeConfigDirect() {
 int curWidth = 0;
 so_hook lowestPowerof2NotLessThan_hook;
 int lowestPowerof2NotLessThan(int dimension) {
-	uintptr_t caller = __builtin_return_address(0);
+	uint32_t caller = (uint32_t)__builtin_return_address(0);
 	if (caller != 0x98521dec && caller != 0x98521dcc) {
 		return SO_CONTINUE(int, lowestPowerof2NotLessThan_hook, dimension);
 	}
@@ -105,89 +106,89 @@ static inline int UnsignedSaturate8(int x) {
     return x;
 }
 
-so_hook texture_copy_hook;
+//so_hook texture_copy_hook;
 
-__attribute__((naked)) 
-__attribute__((target("arm")))
-void texture_copy(void *dst, void *src, size_t size)
-{
-	// Every local variable will increase the stack pointer by 4 bytes
-	uint32_t* stackPtr = 0;
+// __attribute__((naked)) 
+// __attribute__((target("arm")))
+// void texture_copy(void *dst, void *src, size_t size)
+// {
+// 	// Every local variable will increase the stack pointer by 4 bytes
+// 	uint32_t* stackPtr = 0;
 
-	__asm__ volatile (
-		".arm\n"
+// 	__asm__ volatile (
+// 		".arm\n"
 
-		"mov %0, sp\n"
+// 		"mov %0, sp\n"
 
-        "push {r4-r11}\n"
+//         "push {r4-r11}\n"
 
-        // 3) Grab arguments from r0, r1, r2 off the stack or directly 
-        "mov r4, r0\n" // dest
-        "mov r5, r1\n" // src
-        "mov r6, r2\n" // len
-		"mov r7, %0\n" // stack pointer to r7
+//         // 3) Grab arguments from r0, r1, r2 off the stack or directly 
+//         "mov r4, r0\n" // dest
+//         "mov r5, r1\n" // src
+//         "mov r6, r2\n" // len
+// 		"mov r7, %0\n" // stack pointer to r7
 
-        // 4) Now call a small helper in C to do logging + call real memcpy
-        "bl texture_copy_impl\n"
+//         // 4) Now call a small helper in C to do logging + call real memcpy
+//         "bl texture_copy_impl\n"
 
-        // 5) Restore regs and return to the caller (the code after the BL)
-        "pop {r4-r11}\n"
+//         // 5) Restore regs and return to the caller (the code after the BL)
+//         "pop {r4-r11}\n"
 
-		: "=r"(stackPtr)
-    );
+// 		: "=r"(stackPtr)
+//     );
 
-	__asm__ volatile (
-		// Force ARM mode if necessary
-		".arm\n"
+// 	__asm__ volatile (
+// 		// Force ARM mode if necessary
+// 		".arm\n"
 
-		// 2) Restore callee-saved registers
-		//"pop {r4-r11}\n"
+// 		// 2) Restore callee-saved registers
+// 		//"pop {r4-r11}\n"
 
-		"cpy r0, r7\n"
+// 		"cpy r0, r7\n"
 
-        // The instruction: LDR PC, [PC, #-4]
-        ".word 0xe51ff004\n"
-        // The next word: absolute destination address
-        ".word 0x98522478\n"
-    );
-}
+//         // The instruction: LDR PC, [PC, #-4]
+//         ".word 0xe51ff004\n"
+//         // The next word: absolute destination address
+//         ".word 0x98522478\n"
+//     );
+// }
 
-void texture_copy_impl(void) {
-    // r4,r5,r6 hold dest, src, len
-    uintptr_t* destPtr;
-    unsigned char* src;
-    size_t len;
-	uint32_t* stackPtr;
-	__asm__ volatile (
-		"mov %0, r4\n" // dest
-		"mov %1, r5\n" // src
-		"mov %2, r6\n" // len
-		"mov %3, r7\n" // stack pointer
+// void texture_copy_impl(void) {
+//     // r4,r5,r6 hold dest, src, len
+//     uintptr_t* destPtr;
+//     unsigned char* src;
+//     size_t len;
+// 	uint32_t* stackPtr;
+// 	__asm__ volatile (
+// 		"mov %0, r4\n" // dest
+// 		"mov %1, r5\n" // src
+// 		"mov %2, r6\n" // len
+// 		"mov %3, r7\n" // stack pointer
 		
-		: "=r"(destPtr), "=r"(src), "=r"(len), "=r"(stackPtr)
-	);
+// 		: "=r"(destPtr), "=r"(src), "=r"(len), "=r"(stackPtr)
+// 	);
 	
-	uint32_t* pitchPtr = (stackPtr + 0x56 - 0x2);
-	uint32_t* actualWidthPtr = (stackPtr + 0x25 - 0x2);
-	uint32_t* actualHeightPtr = (stackPtr + 0x24 - 0x2);
+// 	uint32_t* pitchPtr = (stackPtr + 0x56 - 0x2);
+// 	uint32_t* actualWidthPtr = (stackPtr + 0x25 - 0x2);
+// 	uint32_t* actualHeightPtr = (stackPtr + 0x24 - 0x2);
 	
-	int pitch = *pitchPtr;
-	int actualHeight = *actualHeightPtr;
-	int actualWidth = *actualWidthPtr;
+// 	int pitch = *pitchPtr;
+// 	int actualHeight = *actualHeightPtr;
+// 	int actualWidth = *actualWidthPtr;
 
-	int rows = actualHeight;     
-	int rowBytes = actualWidth;  
-	unsigned char *dest = (unsigned char*)destPtr;
-	for (int y = 0; y < rows; ++y) {
-		//logv_error("copying row %d of %d from %p to %p, rowBytes=%d\n", y, rows, src, destPtr, rowBytes);
-		// set the memory to all 1s just for testing
-		//memset(dest, 0xFF, rowBytes);
-		// src[0] = 0xFF;
-		__aeabi_memcpy(dest, src, rowBytes);
-		dest += pitch;
-	 	src += rowBytes;
-	}
-}
+// 	int rows = actualHeight;     
+// 	int rowBytes = actualWidth;  
+// 	unsigned char *dest = (unsigned char*)destPtr;
+// 	for (int y = 0; y < rows; ++y) {
+// 		//logv_error("copying row %d of %d from %p to %p, rowBytes=%d\n", y, rows, src, destPtr, rowBytes);
+// 		// set the memory to all 1s just for testing
+// 		//memset(dest, 0xFF, rowBytes);
+// 		// src[0] = 0xFF;
+// 		__aeabi_memcpy(dest, src, rowBytes);
+// 		dest += pitch;
+// 	 	src += rowBytes;
+// 	}
+// }
 
 // void D3DDevice_SetVertexShaderConstantNotInline(int register,undefined4 pConstantData,ulong ConstantCount)
 uint32_t g_pConstantData = 0;
@@ -209,7 +210,7 @@ extern float g_uvFactor;
 extern float g_uvFactorY;
 void D3DDevice_SetTexture(uint32_t param_1, int param_2) {
 	// Get the caller address
-	uintptr_t caller = __builtin_return_address(0);
+	uintptr_t caller = (uintptr_t)__builtin_return_address(0);
 	if (caller == 0x98528c84)
 	{
 		// param_2 as uint32_t*
@@ -354,14 +355,56 @@ void ov_read(int param_1, uint16_t *param_2, uint32_t param_3, int param_4, int 
 	total_ov_read_time += (timeAfter - timeNow) / 1000;
 }
 
-so_hook MakeSub_hook;
-// _ZN3JBE4File7MakeSubEjj
-void MakeSub(void *this,uint param_1,uint param_2) {
-	float timeNow = sceKernelGetProcessTimeWide();
-	SO_CONTINUE(void *, MakeSub_hook, this, param_1, param_2);
-	float timeAfter = sceKernelGetProcessTimeWide();
-	logv_error("[%d] MakeSub took %f ms\n", frameNum, (timeAfter - timeNow) / 1000);
+int g_width = 0;
+int g_height = 0;
+int g_pitch = 0;
+so_hook D3DDevice_CreateTexture2_hook;
+// D3DBaseTexture *D3DDevice_CreateTexture2(int width,int height,undefined4 depth,int levels,uint usage,undefined4 format,undefined4 resourceType)
+void *D3DDevice_CreateTexture2(int width, int height, uint32_t depth, int levels, uint32_t usage, uint32_t format, uint32_t resourceType) {
+	//logv_error("D3DDevice_CreateTexture2(%i, %i, %u, %i, %u, %u, %u)\n", width, height, depth, levels, usage, format, resourceType);
+	void *res = SO_CONTINUE(void *, D3DDevice_CreateTexture2_hook, width, height, depth, levels, usage, format, resourceType);
+
+	g_width = width;
+	g_height = height;
+
+	return res;
 }
+
+so_hook D3DTexture_LockRect_hook;
+// void D3DTexture_UnlockRect(D3DBaseTexture *pThis,undefined4 Level,int *pLockedRect,int *pRect,int flags)
+void D3DTexture_LockRect(void *pThis, uint32_t Level, int *pLockedRect, int *pRect, int flags) {
+	//logv_error("D3DTexture_LockRect(%p, %u, %p, %p, %u)\n", pThis, Level, pLockedRect, pRect, flags);
+	SO_CONTINUE(void *, D3DTexture_LockRect_hook, pThis, Level, pLockedRect, pRect, flags);
+	// print pLockedRect[0] and pLockedRect[1]
+	//logv_error("D3DTexture_LockRect: pLockedRect[0]: %d, pLockedRect[1]: %p\n", pLockedRect[0], pLockedRect[1]);
+	g_pitch = pLockedRect[0];
+}
+
+
+void __aeabi_memcpy_patched(void *dst, const void *src, int n) {
+	int* caller = __builtin_return_address(0);
+	if (caller == LOC(0x00132478))
+	{
+		int actualHeight = g_height;
+		int actualWidth = g_width;
+		int pitch = g_pitch;
+
+		int rows = actualHeight;     
+		int rowBytes = actualWidth;
+		unsigned char *dest = (unsigned char*)dst;
+		unsigned char *destPtr = (unsigned char*)dest;
+		for (int y = 0; y < rows; ++y) {
+			sceClibMemcpy(destPtr, src, rowBytes);
+			destPtr += pitch;
+			src += rowBytes;
+		}
+
+		return;
+	}
+
+	sceClibMemcpy(dst, src, n);
+}
+
 
 void so_patch(void) {
 
@@ -372,13 +415,13 @@ void so_patch(void) {
 
 	// _Z11coreAddTaskPFvvEiPKc coreAddTask
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
-	uint32_t loc = LOC(0x00132474);
-	logv_error("COPY TEXTURE at %p\n", loc);
-	texture_copy_hook = hook_addr(loc, (uintptr_t)&texture_copy);
+	//uint32_t loc = LOC(0x00132474);
+	//logv_error("COPY TEXTURE at %p\n", loc);
+	//texture_copy_hook = hook_addr(loc, (uintptr_t)&texture_copy);
 
 	//_Z25lowestPowerof2NotLessThani
 	uintptr_t lowestPowerof2NotLessThan_addr = (uintptr_t)so_symbol(&so_mod, "_Z25lowestPowerof2NotLessThani");
-	if (lowestPowerof2NotLessThan_addr == NULL) {
+	if (lowestPowerof2NotLessThan_addr == 0) {
 		log_error("lowestPowerof2NotLessThan not found\n");
 	} else {
 		logv_error("lowestPowerof2NotLessThan found at %p\n", lowestPowerof2NotLessThan_addr);
@@ -387,16 +430,34 @@ void so_patch(void) {
 
 	// _Z17writeConfigDirectv
 	uintptr_t writeConfigDirect_addr = (uintptr_t)so_symbol(&so_mod, "_Z17writeConfigDirectv");
-	if (writeConfigDirect_addr == NULL) {
+	if (writeConfigDirect_addr == 0) {
 		log_error("writeConfigDirect not found\n");
 	} else {
 		logv_error("writeConfigDirect found at %p\n", writeConfigDirect_addr);
 		writeConfigDirect_hook = hook_addr(writeConfigDirect_addr, (uintptr_t)&writeConfigDirect);
 	}
 
+	//void D3DTexture_LockRect(D3DBaseTexture *pThis,undefined4 Level,int *pLockedRect,int *pRect,int flags)
+	uintptr_t D3DTexture_LockRect_addr = (uintptr_t)so_symbol(&so_mod, "D3DTexture_LockRect");
+	if (D3DTexture_LockRect_addr == 0) {
+		log_error("D3DTexture_LockRect not found\n");
+	} else {
+		logv_error("D3DTexture_LockRect found at %p\n", D3DTexture_LockRect_addr);
+		D3DTexture_LockRect_hook = hook_addr(D3DTexture_LockRect_addr, (uintptr_t)&D3DTexture_LockRect);
+	}
+
+	//D3DDevice_CreateTexture2
+	uintptr_t D3DDevice_CreateTexture2_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_CreateTexture2");
+	if (D3DDevice_CreateTexture2_addr == 0) {
+		log_error("D3DDevice_CreateTexture2 not found\n");
+	} else {
+		logv_error("D3DDevice_CreateTexture2 found at %p\n", D3DDevice_CreateTexture2_addr);
+		D3DDevice_CreateTexture2_hook = hook_addr(D3DDevice_CreateTexture2_addr, (uintptr_t)&D3DDevice_CreateTexture2);
+	}
+
 	// _ZN3JBE5Input6RenderEv
 	uintptr_t inputRender_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE5Input6RenderEv");
-	if (inputRender_addr == NULL) {
+	if (inputRender_addr == 0) {
 		log_error("inputRender not found\n");
 	} else {
 		logv_error("inputRender found at %p\n", inputRender_addr);
@@ -405,7 +466,7 @@ void so_patch(void) {
 
 	// _ZN15VirtualControls6RenderEv
 	uintptr_t virtualControlsRender_addr = (uintptr_t)so_symbol(&so_mod, "_ZN15VirtualControls6RenderEv");
-	if (virtualControlsRender_addr == NULL) {
+	if (virtualControlsRender_addr == 0) {
 		log_error("virtualControlsRender not found\n");
 	} else {
 		logv_error("virtualControlsRender found at %p\n", virtualControlsRender_addr);
@@ -414,7 +475,7 @@ void so_patch(void) {
 
 	// _Z31frontEndDoControllerScreenInputRiS_
 	uintptr_t frontEndDoControllerScreenInput_addr = (uintptr_t)so_symbol(&so_mod, "_Z31frontEndDoControllerScreenInputRiS_");
-	if (frontEndDoControllerScreenInput_addr == NULL) {
+	if (frontEndDoControllerScreenInput_addr == 0) {
 		log_error("frontEndDoControllerScreenInput not found\n");
 	} else {
 		logv_error("frontEndDoControllerScreenInput found at %p\n", frontEndDoControllerScreenInput_addr);
@@ -423,16 +484,18 @@ void so_patch(void) {
 
 	// _ZN14CommonControls16UsingTouchscreenEv
 	uintptr_t usingTouchscreen_addr = (uintptr_t)so_symbol(&so_mod, "_ZN14CommonControls16UsingTouchscreenEv");
-	if (usingTouchscreen_addr == NULL) {
+	if (usingTouchscreen_addr == 0) {
 		log_error("usingTouchscreen not found\n");
 	} else {
 		logv_error("usingTouchscreen found at %p\n", usingTouchscreen_addr);
 		usingTouchscreen_hook = hook_addr(usingTouchscreen_addr, (uintptr_t)&usingTouchscreen);
 	}
 
+
+
 	//_ZN14CommonControls16RenderTouchIconsEP4Menu
 	uintptr_t renderTouchIcons_addr = (uintptr_t)so_symbol(&so_mod, "_ZN14CommonControls16RenderTouchIconsEP4Menu");
-	if (renderTouchIcons_addr == NULL) {
+	if (renderTouchIcons_addr == 0) {
 		log_error("renderTouchIcons not found\n");
 	} else {
 		logv_error("renderTouchIcons found at %p\n", renderTouchIcons_addr);
@@ -441,7 +504,7 @@ void so_patch(void) {
 
 	// _Z17cdDirectoryLookupPKcPiS1_
 	uintptr_t cdDirectoryLookup_addr = (uintptr_t)so_symbol(&so_mod, "_Z17cdDirectoryLookupPKcPiS1_");
-	if (cdDirectoryLookup_addr == NULL) {
+	if (cdDirectoryLookup_addr == 0) {
 		log_error("cdDirectoryLookup not found\n");
 	} else {
 		logv_error("cdDirectoryLookup found at %p\n", cdDirectoryLookup_addr);
@@ -450,7 +513,7 @@ void so_patch(void) {
 
 	// _Z9SND_Framev
 	uintptr_t SND_Frame_addr = (uintptr_t)so_symbol(&so_mod, "_Z9SND_Framev");
-	if (SND_Frame_addr == NULL) {
+	if (SND_Frame_addr == 0) {
 		log_error("SND_Frame not found\n");
 	} else {
 		logv_error("SND_Frame found at %p\n", SND_Frame_addr);
@@ -459,7 +522,7 @@ void so_patch(void) {
 
 	// _Z16SND_PlaySoundNewPv6Point3fff
 	uintptr_t SND_PlaySoundNew_addr = (uintptr_t)so_symbol(&so_mod, "_Z16SND_PlaySoundNewPv6Point3fff");
-	if (SND_PlaySoundNew_addr == NULL) {
+	if (SND_PlaySoundNew_addr == 0) {
 		log_error("SND_PlaySoundNew not found\n");
 	} else {
 		logv_error("SND_PlaySoundNew found at %p\n", SND_PlaySoundNew_addr);
@@ -468,7 +531,7 @@ void so_patch(void) {
 
 	// DirectSoundDoWork
 	uintptr_t DirectSoundDoWork_addr = (uintptr_t)so_symbol(&so_mod, "DirectSoundDoWork");
-	if (DirectSoundDoWork_addr == NULL) {
+	if (DirectSoundDoWork_addr == 0) {
 		log_error("DirectSoundDoWork not found\n");
 	} else {
 		logv_error("DirectSoundDoWork found at %p\n", DirectSoundDoWork_addr);
@@ -477,7 +540,7 @@ void so_patch(void) {
 
 	// void ov_raw_seek(int *param_1,undefined4 param_2,uint param_3,int param_4)
 	uintptr_t ov_raw_seek_addr = (uintptr_t)so_symbol(&so_mod, "ov_raw_seek");
-	if (ov_raw_seek_addr == NULL) {
+	if (ov_raw_seek_addr == 0) {
 		log_error("ov_raw_seek not found\n");
 	} else {
 		logv_error("ov_raw_seek found at %p\n", ov_raw_seek_addr);
@@ -486,7 +549,7 @@ void so_patch(void) {
 
 	//_Z15SND_StartStreamiPKciii
 	uintptr_t SND_StartStream_addr = (uintptr_t)so_symbol(&so_mod, "_Z15SND_StartStreamiPKciii");
-	if (SND_StartStream_addr == NULL) {
+	if (SND_StartStream_addr == 0) {
 		log_error("SND_StartStream not found\n");
 	} else {
 		logv_error("SND_StartStream found at %p\n", SND_StartStream_addr);
@@ -495,22 +558,12 @@ void so_patch(void) {
 
 	// void ov_read(int param_1,ushort *param_2,undefined4 param_3,int param_4,int param_5,int param_6,undefined4 *param_7)
 	uintptr_t ov_read_addr = (uintptr_t)so_symbol(&so_mod, "ov_read");
-	if (ov_read_addr == NULL) {
+	if (ov_read_addr == 0) {
 		log_error("ov_read not found\n");
 	} else {
 		logv_error("ov_read found at %p\n", ov_read_addr);
 		//ov_read_hook = hook_addr(ov_read_addr, (uintptr_t)&ov_read);
 	}
-
-	//_ZN3JBE4File7MakeSubEjj
-	uintptr_t MakeSub_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE4File7MakeSubEjj");
-	if (MakeSub_addr == NULL) {
-		log_error("MakeSub not found\n");
-	} else {
-		logv_error("MakeSub found at %p\n", MakeSub_addr);
-		//MakeSub_hook = hook_addr(MakeSub_addr, (uintptr_t)&MakeSub);
-	}
-
 
 	uintptr_t addresses[] = {
 		0x0009caf1,

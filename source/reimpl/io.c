@@ -680,7 +680,7 @@ int open_soloader(char *_fname, int flags) {
         return open_soloader("app0:/possible", flags);
     }
 
-    SceFiosFH* handle = 0;
+    SceFiosFH handle = 0;
     char real_fname[256];
     if (psarc_exists && !strncmp(_fname, "ux0:data/bgda/assets//res/", 26)) {
         // real name is whatever is after the prefix "ux0:data/bgda/assets//res/", so strip that

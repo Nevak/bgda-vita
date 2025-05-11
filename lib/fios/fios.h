@@ -79,6 +79,13 @@ typedef struct SceFiosBuffer {
     size_t length;
 } SceFiosBuffer;
 
+typedef struct SceFiosOpenParams {
+    uint32_t openFlags:16;
+    uint32_t opFlags:16;
+    uint32_t reserved;
+    SceFiosBuffer buffer;
+} SceFiosOpenParams;
+
 typedef struct SceFiosParams {
     uint32_t initialized : 1;
     uint32_t paramsSize : 15;
@@ -121,5 +128,8 @@ int sceFiosFHOpenSync(const SceFiosOpAttr *attr, SceFiosFH *fh, const char *path
 int32_t sceFiosFileGetSizeSync(const void *pAttr, const char *pPath);
 int fios_init(void);
 SceFiosSize sceFiosFHGetSize(SceFiosFH fh);
-
+SceFiosFH sceFiosFHToFileno(int fd);
+int sceFiosFHCloseSync(const SceFiosOpAttr *pAttr, SceFiosFH fh);
+SceFiosSize sceFiosArchiveGetMountBufferSizeSync(const SceFiosOpAttr *pAttr, const char *pArchivePath, const SceFiosOpenParams *pOpenParams);
+int sceFiosArchiveMountSync(const SceFiosOpAttr *pAttr, SceFiosFH *pOutFH, const char *pArchivePath, const char *pMountPoint, SceFiosBuffer mountBuffer, const SceFiosOpenParams *pOpenParams);
 #endif

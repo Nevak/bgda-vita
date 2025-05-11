@@ -66,6 +66,7 @@
 #include "reimpl/mem.h"
 #include "reimpl/pthr.h"
 #include "reimpl/sys.h"
+#include "patch.h"
 
 #include <AFakeNative/ALooper.h>
 #include <AFakeNative/AAssetManager.h>
@@ -266,7 +267,7 @@ void *dlsym_fake(void *restrict handle, const char *restrict symbol) {
 
 	if (strcmp("JBE_android_main_sub", symbol) == 0) {
 		uintptr_t jbe_andoid_main_addr = (uintptr_t) so_symbol(&so_mod, "JBE_android_main_sub");
-		if (jbe_andoid_main_addr == NULL)
+		if (jbe_andoid_main_addr == 0)
 		{
 			log_error("[dlsym]JBE_android_main_sub not found\n");
 		}
@@ -277,7 +278,10 @@ void *dlsym_fake(void *restrict handle, const char *restrict symbol) {
 		}
 	}
 
-	return dlsym(handle, symbol);
+	logv_error("dlsym(%p, %s) not implemented", handle, symbol);
+	return NULL;
+
+	//return dlsym(handle, symbol);
 
 	// if (strcmp("AMotionEvent_getAxisValue", symbol) == 0) {
 	// 	return &AMotionEvent_getAxisValue;
@@ -331,7 +335,7 @@ void app_dummy(void)
 }
 
 ssize_t read_delegate(int fd, void *buf, size_t count) {
-	SceFiosFH* fiosH = sceFiosFHToFileno(fd);
+	SceFiosFH fiosH = sceFiosFHToFileno(fd);
 	if (fiosH == 0xffffffff)
 	{
 		//logv_error("non-fios read(fd=0x%x, 0x%p, %zu) delegate called", fd, buf, count);
@@ -351,7 +355,7 @@ extern int retOpen;
 //lseek_delegate
 off_t lseek_delegate(int fd, off_t offset, int whence) {
 	//logv_error("lseek(0x%i, %i, %i) delegate called", fd, offset, whence);
-	SceFiosFH* fiosH = sceFiosFHToFileno(fd);
+	SceFiosFH fiosH = sceFiosFHToFileno(fd);
 	if (fiosH == 0xffffffff)
 	{
 		//logv_error("non-fios lseek(fd=0x%x, 0x%x, %i) delegate called", fd, offset, whence);
@@ -406,7 +410,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "__aeabi_memclr", (uintptr_t)&__aeabi_memclr },
 		{ "__aeabi_memclr4", (uintptr_t)&__aeabi_memclr },
 		{ "__aeabi_memclr8", (uintptr_t)&__aeabi_memclr },
-		{ "__aeabi_memcpy", (uintptr_t)&__aeabi_memcpy },
+		{ "__aeabi_memcpy", (uintptr_t)&__aeabi_memcpy_patched },
 		{ "__aeabi_memcpy4", (uintptr_t)&__aeabi_memcpy },
 		{ "__aeabi_memcpy8", (uintptr_t)&__aeabi_memcpy },
 		{ "__aeabi_memmove", (uintptr_t)&__aeabi_memmove },

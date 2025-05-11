@@ -58,7 +58,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi
 add_executable(${CMAKE_PROJECT_NAME}
 			   source/main.c
 			   source/dynlib.c
-			   source/dll_psp2.c
+			   #source/dll_psp2.c
 			   source/falso_jni_impl.c
 			   source/patch.c
 			   source/reimpl/ctype_patch.c

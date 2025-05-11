@@ -9,6 +9,8 @@
 #include <malloc.h>
 
 #include "fios.h"
+#include "utils/utils.h"
+#include <psp2/kernel/clib.h>
 
 #define MAX_PATH_LENGTH 256
 #define RAMCACHEBLOCKSIZE (128 * 1024)

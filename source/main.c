@@ -24,6 +24,7 @@
 #include <AFakeNative/AFakeNative.h>
 #include <vitasdk.h>
 #include <stdio.h>
+#include <string.h>
 #include <psp2/gxm.h>
 
 void *__wrap_calloc(uint32_t nmember, uint32_t size) { return vglCalloc(nmember, size); }
@@ -54,7 +55,7 @@ SceCtrlData pad_previous;
 int log_allocs = 0;
 float g_uvFactor = 1.0f;
 float g_uvFactorY = 1.0f;
-void input_thread_fn(SceSize args, void *argp) {
+int input_thread_fn(SceSize args, void *argp) {
 	//log_error("Polling input");
 
 	while (1) {
@@ -64,29 +65,31 @@ void input_thread_fn(SceSize args, void *argp) {
 		SceCtrlData pad;
 		sceCtrlPeekBufferPositiveExt2(0, &pad, 1);
 	
-		if (pad.buttons & SCE_CTRL_L1 ) {
-			g_uvFactor += 0.001f;
-			logv_error("g_uvFactor: %f\n", g_uvFactor);
+		if (pad.buttons & SCE_CTRL_L1 && !(pad_previous.buttons & SCE_CTRL_L1)) {
+			// toggle log_allocs
+			log_allocs = !log_allocs;
 		}
-		if (pad.buttons & SCE_CTRL_R1) {
-			g_uvFactor -= 0.001f;
-			logv_error("g_uvFactor: %f\n", g_uvFactor);
-		}
+		// if (pad.buttons & SCE_CTRL_R1) {
+		// 	g_uvFactor -= 0.001f;
+		// 	logv_error("g_uvFactor: %f\n", g_uvFactor);
+		// }
 
-		if (pad.buttons & SCE_CTRL_LEFT ) {
-			g_uvFactorY += 0.001f;
-			logv_error("g_uvFactorY: %f\n", g_uvFactor);
-		}
-		if (pad.buttons & SCE_CTRL_RIGHT) {
-			g_uvFactorY -= 0.001f;
-			logv_error("g_uvFactorY: %f\n", g_uvFactor);
-		}
-		if (pad.buttons & SCE_CTRL_CIRCLE) {
-			g_uvFactor = 1.0f;
-			g_uvFactorY = 1.0f;
-		}
+		// if (pad.buttons & SCE_CTRL_LEFT ) {
+		// 	g_uvFactorY += 0.001f;
+		// 	logv_error("g_uvFactorY: %f\n", g_uvFactor);
+		// }
+		// if (pad.buttons & SCE_CTRL_RIGHT) {
+		// 	g_uvFactorY -= 0.001f;
+		// 	logv_error("g_uvFactorY: %f\n", g_uvFactor);
+		// }
+		// if (pad.buttons & SCE_CTRL_CIRCLE) {
+		// 	g_uvFactor = 1.0f;
+		// 	g_uvFactorY = 1.0f;
+		// }
 		pad_previous = pad;
 	}
+
+	return 0;
 }
 
 
@@ -170,8 +173,8 @@ int main() {
 	}
 
 	// poll input in another thread
-	// SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
-	// sceKernelStartThread(input_thread, 0, NULL);
+	SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
+	sceKernelStartThread(input_thread, 0, NULL);
 
 
 	log_info("Main  thread shutting down");
