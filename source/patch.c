@@ -99,108 +99,10 @@ int lowestPowerof2NotLessThan(int dimension) {
       (  (uint64_t)(low32)  & 0xFFFFFFFFULL )        \
 )
 
-
-static inline int UnsignedSaturate8(int x) {
-    if (x < 0)   return 0;
-    if (x > 255) return 255;
-    return x;
-}
-
-//so_hook texture_copy_hook;
-
-// __attribute__((naked)) 
-// __attribute__((target("arm")))
-// void texture_copy(void *dst, void *src, size_t size)
-// {
-// 	// Every local variable will increase the stack pointer by 4 bytes
-// 	uint32_t* stackPtr = 0;
-
-// 	__asm__ volatile (
-// 		".arm\n"
-
-// 		"mov %0, sp\n"
-
-//         "push {r4-r11}\n"
-
-//         // 3) Grab arguments from r0, r1, r2 off the stack or directly 
-//         "mov r4, r0\n" // dest
-//         "mov r5, r1\n" // src
-//         "mov r6, r2\n" // len
-// 		"mov r7, %0\n" // stack pointer to r7
-
-//         // 4) Now call a small helper in C to do logging + call real memcpy
-//         "bl texture_copy_impl\n"
-
-//         // 5) Restore regs and return to the caller (the code after the BL)
-//         "pop {r4-r11}\n"
-
-// 		: "=r"(stackPtr)
-//     );
-
-// 	__asm__ volatile (
-// 		// Force ARM mode if necessary
-// 		".arm\n"
-
-// 		// 2) Restore callee-saved registers
-// 		//"pop {r4-r11}\n"
-
-// 		"cpy r0, r7\n"
-
-//         // The instruction: LDR PC, [PC, #-4]
-//         ".word 0xe51ff004\n"
-//         // The next word: absolute destination address
-//         ".word 0x98522478\n"
-//     );
-// }
-
-// void texture_copy_impl(void) {
-//     // r4,r5,r6 hold dest, src, len
-//     uintptr_t* destPtr;
-//     unsigned char* src;
-//     size_t len;
-// 	uint32_t* stackPtr;
-// 	__asm__ volatile (
-// 		"mov %0, r4\n" // dest
-// 		"mov %1, r5\n" // src
-// 		"mov %2, r6\n" // len
-// 		"mov %3, r7\n" // stack pointer
-		
-// 		: "=r"(destPtr), "=r"(src), "=r"(len), "=r"(stackPtr)
-// 	);
-	
-// 	uint32_t* pitchPtr = (stackPtr + 0x56 - 0x2);
-// 	uint32_t* actualWidthPtr = (stackPtr + 0x25 - 0x2);
-// 	uint32_t* actualHeightPtr = (stackPtr + 0x24 - 0x2);
-	
-// 	int pitch = *pitchPtr;
-// 	int actualHeight = *actualHeightPtr;
-// 	int actualWidth = *actualWidthPtr;
-
-// 	int rows = actualHeight;     
-// 	int rowBytes = actualWidth;  
-// 	unsigned char *dest = (unsigned char*)destPtr;
-// 	for (int y = 0; y < rows; ++y) {
-// 		//logv_error("copying row %d of %d from %p to %p, rowBytes=%d\n", y, rows, src, destPtr, rowBytes);
-// 		// set the memory to all 1s just for testing
-// 		//memset(dest, 0xFF, rowBytes);
-// 		// src[0] = 0xFF;
-// 		__aeabi_memcpy(dest, src, rowBytes);
-// 		dest += pitch;
-// 	 	src += rowBytes;
-// 	}
-// }
-
 // void D3DDevice_SetVertexShaderConstantNotInline(int register,undefined4 pConstantData,ulong ConstantCount)
 uint32_t g_pConstantData = 0;
 so_hook D3DDevice_SetVertexShaderConstantNotInline_hook;
 float D3DDevice_SetVertexShaderConstantNotInline(int reg, uint32_t pConstantData, uint32_t ConstantCount) {
-	// Get the caller address
-	// uintptr_t caller = __builtin_return_address(0);
-	// if (caller == 0x98528c64)
-	// {
-	// 	g_pConstantData = pConstantData;
-	// 	logv_error("D3DDevice_SetVertexShaderConstantNotInline: register: %i, pConstantData: 0x%x, ConstantCount: %u, caller: 0x%x\n", reg, pConstantData, ConstantCount, caller);
-	// }
 	return SO_CONTINUE(float, D3DDevice_SetVertexShaderConstantNotInline_hook, reg, pConstantData, ConstantCount);
 }
 
@@ -288,72 +190,6 @@ int cdDirectoryLookup(const char *path, int *param_2, int *param_3) {
 	return returnval;
 }
 
-float total_ov_read_time = 0.0f;
-uint32_t frameNum = 0;
-so_hook SND_Frame_hook;
-// Measure the time it takes to execute SND_Frame
-void SND_Frame() {
-	float timeNow = sceKernelGetProcessTimeWide();
-	SO_CONTINUE(void *, SND_Frame_hook);
-	float timeAfter = sceKernelGetProcessTimeWide();
-	if (timeAfter - timeNow > 2000) {
-		logv_error("[%d] SND_Frame took %f ms\n", frameNum, (timeAfter - timeNow) / 1000);
-		logv_error("[%d] total_ov_read_time: %f ms\n", frameNum, total_ov_read_time);
-	}
-
-	total_ov_read_time = 0.0f;
-	++frameNum;
-}
-
-//void SND_PlaySoundNew(void *param_1,Point3 param_2,float param_3,float param_4,float param_5)
-so_hook SND_PlaySoundNew_hook;
-void SND_PlaySoundNew(void *param_1,uint64_t param_2,float param_3,float param_4,float param_5) {
-	logv_error("SND_PlaySoundNew(%p, %p, %f, %f, %f)\n", param_1, param_2, param_3, param_4, param_5);
-	SO_CONTINUE(void *, SND_PlaySoundNew_hook, param_1, param_2, param_3, param_4, param_5);
-	//logv_error("SND_PlaySoundNew returned %i\n", returnval);
-}
-
-so_hook DirectSoundDoWork_hook;
-void DirectSoundDoWork(void) {
-	float timeNow = sceKernelGetProcessTimeWide();
-	SO_CONTINUE(void *, DirectSoundDoWork_hook);
-	float timeAfter = sceKernelGetProcessTimeWide();
-	if (timeAfter - timeNow > 2000) {
-		logv_error("DirectSoundDoWork took %f ms\n", (timeAfter - timeNow) / 1000);
-	}
-	//logv_error("DirectSoundDoWork returned %i\n", returnval);
-}
-
-so_hook ov_raw_seek_hook;
-void ov_raw_seek(int *param_1,uint param_2,uint param_3,int param_4) {
-	float timeNow = sceKernelGetProcessTimeWide();
-	SO_CONTINUE(void *, ov_raw_seek_hook, param_1, param_2, param_3, param_4);
-	float timeAfter = sceKernelGetProcessTimeWide();
-	if (timeAfter - timeNow > 2000) {
-		logv_error("ov_raw_seek took %f ms\n", (timeAfter - timeNow) / 1000);
-	}
-}
-
-so_hook SND_StartStream_hook;
-// _Z15SND_StartStreamiPKciii
-void SND_StartStream(int param_1,char *param_2,int param_3,int param_4,int param_5) {
-	//logv_error("SND_StartStream(%i, %s, %i, %i)\n", param_1, param_2, param_3, param_4);
-	float timeNow = sceKernelGetProcessTimeWide();
-	SO_CONTINUE(void *, SND_StartStream_hook, param_1, param_2, param_3, param_4, param_5);
-	float timeAfter = sceKernelGetProcessTimeWide();
-	if (timeAfter - timeNow > 2000) {
-		logv_error("[%d] SND_StartStream took %f ms\n",frameNum, (timeAfter - timeNow) / 1000);
-	}
-}
-
-so_hook ov_read_hook;
-// void ov_read(int param_1,ushort *param_2,undefined4 param_3,int param_4,int param_5,int param_6,undefined4 *param_7)
-void ov_read(int param_1, uint16_t *param_2, uint32_t param_3, int param_4, int param_5, int param_6, uint32_t *param_7) {
-	float timeNow = sceKernelGetProcessTimeWide();
-	SO_CONTINUE(void *, ov_read_hook, param_1, param_2, param_3, param_4, param_5, param_6, param_7);
-	float timeAfter = sceKernelGetProcessTimeWide();
-	total_ov_read_time += (timeAfter - timeNow) / 1000;
-}
 
 int g_width = 0;
 int g_height = 0;
@@ -509,60 +345,6 @@ void so_patch(void) {
 	} else {
 		logv_error("cdDirectoryLookup found at %p\n", cdDirectoryLookup_addr);
 		cdDirectoryLookup_hook = hook_addr(cdDirectoryLookup_addr, (uintptr_t)&cdDirectoryLookup);
-	}
-
-	// _Z9SND_Framev
-	uintptr_t SND_Frame_addr = (uintptr_t)so_symbol(&so_mod, "_Z9SND_Framev");
-	if (SND_Frame_addr == 0) {
-		log_error("SND_Frame not found\n");
-	} else {
-		logv_error("SND_Frame found at %p\n", SND_Frame_addr);
-		//SND_Frame_hook = hook_addr(SND_Frame_addr, (uintptr_t)&SND_Frame);
-	}
-
-	// _Z16SND_PlaySoundNewPv6Point3fff
-	uintptr_t SND_PlaySoundNew_addr = (uintptr_t)so_symbol(&so_mod, "_Z16SND_PlaySoundNewPv6Point3fff");
-	if (SND_PlaySoundNew_addr == 0) {
-		log_error("SND_PlaySoundNew not found\n");
-	} else {
-		logv_error("SND_PlaySoundNew found at %p\n", SND_PlaySoundNew_addr);
-		//SND_PlaySoundNew_hook = hook_addr(SND_PlaySoundNew_addr, (uintptr_t)&SND_PlaySoundNew);
-	}
-
-	// DirectSoundDoWork
-	uintptr_t DirectSoundDoWork_addr = (uintptr_t)so_symbol(&so_mod, "DirectSoundDoWork");
-	if (DirectSoundDoWork_addr == 0) {
-		log_error("DirectSoundDoWork not found\n");
-	} else {
-		logv_error("DirectSoundDoWork found at %p\n", DirectSoundDoWork_addr);
-		//DirectSoundDoWork_hook = hook_addr(DirectSoundDoWork_addr, (uintptr_t)&DirectSoundDoWork);
-	}
-
-	// void ov_raw_seek(int *param_1,undefined4 param_2,uint param_3,int param_4)
-	uintptr_t ov_raw_seek_addr = (uintptr_t)so_symbol(&so_mod, "ov_raw_seek");
-	if (ov_raw_seek_addr == 0) {
-		log_error("ov_raw_seek not found\n");
-	} else {
-		logv_error("ov_raw_seek found at %p\n", ov_raw_seek_addr);
-		//ov_raw_seek_hook = hook_addr(ov_raw_seek_addr, (uintptr_t)&ov_raw_seek);
-	}
-
-	//_Z15SND_StartStreamiPKciii
-	uintptr_t SND_StartStream_addr = (uintptr_t)so_symbol(&so_mod, "_Z15SND_StartStreamiPKciii");
-	if (SND_StartStream_addr == 0) {
-		log_error("SND_StartStream not found\n");
-	} else {
-		logv_error("SND_StartStream found at %p\n", SND_StartStream_addr);
-		//SND_StartStream_hook = hook_addr(SND_StartStream_addr, (uintptr_t)&SND_StartStream);
-	}
-
-	// void ov_read(int param_1,ushort *param_2,undefined4 param_3,int param_4,int param_5,int param_6,undefined4 *param_7)
-	uintptr_t ov_read_addr = (uintptr_t)so_symbol(&so_mod, "ov_read");
-	if (ov_read_addr == 0) {
-		log_error("ov_read not found\n");
-	} else {
-		logv_error("ov_read found at %p\n", ov_read_addr);
-		//ov_read_hook = hook_addr(ov_read_addr, (uintptr_t)&ov_read);
 	}
 
 	uintptr_t addresses[] = {
