@@ -601,17 +601,9 @@ void so_patch(void) {
 		uintptr_t addressToPatch = so_mod.text_base + addresses[i] - 0x00010000;
 		
 		// print original string
-		logv_error("Original string at %p: %s\n", addressToPatch, (char *)addressToPatch);
+		//logv_error("Original string at %p: %s\n", addressToPatch, (char *)addressToPatch);
 		kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, stringToPatch, strlen(stringToPatch)+1);
 		// print new string
-		logv_error("Patched string at %p: %s\n", addressToPatch, (char *)addressToPatch);
+		//logv_error("Patched string at %p: %s\n", addressToPatch, (char *)addressToPatch);
 	}
-}
-
-void patch_address_with_string(uintptr_t address, char *string) {
-	// print original string
-	logv_error("Original string at %p: %s\n", address, (char *)address);
-	kuKernelCpuUnrestrictedMemcpy((void *)address, string, strlen(string));
-	// print new string
-	logv_error("Patched string at %p: %s\n", address, (char *)address);
 }
