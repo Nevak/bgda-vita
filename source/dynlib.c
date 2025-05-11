@@ -249,15 +249,16 @@ void exit_soloader(int status) {
 }
 
 void *dlopen_hook(const char *restrict filename, int flags) {
+	// if libandroid.so, we handle it
+	if (strstr(filename, "libandroid.so") != NULL) {
+		logv_error("dlopen(%s, %i) called", filename, flags);
+		// Just return whatever for this case.
+		// The game will call dlsym(0xDEADBEEF, "AMotionEvent_getAxisValue") immediately after dlopen
+		// and we will handle it in dlsym_fake.
+		return (void *)0xDEADBEEF;
+	}
+
 	logv_error("Not Implemented dlopen(%s, %i) called", filename, flags);
-
-	// void* res = dlopen("ux0:/data/bgda/lib/armeabi-v7a/libdarkalliance.so", flags);
-
-	// if (!res) {
-	// 	// Check dlerror()
-	// 	char* err = dlerror();
-	// 	logv_error("dlopen error: %s", err);
-	// }
 
 	return 0;
 }
@@ -273,24 +274,16 @@ void *dlsym_fake(void *restrict handle, const char *restrict symbol) {
 		}
 		else
 		{
-			logv_error("[dlsym]JBE_android_main_sub found at %p\n", jbe_andoid_main_addr);
+			//logv_error("[dlsym]JBE_android_main_sub found at %p\n", jbe_andoid_main_addr);
 			return (void *) jbe_andoid_main_addr;
 		}
+	}
+	if (strcmp("AMotionEvent_getAxisValue", symbol) == 0) {
+		return (void *)AMotionEvent_getAxisValue;
 	}
 
 	logv_error("dlsym(%p, %s) not implemented", handle, symbol);
 	return NULL;
-
-	//return dlsym(handle, symbol);
-
-	// if (strcmp("AMotionEvent_getAxisValue", symbol) == 0) {
-	// 	return &AMotionEvent_getAxisValue;
-	// } else if (strcmp("AMotionEvent_getHistoricalAxisValue", symbol) == 0) {
-	// 	return &AMotionEvent_getHistoricalAxisValue;
-	// }
-
-	// logv_error("symbol %s not found", symbol);
-	// return NULL;
 }
 
 // glTexParameterfv_fake
