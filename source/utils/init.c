@@ -121,7 +121,7 @@ void soloader_init_all() {
     log_info("so_resolve() passed.");
 
     so_patch();
-    patch_ogg();
+    //patch_ogg();
     patch_vorbis();
     //patch_ffmpeg();
     log_info("so_patch() passed.");

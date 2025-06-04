@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <psp2/gxm.h>
+#include "utils/vorbis_patch.h"
 
 void *__wrap_calloc(uint32_t nmember, uint32_t size) { return vglCalloc(nmember, size); }
 void __wrap_free(void *addr) { vglFree(addr); };
@@ -173,8 +174,8 @@ int main() {
 	}
 
 	// poll input in another thread
-	SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
-	sceKernelStartThread(input_thread, 0, NULL);
+	// SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
+	// sceKernelStartThread(input_thread, 0, NULL);
 
 
 	log_info("Main  thread shutting down");

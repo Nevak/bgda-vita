@@ -20,7 +20,8 @@ set(VITA_VERSION "01.00")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
-set(PSVITAIP "192.168.110.16" CACHE STRING "PSVita IP (for FTP access)")
+#set(PSVITAIP "192.168.110.16" CACHE STRING "PSVita IP (for FTP access)") #China
+set(PSVITAIP "192.168.1.66" CACHE STRING "PSVita IP (for FTP access)") #Madrid
 set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
 # Game-specific definitions
@@ -52,7 +53,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   add_definitions(-DDEBUG_SOLOADER)
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -fno-inline -ffast-math -mfloat-abi=softfp -Wno-deprecated ")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -fno-inline -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q,--wrap,memcpy,--wrap,memset,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -O3 -fno-inline")
 
 add_executable(${CMAKE_PROJECT_NAME}
@@ -119,10 +120,11 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  stdc++
 					  OpenSLES
 					  sndfile
-					  vorbis
-					  vorbisenc
-					  vorbisfile
-					  ogg
+						# Ogg/Vorbis stack
+						vorbisfile
+						vorbisenc
+						vorbis
+						ogg
 					  FLAC
 					#   mbedtls
 					  openal
