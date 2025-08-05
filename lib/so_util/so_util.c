@@ -113,7 +113,7 @@ void so_flush_caches(so_module *mod) {
 }
 
 int _so_load(so_module *mod, SceUID so_blockid, void *so_data, uintptr_t load_addr) {
-    log_error("Loading module\n");
+    //log_error("Loading module\n");
     int res = 0;
     uintptr_t data_addr = 0;
 
@@ -218,7 +218,7 @@ int _so_load(so_module *mod, SceUID so_blockid, void *so_data, uintptr_t load_ad
                 mod->n_data++;
             }
 
-            logv_error("Allocating %d bytes\n", prog_size - mod->phdr[i].p_filesz);
+            //logv_error("Allocating %d bytes\n", prog_size - mod->phdr[i].p_filesz);
             char *zero = malloc(prog_size - mod->phdr[i].p_filesz);
             memset(zero, 0, prog_size - mod->phdr[i].p_filesz);
             kuKernelCpuUnrestrictedMemcpy(prog_data + mod->phdr[i].p_filesz, zero, prog_size - mod->phdr[i].p_filesz);
@@ -320,7 +320,7 @@ int so_file_load(so_module *mod, const char *filename, uintptr_t load_addr) {
     SceUID so_blockid;
     void *so_data;
 
-    logv_error("[so_file_load] Loading %s\n", filename);
+   // logv_error("[so_file_load] Loading %s\n", filename);
 
     memset(mod, 0, sizeof(so_module));
 
@@ -346,7 +346,7 @@ int so_file_load(so_module *mod, const char *filename, uintptr_t load_addr) {
     sceIoRead(fd, so_data, so_size);
     sceIoClose(fd);
 
-    logv_error("[so_file_load] Loaded %s\n", filename);
+    //logv_error("[so_file_load] Loaded %s\n", filename);
 
     return _so_load(mod, so_blockid, so_data, load_addr);
 }

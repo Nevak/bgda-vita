@@ -450,8 +450,13 @@ int sem_init_soloader (int * uid, int pshared, unsigned int value) {
 }
 
 int sem_post_soloader (int * uid) {
+    Profiler_BeginSample("sem_post_soloader");
     if (sceKernelSignalSema(*uid, 1) < 0)
+    {
+        Profiler_EndSample();
         return -1;
+    }
+    Profiler_EndSample();
     return 0;
 }
 
@@ -477,13 +482,13 @@ int sem_trywait_soloader (int * uid) {
 }
 
 int sem_wait_soloader (int * uid) {
-    //Profiler_BeginSample("sem_wait_soloader");
+    Profiler_BeginSample("sem_wait_soloader");
     if (sceKernelWaitSema(*uid, 1, NULL) < 0)
     {
-        //Profiler_EndSample();
+        Profiler_EndSample();
         return -1;
     }
 
-    //Profiler_EndSample();
+    Profiler_EndSample();
     return 0;
 }

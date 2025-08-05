@@ -34,7 +34,13 @@ AAssetManager * AAssetManager_create() {
 }
 
 AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename, int mode) {
-
+    //ALOGE("AAssetManager_open called with filename: %s, mode: %d\n", filename, mode);
+    // return nullptr;
+    // // if filename starts with /res, return nullptr
+    // if (strncmp(filename, "/res", 4) == 0) {
+    //    // ALOGD("[AAssetManager] AAssetManager_open(%p, %s, %i): returning nullptr", mgr, filename, mode);
+    //     return nullptr;
+    // }
 
     // if filename ends with .xmf, return nullptr
     if (strstr(filename, ".xmf") != nullptr) {

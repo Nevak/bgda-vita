@@ -17,6 +17,7 @@
 #include <utils/prof.h>
 #include <stdio.h>
 #include <vitasdk.h>
+#include <vitagprof.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,6 +33,7 @@ extern so_module so_mod_libxmv;
 #include <stdbool.h>
 #include <string.h>
 #include <stddef.h>
+#include <arm_neon.h>
 
 int ret0() { return 0; }
 int ret1() { return 1; }
@@ -48,33 +50,33 @@ int ret1() { return 1; }
 
 // TIME_HOOK(void, machFrameEnd, int p);
 
-typedef void (*TaskFn)(void);   /* adapt if the real prototype differs */
+// typedef void (*TaskFn)(void);   /* adapt if the real prototype differs */
 
-struct TaskThunk {
-    TaskFn  orig;      /* the real callback                     */
-    const char *name;  /* pointer to the label in param_3       */
-};
+// struct TaskThunk {
+//     TaskFn  orig;      /* the real callback                     */
+//     const char *name;  /* pointer to the label in param_3       */
+// };
 
-__attribute__((naked)) static void task_thunk_entry(void)
-{
-    __asm__ volatile (
-        "push   {r0-r3, lr}           \n"   /* save ABI-scratch regs        */
-        "ldr    r0, [sp, #20]         \n"   /* r0 = ptr to TaskThunk ctx    */
-        "ldr    r1, [r0, #4]          \n"   /* r1 = ctx->name               */
-        "bl     Profiler_BeginSample  \n"
+// __attribute__((naked)) static void task_thunk_entry(void)
+// {
+//     __asm__ volatile (
+//         "push   {r0-r3, lr}           \n"   /* save ABI-scratch regs        */
+//         "ldr    r0, [sp, #20]         \n"   /* r0 = ptr to TaskThunk ctx    */
+//         "ldr    r1, [r0, #4]          \n"   /* r1 = ctx->name               */
+//         "bl     Profiler_BeginSample  \n"
 
-        "ldr    r0, [sp, #20]         \n"   /* ctx again                    */
-        "ldr    r0, [r0, #0]          \n"   /* r0 = ctx->orig               */
-        "blx    r0                    \n"   /* call real task               */
+//         "ldr    r0, [sp, #20]         \n"   /* ctx again                    */
+//         "ldr    r0, [r0, #0]          \n"   /* r0 = ctx->orig               */
+//         "blx    r0                    \n"   /* call real task               */
 
-        "ldr    r0, [sp, #20]         \n"
-        "ldr    r1, [r0, #4]          \n"
-        "bl     Profiler_EndSample    \n"
+//         "ldr    r0, [sp, #20]         \n"
+//         "ldr    r1, [r0, #4]          \n"
+//         "bl     Profiler_EndSample    \n"
 
-        "pop    {r0-r3, lr}           \n"
-        "bx     lr                    \n"
-    );
-}
+//         "pop    {r0-r3, lr}           \n"
+//         "bx     lr                    \n"
+//     );
+// }
 
 
 static const char *gCmdLabels[256] = {
@@ -111,10 +113,10 @@ static const char *gCmdLabels[256] = {
     [0x1E] = "0x1E SetScissors",
     [0x1F] = "0x1F SetDepthRange",
     [0x20] = "0x20 RunDynamicPushBuffer",
-    [0x21] = "0x21 DrawIndexedVertices",
+    [0x21] = "0x21 DrawIndexedVertices", // 33
     [0x22] = "0x22 DrawVertices",
     [0x23] = "0x23 DrawVerticesUP",
-    [0x24] = "0x24 DrawIndexedVerticesInstanced",
+    [0x24] = "0x24 DrawIndexedVerticesInstanced", // 36
     [0x25] = "0x25 DrawVerticesInstanced",
     [0x26] = "0x26 StoreVertexData",
     [0x27] = "0x27 StoreShaderParameters",
@@ -175,6 +177,32 @@ static const char *gCmdLabels[256] = {
 //     return (TaskFn)((uintptr_t)code | 1);
 // }
 
+/*
+coreAddTask(0x984acaf4, 19, StatCache)←[0m
+coreAddTask(0x984d0a4c, 20, Async Load/Save Daemon)←[0m
+coreAddTask(0x985485a0, 110, Dialog Demon)←[0m
+coreAddTask(0x984c7e78, 125, Script Demon)←[0m
+coreAddTask(0x98504a1c, 10, runObjects)←[0m
+coreAddTask(0x98505094, 21, drawObjects)←[0m
+coreAddTask(0x9857b2a0, 28, drawFloorSprites (must be before drawworld))←[0m
+coreAddTask(0x98593eb8, 15, updateParticles)←[0m
+coreAddTask(0x985923ec, 65, drawParticles)←[0m
+coreAddTask(0x985a8c98, 3, transformSceneLight)←[0m
+coreAddTask(0x9852d578, 22, RenderDelayedShadows)←[0m
+coreAddTask(0x9852e50c, 1, camera)←[0m
+coreAddTask(0x9852edb8, 20, drawWorld)←[0m
+coreAddTask(0x985277a0, 23, delayDrawWorld)←[0m
+coreAddTask(0x98564d48, 50, HelpMessage)←[0m
+coreAddTask(0x9852e50c, 1, camera)←[0m
+coreAddTask(0x9852edb8, 20, drawWorld)←[0m
+coreAddTask(0x985277a0, 23, delayDrawWorld)←[0m
+coreAddTask(0x98564d48, 50, HelpMessage)←[0m
+coreAddTask(0x9852e50c, 1, camera)←[0m
+coreAddTask(0x9852edb8, 20, drawWorld)←[0m
+coreAddTask(0x985277a0, 23, delayDrawWorld)←[0m
+coreAddTask(0x98564d48, 50, HelpMessage)←[0m
+coreAddTask(0x98563a90, 50, HUD)←[0m
+*/
 
 
 so_hook coreAddTask_hook;
@@ -192,13 +220,13 @@ int coreAddTask(void *fn, int prio, char *name) {
 	// }
 
 	if (name && strcmp(name, "RenderDelayedShadows") == 0) {
-	 	log_error("Ignoring renderDelayedShadows task\n");
-	 	return 0;
+	  	log_error("Ignoring renderDelayedShadows task\n");
+	  	return 0;
 	}
 
-	if (name && strcmp(name, "gameDrawWorld") == 0) {
-		log_error("Ignoring gameDrawWorld task\n");
-		return 0;
+		if (name && strcmp(name, "delayDrawWorld") == 0) {
+	  	log_error("Ignoring delayDrawWorld task\n");
+	  	return 0;
 	}
 		
 
@@ -217,6 +245,7 @@ int coreAddTask(void *fn, int prio, char *name) {
 
 extern int log_allocs;
 extern int log_profiler;
+extern int profiling_idx;
 
 so_hook renderTouchIcons_hook;
 void renderTouchIcons(void *param_1) {
@@ -276,17 +305,27 @@ int lowestPowerof2NotLessThan(int dimension) {
       (  (uint64_t)(low32)  & 0xFFFFFFFFULL )        \
 )
 
-// void D3DDevice_SetVertexShaderConstantNotInline(int register,undefined4 pConstantData,ulong ConstantCount)
-uint32_t g_pConstantData = 0;
-so_hook D3DDevice_SetVertexShaderConstantNotInline_hook;
-float D3DDevice_SetVertexShaderConstantNotInline(int reg, uint32_t pConstantData, uint32_t ConstantCount) {
-	return SO_CONTINUE(float, D3DDevice_SetVertexShaderConstantNotInline_hook, reg, pConstantData, ConstantCount);
-}
 
 // void D3DDevice_SetTexture(ulong param_1,int param_2)
 so_hook D3DDevice_SetTexture_hook;
 extern float g_uvFactor;
 extern float g_uvFactorY;
+uintptr_t D3DDevice_SetVertexShaderConstantNotInline_addr;
+uintptr_t D3DDevice_SetVertexShaderConstantFast_addr;
+typedef void (*D3DDevice_SetVertexShaderConstantNotInlineFn)(int reg, uint32_t pConstantData, uint32_t ConstantCount);
+typedef void (*D3DDevice_SetVertexShaderConstantFastFn)(int reg, uint32_t pConstantData, uint32_t ConstantCount);
+
+//void D3DDevice_SetVertexShaderConstantNotInline(int register,undefined4 pConstantData,ulong ConstantCount)
+//uint32_t g_pConstantData = 0;
+so_hook D3DDevice_SetVertexShaderConstantNotInline_hook;
+void D3DDevice_SetVertexShaderConstantNotInline(int reg, uint32_t pConstantData, uint32_t ConstantCount) {
+	Profiler_BeginSample("D3DDevice_SetVertexShaderConstantNotInline");
+	//SO_CONTINUE(float, D3DDevice_SetVertexShaderConstantNotInline_hook, reg, pConstantData, ConstantCount);
+	D3DDevice_SetVertexShaderConstantFastFn D3DDevice_SetVertexShaderConstantFast = (D3DDevice_SetVertexShaderConstantFastFn)D3DDevice_SetVertexShaderConstantFast_addr;
+	D3DDevice_SetVertexShaderConstantFast(reg, pConstantData, ConstantCount);
+	Profiler_EndSample();
+}
+
 void D3DDevice_SetTexture(uint32_t param_1, int param_2) {
 	// Get the caller address
 	uintptr_t caller = (uintptr_t)__builtin_return_address(0);
@@ -344,13 +383,16 @@ void D3DDevice_SetTexture(uint32_t param_1, int param_2) {
 			// 	scale[1] = 1.0f;
 			// }
 			//logv_error("D3DDevice_SetTexture: scaleX: %f, scaleY: %f\n", g_uvFactor,  g_uvFactor *);
-			D3DDevice_SetVertexShaderConstantNotInline(24, (uint32_t)scale, 1);
+			//D3DDevice_SetVertexShaderConstantNotInlineFn D3DDevice_SetVertexShaderConstantNotInline = (D3DDevice_SetVertexShaderConstantNotInlineFn)D3DDevice_SetVertexShaderConstantNotInline_addr;
+			//D3DDevice_SetVertexShaderConstantNotInline(24, (uint32_t)scale, 1);
+			SO_CONTINUE(float, D3DDevice_SetVertexShaderConstantNotInline_hook, 24, (uint32_t)scale, 1);
 		}
 		else {
 			float scale[4] = {scaleX, scaleY, 0.0f, 0.0f};
 			//float scale[4] = {g_uvFactor * scaleX, g_uvFactorY * scaleY, 0.0f, 0.0f};
-
-			D3DDevice_SetVertexShaderConstantNotInline(24, (uint32_t)scale, 1);
+			//D3DDevice_SetVertexShaderConstantNotInlineFn D3DDevice_SetVertexShaderConstantNotInline = (D3DDevice_SetVertexShaderConstantNotInlineFn)D3DDevice_SetVertexShaderConstantNotInline_addr;
+			//D3DDevice_SetVertexShaderConstantNotInline(24, (uint32_t)scale, 1);
+			SO_CONTINUE(float, D3DDevice_SetVertexShaderConstantNotInline_hook, 24, (uint32_t)scale, 1);
 		}
 	}
 	SO_CONTINUE(void *, D3DDevice_SetTexture_hook, param_1, param_2);
@@ -408,7 +450,7 @@ void __aeabi_memcpy_patched(void *dst, const void *src, int n) {
 		unsigned char *dest = (unsigned char*)dst;
 		unsigned char *destPtr = (unsigned char*)dest;
 		for (int y = 0; y < rows; ++y) {
-			sceClibMemcpy(destPtr, src, rowBytes);
+			memcpy(destPtr, src, rowBytes);
 			destPtr += pitch;
 			src += rowBytes;
 		}
@@ -418,7 +460,7 @@ void __aeabi_memcpy_patched(void *dst, const void *src, int n) {
 	}
 
 	//Profiler_EndSample();
-	sceClibMemcpy(dst, src, n);
+	memcpy(dst, src, n);
 }
 
 
@@ -454,7 +496,15 @@ PROF_HOOK_VOID(EndFrameFence, "_ZN3JBE9DisplayPF13EndFrameFenceEv", (int* param_
 PROF_HOOK_VOID(SystemUpdate, "_ZN3JBE6System6UpdateEv", (void));
 PROF_HOOK_VOID(SwapToFront, "_ZN3JBE9D3DDevice11SwapToFrontEi", (int* param_1), (param_1));
 PROF_HOOK_VOID(DisplaySwap, "_ZN3JBE9DisplayPF4SwapEv", (void *param_1), (param_1));
+//_ZN3JBE9D3DDevice11CommitStateEv
+PROF_HOOK_VOID(D3DDevice_CommitState, "_ZN3JBE9D3DDevice11CommitStateEv", (void *param_1), (param_1));
 PROF_HOOK_VOID(Blit, "_ZN3JBE9DisplayPF4BlitEiiiiRKNS_13ShaderProgramEi", (int* param_1, int param_2, int param_3, int param_4, void *param_5, int param_6), (param_1, param_2, param_3, param_4, param_5, param_6));
+//_ZN3JBE9D3DDevice16SetTextureStagesEm
+PROF_HOOK_VOID(D3DDevice_SetTextureStages, "_ZN3JBE9D3DDevice16SetTextureStagesEm", (int *param_1, int param_2), (param_1, param_2));
+//_ZN3JBE9D3DDevice17UpdateComboStatesEv
+ PROF_HOOK_VOID(D3DDevice_UpdateComboStates, "_ZN3JBE9D3DDevice17UpdateComboStatesEv", (int *param_1), (param_1));
+
+//PROF_HOOK_VOID(D3DDevice_SetVertexShaderConstantNotInlineX, "D3DDevice_SetVertexShaderConstantNotInline", (int* thisptr, int reg, uint32_t pConstantData, uint64_t ConstantCount), (reg, pConstantData, ConstantCount));
 // PROF_HOOK_RET(uint32_t, WorldClipCubeToFrustum, "_Z22worldClipCubeToFrustumPA2_fi", (float *param_1, int param_2), (param_1, param_2));
 // PROF_HOOK_RET(uint32_t, worldClipCubeToClipFrustum, "_Z26worldClipCubeToClipFrustumPA2_fi", (float *param_1, int param_2), (param_1, param_2));
 void install_prof_hooks(void) {
@@ -487,6 +537,10 @@ void install_prof_hooks(void) {
 	PROF_ATTACH(SwapToFront, "_ZN3JBE9D3DDevice11SwapToFrontEi");
 	PROF_ATTACH(DisplaySwap, "_ZN3JBE9DisplayPF4SwapEv");
 	PROF_ATTACH(Blit, "_ZN3JBE9DisplayPF4BlitEiiiiRKNS_13ShaderProgramEi");
+	PROF_ATTACH(D3DDevice_CommitState, "_ZN3JBE9D3DDevice11CommitStateEv");
+	PROF_ATTACH(D3DDevice_SetTextureStages, "_ZN3JBE9D3DDevice16SetTextureStagesEm");
+	PROF_ATTACH(D3DDevice_UpdateComboStates, "_ZN3JBE9D3DDevice17UpdateComboStatesEv");
+	//PROF_ATTACH(D3DDevice_SetVertexShaderConstantNotInlineX, "D3DDevice_SetVertexShaderConstantNotInline");
 	// PROF_ATTACH(WorldClipCubeToFrustum, "_Z22worldClipCubeToFrustumPA2_fi");
 	// PROF_ATTACH(worldClipCubeToClipFrustum, "_Z26worldClipCubeToClipFrustumPA2_fi");
 }
@@ -519,17 +573,17 @@ uint64_t lastFrameTime = 0;
 uint64_t totalFrameTime = 0;
 so_hook JBE_D3DDevice_Swap_hook;
 void JBE_D3DDevice_Swap(void *param_1, int param_2) {
-	Profiler_BeginSample("JBE::D3DDevice::Swap (render thread)");
+	//Profiler_BeginSample("JBE::D3DDevice::Swap (render thread)");
 	SO_CONTINUE(void *, JBE_D3DDevice_Swap_hook, param_1, param_2);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 }
 
 so_hook DisplayPF_Swap_hook;
 void DisplayPF_Swap(void *param_1) {
 	//logv_error("DisplayPF_Swap(%p)\n", param_1);
-	Profiler_BeginSample("DisplayPF::Swap");
+	//Profiler_BeginSample("DisplayPF::Swap");
 	SO_CONTINUE(void *, DisplayPF_Swap_hook, param_1);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 	//log_error("DisplayPF_Swap finished\n");
 	
 	// only print every 100 frames
@@ -540,22 +594,31 @@ void DisplayPF_Swap(void *param_1) {
 	}
 	bool shouldLog = (frameCount % 100 == 0);
 	if (log_profiler && shouldLog) {
+		//sceClibPrintf("Saving profiling output\n");
+		//char fname[256];
+		//sprintf(fname, "ux0:data/prof_%d.out", profiling_idx++);
+		//gprof_stop(fname, 1);
+
+		// Continue the profiler
+		//gprof_start();
+
 		uint64_t timeNow = sceKernelGetProcessTimeWide();
 		uint64_t deltaSinceLastDump = timeNow - lastFrameTime;
 		lastFrameTime = timeNow;
 
 		SceUID threadId = sceKernelGetThreadId();
 		// int flag_skip_input = param_2 & 0x20;
-		// int flag_skip_wait = param_2 & 0x40;
-		// int flag_skip_vsync = param_2 & 0x10;
+		// // int flag_skip_wait = param_2 & 0x40;
+		// // int flag_skip_vsync = param_2 & 0x10;
 		logv_error("[t:%d]JBE::DisplayPF::Swap deltaSinceLastDump: %f ms. Thread ID: 0x%X\n", 
-			frameCount, (float)deltaSinceLastDump / 1000.0f, threadId);
+		 	frameCount, (float)deltaSinceLastDump / 1000.0f, threadId);
 
 		logv_error("frameStartCallCount: %u", frameStartCallCount);
 		logv_error("frameStartToEndTime: %u ms", frameStartToEndTime / 1000);
 		
 		frameStartCallCount = 0;
 		frameStartToEndTime = 0;
+
 		Profiler_PrintAll();
 		Profiler_ResetAll();
 	}
@@ -594,6 +657,13 @@ struct d3dDeviceFake {
     /* … other fields … */
 };
 
+ReadCommandFn fnReadCommand;
+void ReadCommandCustom(struct d3dDeviceFake *thisPtr) {	
+
+	// Call the original ReadCommand function
+	fnReadCommand(thisPtr);
+}
+
 void D3DDevice_AsyncRenderCB(void *device_ptr) {
 	sceKernelChangeThreadCpuAffinityMask(sceKernelGetThreadId(), SCE_KERNEL_CPU_MASK_USER_1);
     D3DDevice* device = (D3DDevice*)device_ptr;
@@ -605,7 +675,7 @@ void D3DDevice_AsyncRenderCB(void *device_ptr) {
     // Cast function pointer types
     AcquireContextFn fnAcquire = (AcquireContextFn)displayPF_AcquireContext_addr;
     ReleaseContextFn fnRelease = (ReleaseContextFn)displayPF_ReleaseContext_addr;
-    ReadCommandFn fnReadCommand = (ReadCommandFn)D3DDevice_ReadCommand_addr;
+    fnReadCommand = (ReadCommandFn)D3DDevice_ReadCommand_addr;
 
 	log_error("will call fnAcquire");
     // Acquire Render Context
@@ -627,7 +697,7 @@ void D3DDevice_AsyncRenderCB(void *device_ptr) {
 	struct d3dDeviceFake *thisPtr = (struct d3dDeviceFake *)device;
     // Process commands while still work remains
     while (device->hasRenderWork) {
-		if (0){
+		if (log_profiler) {
 			struct astruct *cmdData = thisPtr->cmd;
 			uint8_t cmdType = cmdData->field0 & 0xFF;
 			uint32_t cmdType32 = cmdData->field0 & 0xFF;
@@ -640,7 +710,7 @@ void D3DDevice_AsyncRenderCB(void *device_ptr) {
 		}
 		else {
 			// Just read the command without profiling
-			fnReadCommand(device);
+			ReadCommandCustom(thisPtr);
 		}
     }
 
@@ -675,19 +745,19 @@ _Static_assert(offsetof(struct d3dDeviceFake, cmd) == 0x8,
 so_hook D3DDevice_ReadCommand_hook;
 void D3DDevice_ReadCommand(struct d3dDeviceFake *thisPtr) {
 	if (log_profiler) {
-		struct astruct *cmdData = thisPtr->cmd;
-		uint8_t cmdType = cmdData->field0 & 0xFF;
-		uint32_t cmdType32 = cmdData->field0 & 0xFF;
-		// Profile with the command type
-		const char *label = gCmdLabels[cmdType];
-		// if (!label) {
-		// 	logv_error("D3DDevice_ReadCommand: cmdType is NULL (0x%02X)\n", cmdType);
-		// 	label = "Unknown Command";
-		// }
-		Profiler_BeginSample(label);
+		// struct astruct *cmdData = thisPtr->cmd;
+		// uint8_t cmdType = cmdData->field0 & 0xFF;
+		// uint32_t cmdType32 = cmdData->field0 & 0xFF;
+		// // Profile with the command type
+		// const char *label = gCmdLabels[cmdType];
+		// // if (!label) {
+		// // 	logv_error("D3DDevice_ReadCommand: cmdType is NULL (0x%02X)\n", cmdType);
+		// // 	label = "Unknown Command";
+		// // }
+		// Profiler_BeginSample(label);
 
 		SO_CONTINUE(void *, D3DDevice_ReadCommand_hook, thisPtr);
-		Profiler_EndSample();
+		// Profiler_EndSample();
 	}
 	else {
 		SO_CONTINUE(void *, D3DDevice_ReadCommand_hook, thisPtr);
@@ -819,61 +889,116 @@ _Static_assert(sizeof(struct FrustumIdx) == 3, "FrustumIdx must be packed to 3 b
 so_hook worldClipCubeToFrustum_hook;
 uint32_t worldClipCubeToFrustum(float *cubeVertices, int clippedPlanes)
 {
-	Profiler_BeginSample("worldClipCubeToFrustum");
+    Profiler_BeginSample("worldClipCubeToFrustum");
 
-  int planeIndex;
-  FrustumIdx *planeIndices;
-  int iVar1;
-  float fVar2;
-  float fVar3;
-  float fVar4;
-  
-                    /* Frustum culling function: tests if a 3D cube intersects with viewing frustum.
-                       Returns bitfield of planes that clip the cube (0 = fully inside frustum) */
-                    /* Loop through 6 frustum planes (left, right, top, bottom, near, far) */
-  iVar1 = 0;
-  planeIndices = g_frustumVertexIndices;
-                    /* Skip planes already marked as clipped */
-  planeIndex = -6;
-  do {
-                    /* Test cube's "near" vertex against plane: if behind plane, cube is completely
-                       outside */
-    if ((clippedPlanes & 1 << (planeIndex + 6U & 0xff)) == 0) {
-      fVar3 = *(float *)((int)g_worldFrustum + iVar1 + 0xc);
-      fVar4 = *(float *)((int)g_worldFrustum + iVar1 + 4);
-      fVar2 = *(float *)((int)g_worldFrustum + iVar1 + 8);
-                    /* Test cube's "far" vertex against plane: if behind plane, mark this plane as
-                       clipping */
-      if (fVar3 + *(float *)((int)g_worldFrustum + iVar1) *
-                  cubeVertices[(char)planeIndices[-1].zsel] +
-          fVar4 * cubeVertices[(int)(char)planeIndices->xsel + 2] +
-          fVar2 * cubeVertices[(int)(char)planeIndices->ysel + 4] < 0.0) {
-				Profiler_EndSample();
+    // Rename cryptic variables to meaningful names
+    int planeNumber;             // Better than planeIndex starting at -6
+    FrustumIdx *planeIndices;
+    float planeDistance;         
+    float planeNormalY;            
+    float planeNormalZ;
+    
+    /* Frustum culling function: tests if a 3D cube intersects with viewing frustum.
+       Returns bitfield of planes that clip the cube (0 = fully inside frustum) */
+    
+    /* Loop through 6 frustum planes (left, right, top, bottom, near, far) */
+    float *currentPlane = (float *)g_worldFrustum;
+    planeIndices = g_frustumVertexIndices;
+    
+    for (planeNumber = 0; planeNumber < 6; planeNumber++) {
+        uint32_t planeBitMask = 1 << planeNumber;
+        
+        /* Skip planes already marked as clipped */
+        if ((clippedPlanes & planeBitMask) == 0) {
+            // Access frustum plane data: each plane has 4 floats (nx, ny, nz, d)
+            float planeNormalX = currentPlane[0];
+            planeNormalY = currentPlane[1];
+            planeNormalZ = currentPlane[2];
+            planeDistance = currentPlane[3];
+            
+			uint8_t zsel = planeIndices[-1].zsel;
+			uint8_t xsel = planeIndices->xsel;
+			uint8_t ysel = planeIndices->ysel;
 
-        return 0;
-      }
-      fVar2 = fVar3 + *(float *)((int)g_worldFrustum + iVar1) *
-                      cubeVertices[(int)(char)planeIndices[-1].zsel ^ 1] +
-              fVar4 * cubeVertices[((int)(char)planeIndices->xsel ^ 1U) + 2] +
-              fVar2 * cubeVertices[((int)(char)planeIndices->ysel ^ 1U) + 4];
-      if (fVar2 < 0.0 == NAN(fVar2)) {
-        clippedPlanes = clippedPlanes | 1 << (planeIndex + 6U & 0xff);
-      }
+            /* Test cube's "far" vertex against plane: if behind plane, mark this plane as clipping */
+            if (planeDistance + planeNormalX *
+                cubeVertices[zsel] +
+                planeNormalY * cubeVertices[xsel + 2] +
+                planeNormalZ * cubeVertices[ysel + 4] < 0.0) {
+                
+                Profiler_EndSample();
+                return 0;
+            }
+            
+            float farVertexDistance = planeDistance + planeNormalX *
+                          cubeVertices[zsel ^ 1] +
+                          planeNormalY * cubeVertices[(xsel ^ 1U) + 2] +
+                          planeNormalZ * cubeVertices[(ysel ^ 1U) + 4];
+            
+            if (farVertexDistance < 0.0 == NAN(farVertexDistance)) {
+                clippedPlanes = clippedPlanes | planeBitMask;
+            }
+        }
+        
+        /* Move to next frustum plane */
+        currentPlane += 4;  // Each plane has 4 floats
+        planeIndices++;
     }
-                    /* Get current frustum plane (normal + distance) */
-    iVar1 = iVar1 + 0x10;
-    planeIndices = planeIndices + 1;
-    planeIndex = planeIndex + 1;
-  } while (iVar1 != 0x60);
-	Profiler_EndSample();
-	return clippedPlanes;
+    
+    Profiler_EndSample();
+    return clippedPlanes;
 }
 
 
+so_hook worldClipCubeToClipFrustum_hook;
+uint32_t worldClipCubeToClipFrustum(float *cubeVertices, int clippedPlanes)
+{	
+	Profiler_BeginSample("worldClipCubeToClipFrustum");
+	uint32_t x = SO_CONTINUE(uint32_t, worldClipCubeToClipFrustum_hook, cubeVertices, clippedPlanes);
+	Profiler_EndSample();
+	//log_error("worldClipCubeToClipFrustum finished\n");
+	return x;
+}
 
-void so_patch(void) {
+so_hook worldClipCubeToFrustumOnce_hook;
+uint32_t worldClipCubeToFrustumOnce(float *cubeVertices, int clippedPlanes)
+{
+	Profiler_BeginSample("worldClipCubeToFrustumOnce");
+	uint32_t x = SO_CONTINUE(uint32_t, worldClipCubeToFrustumOnce_hook, cubeVertices, clippedPlanes);
+	Profiler_EndSample();
+	return x;
+}
 
-	log_error("Patching .so functions\n");
+void so_patch(void) {	
+	// _Z22worldClipCubeToFrustumPA2_fi
+	uintptr_t worldClipCubeToFrustum_addr = (uintptr_t)so_symbol(&so_mod, "_Z22worldClipCubeToFrustumPA2_fi");
+	if (worldClipCubeToFrustum_addr == 0) {
+		log_error("worldClipCubeToFrustum not found\n");
+	} else {
+		logv_error("worldClipCubeToFrustum found at %p\n", worldClipCubeToFrustum_addr);
+		worldClipCubeToFrustum_hook = hook_addr(worldClipCubeToFrustum_addr, (uintptr_t)&worldClipCubeToFrustum);
+	}
+
+	// _Z26worldClipCubeToClipFrustumPA2_fi
+	uintptr_t worldClipCubeToClipFrustum_addr = (uintptr_t)so_symbol(&so_mod, "_Z26worldClipCubeToClipFrustumPA2_fi");
+	if (worldClipCubeToClipFrustum_addr == 0) {
+		log_error("worldClipCubeToClipFrustum not found\n");
+	}
+	else {
+		logv_error("worldClipCubeToClipFrustum found at %p\n", worldClipCubeToClipFrustum_addr);
+		worldClipCubeToClipFrustum_hook = hook_addr(worldClipCubeToClipFrustum_addr, (uintptr_t)&worldClipCubeToClipFrustum);
+	}
+
+	//_Z26worldClipCubeToFrustumOncePA2_f
+	uintptr_t worldClipCubeToFrustumOnce_addr = (uintptr_t)so_symbol(&so_mod, "_Z26worldClipCubeToFrustumOncePA2_f");
+	if (worldClipCubeToFrustumOnce_addr == 0) {
+		log_error("worldClipCubeToFrustumOnce not found\n");
+	} else {
+		logv_error("worldClipCubeToFrustumOnce found at %p\n", worldClipCubeToFrustumOnce_addr);
+		worldClipCubeToFrustumOnce_hook = hook_addr(worldClipCubeToFrustumOnce_addr, (uintptr_t)&worldClipCubeToFrustumOnce);
+	}
+
+
 	
 	g_frustumVertexIndices = (FrustumIdx*)(LOC(0x003f7e26));
 	logv_error("g_frustumVertexIndices is at %p\n", g_frustumVertexIndices);
@@ -883,7 +1008,8 @@ void so_patch(void) {
 
 	D3DDevice_SetTexture_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetTexture"), (uintptr_t)&D3DDevice_SetTexture);
 	D3DDevice_SetVertexShaderConstantNotInline_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline");
-	//D3DDevice_SetVertexShaderConstantNotInline_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline"), (uintptr_t)&D3DDevice_SetVertexShaderConstantNotInline);
+	D3DDevice_SetVertexShaderConstantFast_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantFast");
+	D3DDevice_SetVertexShaderConstantNotInline_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline"), (uintptr_t)&D3DDevice_SetVertexShaderConstantNotInline);
 
 	// _Z11coreAddTaskPFvvEiPKc coreAddTask
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
@@ -1118,6 +1244,7 @@ void so_patch(void) {
 	} else {
 		logv_error("g_Singleton found at %p\n", g_Singleton_addr);
 	}
+
 	// _ZN3JBE9DisplayPF14AcquireContextEv
 	displayPF_AcquireContext_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9DisplayPF14AcquireContextEv");
 	if (displayPF_AcquireContext_addr == 0) {
@@ -1142,17 +1269,7 @@ void so_patch(void) {
 		MEMAllocFromExpHeapEx_hook = hook_addr(MEMAllocFromExpHeapEx_addr, (uintptr_t)&MEMAllocFromExpHeapEx);
 	}
 
-	// _Z22worldClipCubeToFrustumPA2_fi
-	uintptr_t worldClipCubeToFrustum_addr = (uintptr_t)so_symbol(&so_mod, "_Z22worldClipCubeToFrustumPA2_fi");
-	if (worldClipCubeToFrustum_addr == 0) {
-		log_error("worldClipCubeToFrustum not found\n");
-	} else {
-		logv_error("worldClipCubeToFrustum found at %p\n", worldClipCubeToFrustum_addr);
-		worldClipCubeToFrustum_hook = hook_addr(worldClipCubeToFrustum_addr, (uintptr_t)&worldClipCubeToFrustum);
-	}
-
-
-	//install_prof_hooks();
+	install_prof_hooks();
 
 	uintptr_t addresses[] = {
 		0x0009caf1,

@@ -312,9 +312,20 @@ void glGenTextures_profiled(GLsizei n, GLuint *textures) {
 	//Profiler_BeginSample("glGenTextures");
 	glGenTextures(n, textures);
 	//Profiler_EndSample();
-	
 }
 
+void glVertexAttrib4fv_profiled(GLuint index, const GLfloat *v) {
+	Profiler_BeginSample("glVertexAttrib4fv");
+	glVertexAttrib4fv(index, v);
+	Profiler_EndSample();
+}
+
+
+void glDrawElements_profiled(GLenum mode, GLsizei count, GLenum type, const void *indices) {
+	Profiler_BeginSample("glDrawElements");
+	glDrawElements(mode, count, type, indices);
+	Profiler_EndSample();
+}
 
 // glTexImage2D_fake
 void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) {
@@ -913,7 +924,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glScalef", (uintptr_t)&glScalef },
 		{ "glTexParameterfv", (uintptr_t)&glTexParameterfv_fake },
 		{ "glTranslatef", (uintptr_t)&glTranslatef },
-		{ "glVertexAttrib4fv", (uintptr_t)&glVertexAttrib4fv },
+		{ "glVertexAttrib4fv", (uintptr_t)&glVertexAttrib4fv_profiled },
 		//{"glBlendColor", (uintptr_t)&ret0},
 
 
