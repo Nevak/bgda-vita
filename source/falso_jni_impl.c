@@ -488,6 +488,10 @@ char WINDOW_SERVICE[] = "window";
 NameToFieldID nameToFieldId[] = {
 	{ 0, "WINDOW_SERVICE", FIELD_TYPE_OBJECT }, 
 	{ 1, "SDK_INT", FIELD_TYPE_INT },
+	{ 2, "RELEASE", FIELD_TYPE_OBJECT },
+	{ 3, "DEVICE", FIELD_TYPE_OBJECT },
+	{ 4, "MODEL", FIELD_TYPE_OBJECT },
+	{ 5, "CPU_ABI", FIELD_TYPE_OBJECT },
 };
 
 FieldsBoolean fieldsBoolean[] = {};
@@ -500,6 +504,10 @@ FieldsInt fieldsInt[] = {
 };
 FieldsObject fieldsObject[] = {
 	{ 0, WINDOW_SERVICE },
+	{ 2, "1.0.7" }, // RELEASE
+	{ 3, "vita" }, // DEVICE
+	{ 4, "PlayStation Vita" }, // MODEL
+	{ 5, "armeabi-v7a" }, // CPU_ABI
 };
 FieldsLong fieldsLong[] = {};
 FieldsShort fieldsShort[] = {};

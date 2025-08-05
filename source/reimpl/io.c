@@ -667,7 +667,7 @@ int compare_strings(const void *a, const void *b) {
 }
 
 int retOpen = 0;
-int open_soloader(char *_fname, int flags) {
+int open_soloader(char *_fname, int flags, ...) {
     if (strcmp(_fname, "/proc/cpuinfo") == 0) {
         return open_soloader("app0:/cpuinfo", flags);
     } else if (strcmp(_fname, "/proc/meminfo") == 0) {
@@ -731,7 +731,16 @@ int open_soloader(char *_fname, int flags) {
         // }
     }
 
-    flags = oflags_newlib_to_oflags_musl(flags);
+    mode_t mode = 0666;
+    if (((flags & BIONIC_O_CREAT) == BIONIC_O_CREAT) ||
+        ((flags & BIONIC_O_TMPFILE) == BIONIC_O_TMPFILE)) {
+        va_list args;
+        va_start(args, flags);
+        mode = (mode_t)(va_arg(args, int));
+        va_end(args);
+    }
+
+    flags = oflags_bionic_to_newlib(flags);
     int ret = open(_fname, flags);
     // if (!strncmp(_fname, "ux0:data/bgda/assets//res/", 26))
     // {
@@ -746,7 +755,7 @@ int fstat_soloader(int fd, void *statbuf) {
     struct stat st;
     int res = fstat(fd, &st);
     if (res == 0)
-        stat_newlib_to_stat_bionic(&st, statbuf);
+        stat_newlib_to_bionic(&st, statbuf);
 
     logv_debug("[io] fstat(fd#%i): %i", fd, res);
     return res;
@@ -757,7 +766,7 @@ int stat_soloader(char *_pathname, stat64_bionic *statbuf) {
     int res = stat(_pathname, &st);
 
     if (res == 0)
-        stat_newlib_to_stat_bionic(&st, statbuf);
+        stat_newlib_to_bionic(&st, statbuf);
 
     //logv_debug("[io] stat(%s): %i", _pathname, res);
     return res;
@@ -800,7 +809,7 @@ struct dirent64_bionic * readdir_soloader(DIR * dir) {
     logv_debug("[io] readdir(%p): %p", dir, ret);
 
     if (ret) {
-        dirent64_bionic* entry_tmp = dirent_newlib_to_dirent_bionic(ret);
+        dirent64_bionic* entry_tmp = dirent_newlib_to_bionic(ret);
         memcpy(&dirent_tmp, entry_tmp, sizeof(dirent64_bionic));
         free(entry_tmp);
         //logv_debug("  [io] readdir(%p): %s", dir, dirent_tmp.d_name);
@@ -817,7 +826,7 @@ int readdir_r_soloader(DIR *dirp, dirent64_bionic *entry, dirent64_bionic **resu
     int ret = readdir_r(dirp, &dirent_tmp, &pdirent_tmp);
 
     if (ret == 0) {
-        dirent64_bionic* entry_tmp = dirent_newlib_to_dirent_bionic(&dirent_tmp);
+        dirent64_bionic* entry_tmp = dirent_newlib_to_bionic(&dirent_tmp);
         memcpy(entry, entry_tmp, sizeof(dirent64_bionic));
         *result = (pdirent_tmp != NULL) ? entry : NULL;
         free(entry_tmp);

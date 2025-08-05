@@ -26,18 +26,37 @@
 #include <stdio.h>
 #include <string.h>
 #include <psp2/gxm.h>
+#include "utils/prof.h"
 #include "utils/vorbis_patch.h"
+#include <vitagprof.h>
 
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_calloc(uint32_t nmember, uint32_t size) { return vglCalloc(nmember, size); }
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void __wrap_free(void *addr) { vglFree(addr); };
-void *__wrap_malloc(uint32_t size) { return vglMalloc(size); };
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+void *__wrap_malloc(uint32_t size) { 
+	//Profiler_BeginSample("malloc");
+	void * r = vglMalloc(size); 
+	// check if successful
+	if (r == NULL) {
+		logv_error("malloc(%d) failed", size);
+	}
+
+	//Profiler_EndSample();
+	return r;
+};
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_memalign(uint32_t alignment, uint32_t size) { return vglMemalign(alignment, size); };
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_realloc(void *ptr, uint32_t size) { return vglRealloc(ptr, size); };
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_memcpy (void *dst, const void *src, size_t num) { return sceClibMemcpy(dst, src, num); };
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_memset (void *ptr, int value, size_t num) { return sceClibMemset(ptr, value, num); };
 
 
-int _newlib_heap_size_user = 256 * 1024 * 1024;
+int _newlib_heap_size_user = 128 * 1024 * 1024;
 
 #ifdef USE_SCELIBC_IO
 int sceLibcHeapSize = 1 * 1024 * 1024;
@@ -54,6 +73,9 @@ SceCtrlData pad_previous;
 #define DEFAULT_RAZOR_CAPTURE_PATH "ur0:data/librazorcapture_es4.suprx"
 
 int log_allocs = 0;
+int log_profiler = 0;
+int profiling_idx = 0;
+
 float g_uvFactor = 1.0f;
 float g_uvFactorY = 1.0f;
 int input_thread_fn(SceSize args, void *argp) {
@@ -69,6 +91,18 @@ int input_thread_fn(SceSize args, void *argp) {
 		if (pad.buttons & SCE_CTRL_L1 && !(pad_previous.buttons & SCE_CTRL_L1)) {
 			// toggle log_allocs
 			log_allocs = !log_allocs;
+		}
+		if (pad.buttons & SCE_CTRL_R1 && !(pad_previous.buttons & SCE_CTRL_R1)) {
+			log_profiler = !log_profiler;
+			if (log_profiler) {
+				sceClibPrintf("Starting profiling\n");
+				//gprof_start();
+			} else {
+				sceClibPrintf("Stopping profiling\n");
+				//char fname[256];
+				//sprintf(fname, "ux0:data/prof_%d.out", profiling_idx++);
+				//gprof_stop(fname, 1);
+			}
 		}
 		// if (pad.buttons & SCE_CTRL_R1) {
 		// 	g_uvFactor -= 0.001f;
@@ -95,6 +129,9 @@ int input_thread_fn(SceSize args, void *argp) {
 
 
 int main() {
+	log_error("main()");
+	gprof_stop("ux0:/data/gmon.out", 0);
+
 	SceAppUtilInitParam appUtilParam;
 	SceAppUtilBootParam appUtilBootParam;
 	memset(&appUtilParam, 0, sizeof(SceAppUtilInitParam));
@@ -174,8 +211,8 @@ int main() {
 	}
 
 	// poll input in another thread
-	// SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
-	// sceKernelStartThread(input_thread, 0, NULL);
+	SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
+	sceKernelStartThread(input_thread, 0, NULL);
 
 
 	log_info("Main  thread shutting down");

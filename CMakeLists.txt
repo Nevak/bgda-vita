@@ -75,6 +75,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   source/utils/ogg_patch.c
 			   source/utils/vorbis_patch.c
 			   #source/utils/ffmpeg_patch.c
+			   source/utils/prof.c
 			   source/utils/dialog.c
 			   source/utils/glutil.c
 			   source/utils/init.c
@@ -118,15 +119,13 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 target_link_libraries(${CMAKE_PROJECT_NAME}
 					  -Wl,--whole-archive pthread -Wl,--no-whole-archive
 					  stdc++
+					  vitagprof
+					  SceLibKernel_stub
 					  OpenSLES
 					  sndfile
-						# Ogg/Vorbis stack
-						vorbisfile
-						vorbisenc
-						vorbis
-						ogg
+					  ogg
 					  FLAC
-					#   mbedtls
+					  vorbisidec
 					  openal
 					#   avcodec
 					#   avfilter

@@ -9,6 +9,7 @@
 
 #include "controls.h"
 
+#include <cstdint>
 #include <falso_jni/FalsoJNI.h>
 #include <psp2/kernel/threadmgr.h>
 #include <pthread.h>
@@ -43,10 +44,12 @@ extern "C" {
 
 AInputQueue * inputQueue;
 
+__attribute__((no_instrument_function, always_inline))
 float lerp(float x1, float y1, float x3, float y3, float x2) {
 	return ((x2-x1)*(y3-y1) / (x3-x1)) + y1;
 }
 
+__attribute__((no_instrument_function, always_inline))
 float coord_normalize(float val, float deadzone_min, float deadzone_max) {
 	float sign = (val < 0) ? -1.0f : 1.0f;
 
@@ -73,7 +76,6 @@ void controls_init(AInputQueue * queue) {
 void * controls_poll(void * arg) {
 	while (1) {
 		pollPad();
-		//pollTouch();
 		sceKernelDelayThread(16666);
 	}
 }
@@ -255,51 +257,90 @@ float lx = 0, ly = 0, rx = 0, ry = 0, lastLx = 0, lastLy = 0, lastRx = 0, lastRy
 
 inputEvent stickInputEvent;
 int sticksDown = 0;
-float x_old = 0.0f, y_old = 0.0f, z_old = 0.0f, rz_old = 0.0f, hat_x_old = 0.0f, hat_y_old = 0.0f;
-bool ltPressed_old = false, rtPressed_old = false, lbPressed_old = false, rbPressed_old = false;
 
-void sendJoyEvent(float x, float y, float z, float rz, float hat_x, float hat_y, bool ltPressed, bool rtPressed, bool lbPressed, bool rbPressed) {
-	if (x != x_old 
-		|| y != y_old 
-		|| z != z_old 
-		|| rz != rz_old 
-		|| hat_x != hat_x_old 
-		|| hat_y != hat_y_old 
-		|| ltPressed != ltPressed_old 
-		|| rtPressed != rtPressed_old
-		|| lbPressed != lbPressed_old
-		|| rbPressed != rbPressed_old) {
-		stickInputEvent.source = AINPUT_SOURCE_JOYSTICK;
-		stickInputEvent.motion_ptrcount = sticksDown + 1;
-		stickInputEvent.motion_x[0] = x;
-		stickInputEvent.motion_y[0] = y;
-		stickInputEvent.motion_z[0] = z;
-		stickInputEvent.motion_rz[0] = rz;
-		stickInputEvent.motion_hat_x[0] = hat_x;
-		stickInputEvent.motion_hat_y[0] = hat_y;
-		stickInputEvent.motion_lt[0] = lbPressed || ltPressed ? 1.0 : 0.0;
-		stickInputEvent.motion_rt[0] = rbPressed || rtPressed ? 1.0 : 0.0;
+// Bitmask constants for trigger buttons
+enum TriggerMask {
+    TRIGGER_L1 = 1 << 0,  // 0x01
+    TRIGGER_R1 = 1 << 1,  // 0x02
+    TRIGGER_L2 = 1 << 2,  // 0x04
+    TRIGGER_R2 = 1 << 3   // 0x08
+};
 
-		stickInputEvent.motion_ptridx[0] = 0;
-		stickInputEvent.type = AINPUT_EVENT_TYPE_MOTION;
-
-		stickInputEvent.motion_action = AMOTION_EVENT_ACTION_MOVE;
-		AInputEvent* aie = AInputEvent_create(&stickInputEvent);
-		AInputQueue_enqueueEvent(inputQueue, aie);
-
-		x_old = x;
-		y_old = y;
-		z_old = z;
-		rz_old = rz;
-		hat_x_old = hat_x;
-		hat_y_old = hat_y;
-		ltPressed_old = ltPressed;
-		rtPressed_old = rtPressed;
-		lbPressed_old = lbPressed;
-		rbPressed_old = rbPressed;
+// Structure to hold joystick state
+struct JoyState {
+    union {
+        struct {
+            float x, y, z, rz;
+            uint8_t hat_x, hat_y;
+            uint8_t trigger_mask;
+            uint8_t padding[3];  // Align to 32 bytes for better cache performance
+        };
+        //uint64_t raw_data[4];  // 32 bytes total, compare as 4x 64-bit values
+    };
+    
+	__attribute__((no_instrument_function, always_inline))
+    // Constructor for easy initialization
+    JoyState(float x = 0, float y = 0, float z = 0, float rz = 0, 
+             uint8_t hat_x = 0, uint8_t hat_y = 0, uint8_t triggers = 0)
+        : x(x), y(y), z(z), rz(rz), hat_x(hat_x), hat_y(hat_y), trigger_mask(triggers) {
+        // Zero out padding for consistent comparisons
+        padding[0] = padding[1] = padding[2] = 0;
+    }
+    
+	__attribute__((no_instrument_function, always_inline))
+    bool operator==(const JoyState& other) const {
+        return (trigger_mask == other.trigger_mask) &&
+			   (x == other.x) &&
+			   (y == other.y) &&
+			   (z == other.z) &&
+			   (rz == other.rz) &&
+			   (hat_x == other.hat_x) &&
+			   (hat_y == other.hat_y);
 	}
+
+	__attribute__((no_instrument_function, always_inline))
+    bool operator!=(const JoyState& other) const {
+        return (trigger_mask != other.trigger_mask) ||
+			   (x != other.x) ||
+			   (y != other.y) ||
+			   (z != other.z) ||
+			   (rz != other.rz) ||
+			   (hat_x != other.hat_x) ||
+			   (hat_y != other.hat_y);
+	}
+};
+
+// Global state tracking
+//static JoyState current_joy_state;
+static JoyState previous_joy_state;
+
+void sendJoyEvent(const JoyState& state) {
+	stickInputEvent.source = AINPUT_SOURCE_JOYSTICK;
+	stickInputEvent.motion_ptrcount = sticksDown + 1;
+	stickInputEvent.motion_x[0] = state.x;
+	stickInputEvent.motion_y[0] = state.y;
+	stickInputEvent.motion_z[0] = state.z;
+	stickInputEvent.motion_rz[0] = state.rz;
+	stickInputEvent.motion_hat_x[0] = 0;
+	stickInputEvent.motion_hat_y[0] = 0;
+
+	bool ltPressed = (state.trigger_mask & TRIGGER_L2) != 0;
+	bool rtPressed = (state.trigger_mask & TRIGGER_R2) != 0;
+	bool lbPressed = (state.trigger_mask & TRIGGER_L1) != 0;
+	bool rbPressed = (state.trigger_mask & TRIGGER_R1) != 0;
+	
+	stickInputEvent.motion_lt[0] = (lbPressed || ltPressed) ? 1.0f : 0.0f;
+	stickInputEvent.motion_rt[0] = (rbPressed || rtPressed) ? 1.0f : 0.0f;
+
+	stickInputEvent.motion_ptridx[0] = 0;
+	stickInputEvent.type = AINPUT_EVENT_TYPE_MOTION;
+	stickInputEvent.motion_action = AMOTION_EVENT_ACTION_MOVE;
+	
+	AInputEvent* aie = AInputEvent_create(&stickInputEvent);
+	AInputQueue_enqueueEvent(inputQueue, aie);
 }
 
+__attribute__((no_instrument_function, always_inline))
 void pollPad() {
 	SceCtrlData pad;
 	sceCtrlPeekBufferPositiveExt2(0, &pad, 1);
@@ -331,11 +372,12 @@ void pollPad() {
 		}
 	}
 	
-	lastLx = lx;
-	lastLy = ly;
-	lastRx = rx;
-	lastRy = ry;
+	// lx = pad.lx;
+	// ly = pad.ly;
+	// rx = pad.rx;
+	// ry = pad.ry;
 
+	// apply deadzones
 	lx = coord_normalize(((float)pad.lx - 128.0f) / 128.0f, L_INNER_DEADZONE, L_OUTER_DEADZONE);
 	ly = coord_normalize(((float)pad.ly - 128.0f) / 128.0f, L_INNER_DEADZONE, L_OUTER_DEADZONE);
 	rx = coord_normalize(((float)pad.rx - 128.0f) / 128.0f, R_INNER_DEADZONE, R_OUTER_DEADZONE);
@@ -344,14 +386,24 @@ void pollPad() {
 	stickInputEvent.motion_action = AMOTION_EVENT_ACTION_MOVE;
 	stickInputEvent.type = AINPUT_EVENT_TYPE_MOTION;
 
-	sendJoyEvent(lx,
-				 ly,
-				 rx,
-				 ry,
-				 0,
-				 0,
-				 current_buttons & SCE_CTRL_L1,
-				 current_buttons & SCE_CTRL_R1, 
-				 current_buttons & SCE_CTRL_L2,
-				 current_buttons & SCE_CTRL_R2);
+    // Build trigger bitmask
+    uint8_t trigger_mask = 0;
+    if (current_buttons & SCE_CTRL_L1) trigger_mask |= TRIGGER_L1;
+    if (current_buttons & SCE_CTRL_R1) trigger_mask |= TRIGGER_R1;
+    if (current_buttons & SCE_CTRL_L2) trigger_mask |= TRIGGER_L2;
+    if (current_buttons & SCE_CTRL_R2) trigger_mask |= TRIGGER_R2;
+    
+    // Create joystick state and send event
+    JoyState joy_state(lx, ly, rx, ry, 0, 0, trigger_mask);
+	if (joy_state != previous_joy_state) {
+    	sendJoyEvent(joy_state);
+	
+        // Update previous state
+        previous_joy_state = joy_state;
+	}
+
+	lastLx = lx;
+	lastLy = ly;
+	lastRx = rx;
+	lastRy = ry;
 }

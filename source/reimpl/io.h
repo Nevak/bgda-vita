@@ -36,25 +36,28 @@
 #endif
 
 typedef struct __attribute__((__packed__)) stat64_bionic {
-    unsigned long long st_dev;
-    unsigned char __pad0[4];
-    unsigned long st_ino;
-    unsigned int st_mode;
-    unsigned int st_nlink;
-    unsigned long st_uid;
-    unsigned long st_gid;
-    unsigned long long st_rdev;
-    unsigned char __pad3[4];
-    unsigned long st_size;
-    unsigned long st_blksize;
-    unsigned long st_blocks;
-    unsigned long st_atime;
-    unsigned long st_atime_nsec;
-    unsigned long st_mtime;
-    unsigned long st_mtime_nsec;
-    unsigned long st_ctime;
-    unsigned long st_ctime_nsec;
-    unsigned long long __pad4;
+    unsigned long long st_dev;  // 0
+    unsigned int __pad1;        // 8
+    unsigned long st_ino;       // 12
+    unsigned int st_mode;       // 16
+    unsigned int st_nlink;      // 20
+    unsigned int st_uid;        // 24
+    unsigned int st_gid;        // 28
+    unsigned long long st_rdev; // 32
+    unsigned int __pad2;        // 40
+    unsigned long __unused4;    // 80
+    unsigned long __unused5;    // 84    
+    unsigned long __unused6;    // 80
+    unsigned long __unused7;
+    long st_size;               // 44
+    long st_blksize;            // 48    
+    long st_blocks;             // 52   
+    unsigned long st_atime;     // 56
+    unsigned long st_atime_nsec;// 60 
+    unsigned long st_mtime;     // 64
+    unsigned long st_mtime_nsec;// 68
+    unsigned long st_ctime;     // 72
+    unsigned long st_ctime_nsec;// 76
 } stat64_bionic;
 
 typedef struct __attribute__((__packed__)) dirent64_bionic {
@@ -65,7 +68,7 @@ typedef struct __attribute__((__packed__)) dirent64_bionic {
     char d_name[256]; // 256 bytes // offset 0x13
 } dirent64_bionic;
 
-int open_soloader(char *fname, int flags);
+int open_soloader(char *fname, int flags, ...);
 FILE *fopen_soloader(char *fname, char *mode);
 DIR* opendir_soloader(char* name);
 

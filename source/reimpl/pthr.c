@@ -23,6 +23,7 @@
 
 #include "utils/utils.h"
 #include "utils/logger.h"
+#include "utils/prof.h"
 
 #define  BIONIC_PTHREAD_COND_INITIALIZER              0
 #define  BIONIC_PTHREAD_MUTEX_INITIALIZER             0
@@ -62,6 +63,7 @@ static volatile short int pthr_mutex_inited = 0;
         sceKernelUnlockLwMutex(&pthr_mutex, 1); \
     }
 
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 int isObjectInitialized(const void * mut) {
     PTHR_LOCK
     for (int i = 0; i < 512; ++i) {
@@ -172,6 +174,9 @@ PTHR_INLINE int _cond_t_static_init(pthread_cond_t_bionic * cond, const pthread_
 
 int pthread_create_soloader(pthread_t *thread, const pthread_attr_t_bionic *attr, void *(*start)(void *), void *param) {
     int ret;
+    int caller_addr = (int) __builtin_return_address(0);
+    sceClibPrintf("pthread_create_soloader: thread: %p, attr: %p, start: %p, param: %p, caller: 0x%x\n",
+                  thread, attr, start, param, caller_addr);
 
     if (!attr) {
         pthread_attr_t a;
@@ -472,7 +477,13 @@ int sem_trywait_soloader (int * uid) {
 }
 
 int sem_wait_soloader (int * uid) {
+    //Profiler_BeginSample("sem_wait_soloader");
     if (sceKernelWaitSema(*uid, 1, NULL) < 0)
+    {
+        //Profiler_EndSample();
         return -1;
+    }
+
+    //Profiler_EndSample();
     return 0;
 }

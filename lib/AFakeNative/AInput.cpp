@@ -82,6 +82,7 @@ void AInputQueue_detachLooper(AInputQueue* queue) {
     pthread_mutex_unlock(&q->mLock);
 }
 
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 int32_t AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
     if (!queue) {
         ALOGE("AInputQueue_getEvent: bad queue");

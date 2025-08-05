@@ -16,7 +16,7 @@
 #include "utils/dialog.h"
 #include "utils/logger.h"
 
-#include "so_util.h"
+#include "so_util/so_util.h"
 
 #ifndef SCE_KERNEL_MEMBLOCK_TYPE_USER_RX
 #define SCE_KERNEL_MEMBLOCK_TYPE_USER_RX                 (0x0C20D050)

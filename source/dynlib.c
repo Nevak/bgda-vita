@@ -52,6 +52,7 @@
 #include "utils/glutil.h"
 #include "utils/utils.h"
 #include "utils/logger.h"
+#include "utils/prof.h"
 
 #ifdef USE_SCELIBC_IO
 #include <libc_bridge/libc_bridge.h>
@@ -306,6 +307,14 @@ int glCompressedTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GL
 	return 0;
 }
 
+void glGenTextures_profiled(GLsizei n, GLuint *textures) {
+	logv_error("glGenTextures(%i, %p) called", n, textures);
+	//Profiler_BeginSample("glGenTextures");
+	glGenTextures(n, textures);
+	//Profiler_EndSample();
+	
+}
+
 
 // glTexImage2D_fake
 void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) {
@@ -370,6 +379,21 @@ off_t lseek_delegate(int fd, off_t offset, int whence) {
 	}
 }
 
+//glViewport_profiled
+void glViewport_profiled(GLint x, GLint y, GLsizei width, GLsizei height) {
+	//Profiler_BeginSample("glViewport");
+	glViewport(x, y, width, height);
+	//Profiler_EndSample();
+}
+
+// eglSwapBuffers_profiled
+int eglSwapBuffers_profiled(EGLDisplay dpy, EGLSurface surface) {
+	//Profiler_BeginSample("eglSwapBuffers");
+	int res = eglSwapBuffers(dpy, surface);
+	//Profiler_EndSample();
+
+	return res;
+}
 
 so_default_dynlib default_dynlib[] = {
 		// Common C/C++ internals
@@ -400,9 +424,9 @@ so_default_dynlib default_dynlib[] = {
 		{ "__aeabi_l2d", (uintptr_t)&__aeabi_l2d },
 		{ "__aeabi_l2f", (uintptr_t)&__aeabi_l2f },
 		{ "__aeabi_ldivmod", (uintptr_t)&__aeabi_ldivmod },
-		{ "__aeabi_memclr", (uintptr_t)&__aeabi_memclr },
-		{ "__aeabi_memclr4", (uintptr_t)&__aeabi_memclr },
-		{ "__aeabi_memclr8", (uintptr_t)&__aeabi_memclr },
+		{ "__aeabi_memclr", (uintptr_t)&sceClibMemclr },
+		{ "__aeabi_memclr4", (uintptr_t)&sceClibMemclr },
+		{ "__aeabi_memclr8", (uintptr_t)&sceClibMemclr },
 		{ "__aeabi_memcpy", (uintptr_t)&__aeabi_memcpy_patched },
 		{ "__aeabi_memcpy4", (uintptr_t)&__aeabi_memcpy },
 		{ "__aeabi_memcpy8", (uintptr_t)&__aeabi_memcpy },
@@ -873,7 +897,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glVertexAttrib4f", (uintptr_t)&glVertexAttrib4f },
 		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
 		{ "glVertexPointer", (uintptr_t)&glVertexPointer },
-		{ "glViewport", (uintptr_t)&glViewport },
+		{ "glViewport", (uintptr_t)&glViewport_profiled },
 		{ "glDrawArraysInstanced", (uintptr_t)&glDrawArraysInstanced },
 		{ "glDrawElementsInstanced", (uintptr_t)&glDrawElementsInstanced },
 
@@ -907,7 +931,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "eglInitialize", (uintptr_t)&eglInitialize },
 		{ "eglMakeCurrent", (uintptr_t)&eglMakeCurrent },
 		{ "eglQuerySurface", (uintptr_t)&eglQuerySurface },
-		{ "eglSwapBuffers", (uintptr_t)&eglSwapBuffers },
+		{ "eglSwapBuffers", (uintptr_t)&eglSwapBuffers_profiled },
 		{ "eglTerminate", (uintptr_t)&eglTerminate },
 		// By Raul
 		{ "eglGetConfigs", (uintptr_t)&eglGetConfigs },
@@ -1056,7 +1080,7 @@ so_default_dynlib default_dynlib[] = {
 		// Time
 		{ "clock", (uintptr_t)&clock },
 		//{ "clock_getres", (uintptr_t)&clock_getres },
-		{ "clock_gettime", (uintptr_t)&clock_gettime },
+		{ "clock_gettime", (uintptr_t)&clock_gettime_soloader },
 		{ "difftime", (uintptr_t)&difftime },
 		{ "gettimeofday", (uintptr_t)&gettimeofday },
 		{ "gmtime", (uintptr_t)&gmtime },
