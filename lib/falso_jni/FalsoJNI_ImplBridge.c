@@ -20,10 +20,7 @@
 #include <malloc.h>
 #include <pthread.h>
 
-JavaDynArray* javaDynArrays = NULL;
-pthread_mutex_t* javaDynArrays_mutex = NULL;
-size_t javaDynArrays_free = 0;
-size_t javaDynArrays_taken = 0;
+#include "converter.h"
 
 jfieldID getFieldIdByName(const char* name) {
     for (int i = 0; i < nameToFieldId_size() / sizeof(NameToFieldID); i++) {
@@ -276,194 +273,92 @@ jfloat methodFloatCall(jmethodID id, va_list args) {
     return -1;
 }
 
-void jda_lock() {
-    if (javaDynArrays_mutex == NULL) {
-        pthread_mutex_t initTmpNormal;
-        javaDynArrays_mutex = malloc(sizeof(pthread_mutex_t));
-        memcpy(javaDynArrays_mutex, &initTmpNormal, sizeof(pthread_mutex_t));
-
-        if (pthread_mutex_init(javaDynArrays_mutex, NULL) != 0) {
-            fjni_log_err("Failed to allocate dynarr mutex");
-            javaDynArrays_mutex = NULL;
-            return;
-        }
-    }
-
-    pthread_mutex_lock(javaDynArrays_mutex);
-}
-
-void jda_unlock() {
-    if (javaDynArrays_mutex != NULL) {
-        pthread_mutex_unlock(javaDynArrays_mutex);
-    }
-}
-
-jboolean jda_tryinit() {
-    if (javaDynArrays == NULL) {
-        javaDynArrays = malloc(16 * sizeof(JavaDynArray));
-        if (!javaDynArrays)
-            return JNI_FALSE;
-
-        for (int i = 0; i < 16; ++i) {
-            javaDynArrays[i].array = NULL;
-            javaDynArrays[i].len = -1;
-            javaDynArrays[i].type = FIELD_TYPE_UNKNOWN;
-        }
-
-        javaDynArrays_free = 16;
-        javaDynArrays_taken = 0;
-    }
-
-    return JNI_TRUE;
-}
-
-jboolean jda_extend() {
-    if (jda_tryinit() == JNI_FALSE)
-        return JNI_FALSE;
-
-    if (javaDynArrays_free == 0) {
-        if (javaDynArrays == NULL)
-            return JNI_FALSE;
-
-        javaDynArrays = realloc(javaDynArrays, (sizeof(JavaDynArray) * (javaDynArrays_taken+16)));
-
-        if (javaDynArrays == NULL)
-            return JNI_FALSE;
-
-        for (int i = javaDynArrays_taken; i < javaDynArrays_taken+16; ++i) {
-            javaDynArrays[i].array = NULL;
-            javaDynArrays[i].len = -1;
-            javaDynArrays[i].type = FIELD_TYPE_UNKNOWN;
-        }
-
-        javaDynArrays_free = 16;
-    }
-    return JNI_TRUE;
-}
-
 JavaDynArray * jda_alloc(jsize len, FIELD_TYPE type) {
-    jda_lock();
-
     void * array = malloc(len * getFieldTypeSize(type));
     if (!array) {
-        jda_unlock();
         return NULL;
     }
 
-    if (jda_extend() == JNI_FALSE) {
-        jda_unlock();
+    JavaDynArray * ret = malloc(sizeof(JavaDynArray));
+    if (!ret) {
         free(array);
         return NULL;
     }
 
-    int index = -1;
-    for (int i = 0; i < (javaDynArrays_taken+javaDynArrays_free); ++i) {
-        if (javaDynArrays[i].array == NULL) {
-            index = i;
-        }
-    }
+    ret->array = array;
+    ret->len = len;
+    ret->type = type;
 
-    if (index == -1) {
-        jda_unlock();
-        free(array);
-        return NULL;
-    }
-
-    javaDynArrays[index].array = array;
-    javaDynArrays[index].len = len;
-    javaDynArrays[index].type = type;
-
-    javaDynArrays_taken++;
-    javaDynArrays_free--;
-
-    JavaDynArray * ret = &javaDynArrays[index];
-    jda_unlock();
     return ret;
 }
 
 jsize jda_sizeof(JavaDynArray * jda) {
-    if (!jda) return -1;
-    if (!javaDynArrays) return -1;
-
-    jda_lock();
-    if (javaDynArrays_taken == 0) {
-        jda_unlock();
+    if (!jda)
         return -1;
+
+    return jda->len;
+}
+
+jboolean jda_realloc(JavaDynArray * jda, jsize len) {
+    if (!jda)
+        return JNI_FALSE;
+
+    void * res = realloc(jda->array, len * getFieldTypeSize(jda->type));
+    if (res == NULL) {
+        return JNI_FALSE;
     }
 
-    for (int i = 0; i < (javaDynArrays_taken+javaDynArrays_free); i++) {
-        if (jda == &javaDynArrays[i]) {
-            if (javaDynArrays[i].array == NULL) {
-                jda_unlock();
-                return -1;
-            }
-            jsize ret = javaDynArrays[i].len;
-            jda_unlock();
-            return ret;
-        }
-    }
+    jda->array = res;
 
-    jda_unlock();
-    return -1;
+    return JNI_TRUE;
 }
 
 jboolean jda_free(JavaDynArray * jda) {
     if (!jda) return JNI_FALSE;
-    if (!javaDynArrays) return JNI_FALSE;
 
-    jda_lock();
-    if (javaDynArrays_taken == 0) {
-        jda_unlock();
-        return JNI_FALSE;
-    }
+    free(jda->array);
+    free(jda);
 
-    int index = -1;
-    for (int i = 0; i < (javaDynArrays_taken+javaDynArrays_free); ++i) {
-        if (jda == &javaDynArrays[i]) {
-            index = i;
-        }
-    }
-
-    if (index == -1) {
-        jda_unlock();
-        return JNI_FALSE;
-    }
-
-    free(javaDynArrays[index].array);
-    javaDynArrays[index].array = NULL;
-    javaDynArrays[index].type = FIELD_TYPE_UNKNOWN;
-    javaDynArrays[index].len = 0;
-
-    javaDynArrays_taken--;
-    javaDynArrays_free++;
-    jda_unlock();
     return JNI_TRUE;
 }
 
-JavaDynArray * jda_find(void * arr) {
-    if (!arr) return NULL;
-    if (!javaDynArrays) return NULL;
+jboolean jstr_utf16_to_utf8(JavaString * jstr) {
+    if (!jstr) return JNI_FALSE;
 
-    jda_lock();
-    if (javaDynArrays_taken == 0) {
-        jda_unlock();
-        return NULL;
-    }
-
-    for (int i = 0; i < (javaDynArrays_taken+javaDynArrays_free); ++i) {
-        if (arr == &javaDynArrays[i]) {
-            if (javaDynArrays[i].array == NULL) {
-                jda_unlock();
-                return NULL;
-            }
-            JavaDynArray * ret = &javaDynArrays[i];
-            jda_unlock();
-            return ret;
+    if (jstr->utf8 == NULL) {
+        jstr->utf8 = jda_alloc(jstr->utf16->len+1, FIELD_TYPE_BYTE);
+        if (jstr->utf8 == NULL) {
+            return JNI_FALSE;
+        }
+    } else if (jstr->utf8->len < jstr->utf16->len+1) {
+        if (jda_realloc(jstr->utf8, jstr->utf16->len+1) == JNI_FALSE) {
+            return JNI_FALSE;
         }
     }
 
-    jda_unlock();
-    return NULL;
+    utf16_to_utf8(jstr->utf16->array, jstr->utf16->len, jstr->utf8->array, jstr->utf8->len);
+
+    char * arr = jstr->utf8->array;
+    arr[jstr->utf8->len - 1] = '\0';
+    return JNI_TRUE;
+}
+
+jboolean jstr_utf8_to_utf16(JavaString * jstr) {
+    if (!jstr) return JNI_FALSE;
+
+    if (jstr->utf8 == NULL) {
+        return JNI_FALSE;
+    }
+
+    if (jstr->utf16->len + 1 < jstr->utf8->len) {
+        if (jda_realloc(jstr->utf16, jstr->utf8->len - 1) == JNI_FALSE) {
+            return JNI_FALSE;
+        }
+    }
+
+    utf8_to_utf16(jstr->utf8->array, jstr->utf8->len - 1, jstr->utf16->array, jstr->utf16->len);
+
+    return JNI_TRUE;
 }
 
 va_list _AtoV(int dummy, ...) {

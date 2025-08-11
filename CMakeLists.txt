@@ -86,6 +86,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   lib/falso_jni/FalsoJNI.c
 			   lib/falso_jni/FalsoJNI_ImplBridge.c
 			   lib/falso_jni/FalsoJNI_Logger.c
+			   lib/falso_jni/converter.c
 			   lib/AFakeNative/polling/pseudo_eventfd.cpp
 			   lib/AFakeNative/polling/pseudo_pipe.cpp
 			   lib/AFakeNative/PseudoEpoll.cpp

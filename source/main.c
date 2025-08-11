@@ -141,12 +141,14 @@ int main() {
 	soloader_init_all();
 
 
+
     int (*JNI_OnLoad)(JavaVM* jvm) = (void*)so_symbol(&so_mod_jbejni, "JNI_OnLoad");
 
 	int (*ANativeActivity_onCreate)(ANativeActivity *activity, void *savedState,
 		size_t savedStateSize) = (void *) so_symbol(&so_mod_jbejni, "ANativeActivity_onCreate");
 
 	ANativeActivity *activity = ANativeActivity_create();
+	init_jni_fields(activity->env);
 
 	log_info("Created NativeActivity object");
 

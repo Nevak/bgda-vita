@@ -65,6 +65,8 @@ extern size_t fieldsObject_size();
 extern size_t fieldsLong_size();
 extern size_t fieldsShort_size();
 
+void init_jni_fields(JNIEnv *env);
+
 #define __FALSOJNI_IMPL_CONTAINER_SIZES \
 size_t nameToMethodId_size() { return sizeof nameToMethodId; } \
 size_t methodsBoolean_size() { return sizeof methodsBoolean; } \
