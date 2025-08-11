@@ -321,12 +321,6 @@ void glVertexAttrib4fv_profiled(GLuint index, const GLfloat *v) {
 }
 
 
-void glDrawElements_profiled(GLenum mode, GLsizei count, GLenum type, const void *indices) {
-	Profiler_BeginSample("glDrawElements");
-	glDrawElements(mode, count, type, indices);
-	Profiler_EndSample();
-}
-
 // glTexImage2D_fake
 void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) {
 	
@@ -404,6 +398,27 @@ int eglSwapBuffers_profiled(EGLDisplay dpy, EGLSurface surface) {
 	//Profiler_EndSample();
 
 	return res;
+}
+
+// glEnable_profiled
+void glEnable_profiled(GLenum cap) {
+	Profiler_BeginSample("glEnable");
+	glEnable(cap);
+	Profiler_EndSample();
+}
+
+// glDisable_profiled
+void glDisable_profiled(GLenum cap) {
+	Profiler_BeginSample("glDisable");
+	glDisable(cap);
+	Profiler_EndSample();
+}
+
+// glDrawElements_profiled	
+void glDrawElements_profiled(GLenum mode, GLsizei count, GLenum type, const void *indices) {
+	Profiler_BeginSample("glDrawElements");
+	glDrawElements(mode, count, type, indices);
+	Profiler_EndSample();
 }
 
 so_default_dynlib default_dynlib[] = {
@@ -908,7 +923,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glVertexAttrib4f", (uintptr_t)&glVertexAttrib4f },
 		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
 		{ "glVertexPointer", (uintptr_t)&glVertexPointer },
-		{ "glViewport", (uintptr_t)&glViewport_profiled },
+		{ "glViewport", (uintptr_t)&glViewport },
 		{ "glDrawArraysInstanced", (uintptr_t)&glDrawArraysInstanced },
 		{ "glDrawElementsInstanced", (uintptr_t)&glDrawElementsInstanced },
 
@@ -924,7 +939,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glScalef", (uintptr_t)&glScalef },
 		{ "glTexParameterfv", (uintptr_t)&glTexParameterfv_fake },
 		{ "glTranslatef", (uintptr_t)&glTranslatef },
-		{ "glVertexAttrib4fv", (uintptr_t)&glVertexAttrib4fv_profiled },
+		{ "glVertexAttrib4fv", (uintptr_t)&glVertexAttrib4fv },
 		//{"glBlendColor", (uintptr_t)&ret0},
 
 
@@ -942,7 +957,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "eglInitialize", (uintptr_t)&eglInitialize },
 		{ "eglMakeCurrent", (uintptr_t)&eglMakeCurrent },
 		{ "eglQuerySurface", (uintptr_t)&eglQuerySurface },
-		{ "eglSwapBuffers", (uintptr_t)&eglSwapBuffers_profiled },
+		{ "eglSwapBuffers", (uintptr_t)&eglSwapBuffers },
 		{ "eglTerminate", (uintptr_t)&eglTerminate },
 		// By Raul
 		{ "eglGetConfigs", (uintptr_t)&eglGetConfigs },

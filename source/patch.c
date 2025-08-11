@@ -219,15 +219,16 @@ int coreAddTask(void *fn, int prio, char *name) {
 	// 	return 0;
 	// }
 
+
 	if (name && strcmp(name, "RenderDelayedShadows") == 0) {
-	  	log_error("Ignoring renderDelayedShadows task\n");
-	  	return 0;
+	   	log_error("Ignoring renderDelayedShadows task\n");
+	   	return 0;
 	}
 
-		if (name && strcmp(name, "delayDrawWorld") == 0) {
-	  	log_error("Ignoring delayDrawWorld task\n");
-	  	return 0;
-	}
+	// 	if (name && strcmp(name, "delayDrawWorld") == 0) {
+	//   	log_error("Ignoring delayDrawWorld task\n");
+	//   	return 0;
+	// }
 		
 
 	// int returnval = SO_CONTINUE(int, coreAddTask_hook, param_1, param_2, param_3);
@@ -500,13 +501,19 @@ PROF_HOOK_VOID(DisplaySwap, "_ZN3JBE9DisplayPF4SwapEv", (void *param_1), (param_
 PROF_HOOK_VOID(D3DDevice_CommitState, "_ZN3JBE9D3DDevice11CommitStateEv", (void *param_1), (param_1));
 PROF_HOOK_VOID(Blit, "_ZN3JBE9DisplayPF4BlitEiiiiRKNS_13ShaderProgramEi", (int* param_1, int param_2, int param_3, int param_4, void *param_5, int param_6), (param_1, param_2, param_3, param_4, param_5, param_6));
 //_ZN3JBE9D3DDevice16SetTextureStagesEm
-PROF_HOOK_VOID(D3DDevice_SetTextureStages, "_ZN3JBE9D3DDevice16SetTextureStagesEm", (int *param_1, int param_2), (param_1, param_2));
+//PROF_HOOK_VOID(D3DDevice_SetTextureStages, "_ZN3JBE9D3DDevice16SetTextureStagesEm", (uint8_t *param_1, uint32_t param_2), (param_1, param_2));
 //_ZN3JBE9D3DDevice17UpdateComboStatesEv
  PROF_HOOK_VOID(D3DDevice_UpdateComboStates, "_ZN3JBE9D3DDevice17UpdateComboStatesEv", (int *param_1), (param_1));
-
+// _ZN3JBE9D3DDevice26SetVertexShaderInputDirectE
+PROF_HOOK_VOID(D3DDevice_SetVertexShaderInputDirect, "_ZN3JBE9D3DDevice26SetVertexShaderInputDirectE", (int *thisptr, int param_2, int param_3, int param_4), (thisptr, param_2, param_3, param_4));
 //PROF_HOOK_VOID(D3DDevice_SetVertexShaderConstantNotInlineX, "D3DDevice_SetVertexShaderConstantNotInline", (int* thisptr, int reg, uint32_t pConstantData, uint64_t ConstantCount), (reg, pConstantData, ConstantCount));
 // PROF_HOOK_RET(uint32_t, WorldClipCubeToFrustum, "_Z22worldClipCubeToFrustumPA2_fi", (float *param_1, int param_2), (param_1, param_2));
 // PROF_HOOK_RET(uint32_t, worldClipCubeToClipFrustum, "_Z26worldClipCubeToClipFrustumPA2_fi", (float *param_1, int param_2), (param_1, param_2));
+
+
+// _ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm
+// PROF_HOOK_RET(int, D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm, "_ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm", (void *param_1, int *param_2), (param_1, param_2));
+
 void install_prof_hooks(void) {
 	//PROF_ATTACH(gameLoop, "_Z8gameLoopv");
 	//PROF_ATTACH(machFrameEnd, "_Z12machFrameEndi");
@@ -538,8 +545,10 @@ void install_prof_hooks(void) {
 	PROF_ATTACH(DisplaySwap, "_ZN3JBE9DisplayPF4SwapEv");
 	PROF_ATTACH(Blit, "_ZN3JBE9DisplayPF4BlitEiiiiRKNS_13ShaderProgramEi");
 	PROF_ATTACH(D3DDevice_CommitState, "_ZN3JBE9D3DDevice11CommitStateEv");
-	PROF_ATTACH(D3DDevice_SetTextureStages, "_ZN3JBE9D3DDevice16SetTextureStagesEm");
-	PROF_ATTACH(D3DDevice_UpdateComboStates, "_ZN3JBE9D3DDevice17UpdateComboStatesEv");
+	// _ZN3JBE9D3DDevice26SetVertexShaderInputDirectE
+	//PROF_ATTACH(D3DDevice_SetVertexShaderInputDirect, "_ZN3JBE9D3DDevice26SetVertexShaderInputDirectE");
+//	 PROF_ATTACH(D3DDevice_SetTextureStages, "_ZN3JBE9D3DDevice16SetTextureStagesEm");
+	//PROF_ATTACH(D3DDevice_UpdateComboStates, "_ZN3JBE9D3DDevice17UpdateComboStatesEv");
 	//PROF_ATTACH(D3DDevice_SetVertexShaderConstantNotInlineX, "D3DDevice_SetVertexShaderConstantNotInline");
 	// PROF_ATTACH(WorldClipCubeToFrustum, "_Z22worldClipCubeToFrustumPA2_fi");
 	// PROF_ATTACH(worldClipCubeToClipFrustum, "_Z26worldClipCubeToClipFrustumPA2_fi");
@@ -969,6 +978,37 @@ uint32_t worldClipCubeToFrustumOnce(float *cubeVertices, int clippedPlanes)
 	return x;
 }
 
+so_hook D3DDevice_SetTextureStages_hook;
+void D3DDevice_SetTextureStages(uint8_t *param_1, uint32_t param_2) {
+	//logv_error("D3DDevice_SetTextureStages(%p, %u)\n", param_1, param_2);
+	Profiler_BeginSample("D3DDevice_SetTextureStages");
+	SO_CONTINUE(void *, D3DDevice_SetTextureStages_hook, param_1, param_2);
+	Profiler_EndSample();
+	//log_error("D3DDevice_SetTextureStages finished\n");
+}
+// _ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm
+so_hook D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_hook;
+int D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm(void *thisptr, uintptr_t* container, uint32_t param_2) {
+	//logv_error("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm(%p, %p, %u)\n", thisptr, container, param_2);
+	Profiler_BeginSample("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm");
+	int result = SO_CONTINUE(int, D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_hook, thisptr, container, param_2);
+	Profiler_EndSample();
+	//logv_error("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm finished with result %d\n", result);
+	return result;
+}
+
+// _ZN14D3DBaseTexture11BufferToOGLEP21RegisteredTextureDataPKvi 
+so_hook D3DBaseTexture_BufferToOGL_hook;
+void D3DBaseTexture_BufferToOGL(void *pThis, void *pTexData, const void *pBuffer, int size) {
+	//logv_error("D3DBaseTexture_BufferToOGL(%p, %p, %p, %d)\n", pThis, pTexData, pBuffer, size);
+	Profiler_BeginSample("D3DBaseTexture_BufferToOGL");
+	SO_CONTINUE(void *, D3DBaseTexture_BufferToOGL_hook, pThis, pTexData, pBuffer, size);
+	Profiler_EndSample();
+	//log_error("D3DBaseTexture_BufferToOGL finished\n");
+}
+
+
+
 void so_patch(void) {	
 	// _Z22worldClipCubeToFrustumPA2_fi
 	uintptr_t worldClipCubeToFrustum_addr = (uintptr_t)so_symbol(&so_mod, "_Z22worldClipCubeToFrustumPA2_fi");
@@ -1029,6 +1069,27 @@ void so_patch(void) {
 		logv_error("lowestPowerof2NotLessThan found at %p\n", lowestPowerof2NotLessThan_addr);
 		lowestPowerof2NotLessThan_hook = hook_addr(lowestPowerof2NotLessThan_addr, (uintptr_t)&lowestPowerof2NotLessThan);
 	}
+
+	// _ZN14D3DBaseTexture11BufferToOGLEP21RegisteredTextureDataPKvi
+	uintptr_t D3DBaseTexture_BufferToOGL_addr = (uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture11BufferToOGLEP21RegisteredTextureDataPKvi");
+	if (D3DBaseTexture_BufferToOGL_addr == 0) {
+		log_error("D3DBaseTexture_BufferToOGL not found\n");
+	} else {
+		logv_error("D3DBaseTexture_BufferToOGL found at %p\n", D3DBaseTexture_BufferToOGL_addr);
+		//D3DBaseTexture_BufferToOGL_hook = hook_addr(D3DBaseTexture_BufferToOGL_addr, (uintptr_t)&D3DBaseTexture_BufferToOGL);
+	}
+	
+	
+
+	// _ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm
+	uintptr_t D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm");
+	if (D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_addr == 0) {
+		log_error("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm not found\n");
+	} else {
+		logv_error("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm found at %p\n", D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_addr);
+		//D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_hook = hook_addr(D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_addr, (uintptr_t)&D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm);
+	}
+
 	//_Z7memInitPvi
 	uintptr_t memInit_addr = (uintptr_t)so_symbol(&so_mod, "_Z7memInitPvi");
 	if (memInit_addr == 0) {
@@ -1072,6 +1133,15 @@ void so_patch(void) {
 	} else {
 		logv_error("D3DDevice_CreateTexture2 found at %p\n", D3DDevice_CreateTexture2_addr);
 		D3DDevice_CreateTexture2_hook = hook_addr(D3DDevice_CreateTexture2_addr, (uintptr_t)&D3DDevice_CreateTexture2);
+	}
+
+	//_ZN3JBE9D3DDevice16SetTextureStagesEm
+	uintptr_t D3DDevice_SetTextureStages_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice16SetTextureStagesEm");
+	if (D3DDevice_SetTextureStages_addr == 0) {
+		log_error("D3DDevice_SetTextureStages not found\n");
+	} else {
+		logv_error("D3DDevice_SetTextureStages found at %p\n", D3DDevice_SetTextureStages_addr);
+		D3DDevice_SetTextureStages_hook = hook_addr(D3DDevice_SetTextureStages_addr, (uintptr_t)&D3DDevice_SetTextureStages);
 	}
 
 	// _ZN3JBE5Input6RenderEv
@@ -1269,7 +1339,7 @@ void so_patch(void) {
 		MEMAllocFromExpHeapEx_hook = hook_addr(MEMAllocFromExpHeapEx_addr, (uintptr_t)&MEMAllocFromExpHeapEx);
 	}
 
-	install_prof_hooks();
+	//install_prof_hooks();
 
 	uintptr_t addresses[] = {
 		0x0009caf1,

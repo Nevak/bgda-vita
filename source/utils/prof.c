@@ -92,8 +92,8 @@ static void print_branch(ProfilerState *ps, int parent, int indent)
         Sample *s = &ps->samples[i];
         if (s->parentIndex != parent) continue;
 
-        for (int j = 0; j < indent; ++j) sceClibPrintf("  ");
-        sceClibPrintf("%s: took %.2f ms in %d calls\n",
+        for (int j = 0; j < indent; ++j) sceClibPrintf("\t");
+        sceClibPrintf("%s: \t\t took %.2f ms \t %d calls\n",
                       s->name,
                       (double)s->totalTime * 1000.0 / CLOCKS_PER_SEC,
                       s->callCount);
