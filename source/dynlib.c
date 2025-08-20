@@ -315,20 +315,15 @@ void glGenTextures_profiled(GLsizei n, GLuint *textures) {
 }
 
 void glVertexAttrib4fv_profiled(GLuint index, const GLfloat *v) {
-	Profiler_BeginSample("glVertexAttrib4fv");
+	//Profiler_BeginSample("glVertexAttrib4fv");
 	glVertexAttrib4fv(index, v);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 }
 
 
 // glTexImage2D_fake
 void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) {
-	
-	// if (target == GL_TEXTURE_2D && format == 0x80e1 && width != SCREEN_W && height != SCREEN_H && type == 0x1401) {
-	// 	internalformat = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
-	// 	logv_error("glTexImage2D(%i, %i, format:0x%x, w:%i, h:%i, %i, format0x%x, type:0x%x, %p) called", 
-	// 		target, level, internalformat, width, height, border, format, type, pixels);
-	// }
+
 	if (level > 0)
 	{
 		return;
@@ -402,23 +397,35 @@ int eglSwapBuffers_profiled(EGLDisplay dpy, EGLSurface surface) {
 
 // glEnable_profiled
 void glEnable_profiled(GLenum cap) {
-	Profiler_BeginSample("glEnable");
+	//Profiler_BeginSample("glEnable");
 	glEnable(cap);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 }
 
 // glDisable_profiled
 void glDisable_profiled(GLenum cap) {
-	Profiler_BeginSample("glDisable");
+	//Profiler_BeginSample("glDisable");
 	glDisable(cap);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 }
 
 // glDrawElements_profiled	
 void glDrawElements_profiled(GLenum mode, GLsizei count, GLenum type, const void *indices) {
-	Profiler_BeginSample("glDrawElements");
+	//Profiler_BeginSample("glDrawElements");
 	glDrawElements(mode, count, type, indices);
-	Profiler_EndSample();
+	//Profiler_EndSample();
+}
+
+void glBindBuffer_profiled(GLenum target, GLuint buffer) {
+	//Profiler_BeginSample("glBindBuffer");
+	glBindBuffer(target, buffer);
+	//Profiler_EndSample();
+}
+
+void glBufferSubData_profiled(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) {
+	//Profiler_BeginSample("glBufferSubData");
+	glBufferSubData(target, offset, size, data);
+	//Profiler_EndSample();
 }
 
 so_default_dynlib default_dynlib[] = {
@@ -450,12 +457,12 @@ so_default_dynlib default_dynlib[] = {
 		{ "__aeabi_l2d", (uintptr_t)&__aeabi_l2d },
 		{ "__aeabi_l2f", (uintptr_t)&__aeabi_l2f },
 		{ "__aeabi_ldivmod", (uintptr_t)&__aeabi_ldivmod },
-		{ "__aeabi_memclr", (uintptr_t)&sceClibMemclr },
-		{ "__aeabi_memclr4", (uintptr_t)&sceClibMemclr },
-		{ "__aeabi_memclr8", (uintptr_t)&sceClibMemclr },
+		{ "__aeabi_memclr", (uintptr_t)&__aeabi_memclr_patched },
+		{ "__aeabi_memclr4", (uintptr_t)&__aeabi_memclr_patched },
+		{ "__aeabi_memclr8", (uintptr_t)&__aeabi_memclr_patched },
 		{ "__aeabi_memcpy", (uintptr_t)&__aeabi_memcpy_patched },
-		{ "__aeabi_memcpy4", (uintptr_t)&__aeabi_memcpy },
-		{ "__aeabi_memcpy8", (uintptr_t)&__aeabi_memcpy },
+		{ "__aeabi_memcpy4", (uintptr_t)&__aeabi_memcpy_patched },
+		{ "__aeabi_memcpy8", (uintptr_t)&__aeabi_memcpy_patched },
 		{ "__aeabi_memmove", (uintptr_t)&__aeabi_memmove },
 		{ "__aeabi_memmove4", (uintptr_t)&__aeabi_memmove },
 		{ "__aeabi_memmove8", (uintptr_t)&__aeabi_memmove },
@@ -803,7 +810,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glAlphaFuncx", (uintptr_t)&glAlphaFuncx },
 		{ "glAttachShader", (uintptr_t)&glAttachShader },
 		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation },
-		{ "glBindBuffer", (uintptr_t)&glBindBuffer },
+		{ "glBindBuffer", (uintptr_t)&glBindBuffer_profiled },
 		{ "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
 		{ "glBindRenderbuffer", (uintptr_t)&glBindRenderbuffer },
 		{ "glBindTexture", (uintptr_t)&glBindTexture },
@@ -812,7 +819,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glBlendFunc", (uintptr_t)&glBlendFunc },
 		{ "glBlendFuncSeparate", (uintptr_t)&glBlendFuncSeparate },
 		{ "glBufferData", (uintptr_t)&glBufferData },
-		{ "glBufferSubData", (uintptr_t)&glBufferSubData },
+		{ "glBufferSubData", (uintptr_t)&glBufferSubData_profiled },
 		{ "glCheckFramebufferStatus", (uintptr_t)&glCheckFramebufferStatus },
 		{ "glClear", (uintptr_t)&glClear },
 		{ "glClearColor", (uintptr_t)&glClearColor },

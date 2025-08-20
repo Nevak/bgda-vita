@@ -28,13 +28,13 @@
 #include <psp2/gxm.h>
 #include "utils/prof.h"
 #include "utils/vorbis_patch.h"
-#include <vitagprof.h>
+#include <profilerino.h>
 
 __attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_calloc(uint32_t nmember, uint32_t size) { return vglCalloc(nmember, size); }
 __attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void __wrap_free(void *addr) { vglFree(addr); };
-__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+//__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_malloc(uint32_t size) { 
 	//Profiler_BeginSample("malloc");
 	void * r = vglMalloc(size); 
@@ -130,7 +130,8 @@ int input_thread_fn(SceSize args, void *argp) {
 
 int main() {
 	log_error("main()");
-	gprof_stop("ux0:/data/gmon.out", 0);
+	//gprof_stop("ux0:/data/gmon.out", 0);
+	profilerino_init();
 
 	SceAppUtilInitParam appUtilParam;
 	SceAppUtilBootParam appUtilBootParam;

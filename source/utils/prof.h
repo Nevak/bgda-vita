@@ -55,10 +55,7 @@ void Profiler_ResetAll(void);   /* clear counters           */
                                                                           \
     static void FN##_wrap PARAMS                                          \
     {                                                                     \
-        Profiler_BeginSample(#FN);                                        \
-        /* ##__VA_ARGS__ removes the comma if __VA_ARGS__ is empty */     \
         SO_CONTINUE(void *, FN##_hk, ##__VA_ARGS__);                      \
-        Profiler_EndSample();                                             \
     }                                                                         \
     // static void __attribute__((constructor(101))) FN##_install(void)       \
     // {                                                                      \

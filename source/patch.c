@@ -17,7 +17,8 @@
 #include <utils/prof.h>
 #include <stdio.h>
 #include <vitasdk.h>
-#include <vitagprof.h>
+#include <libsysmodule.h>
+#include <libperf.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,6 +38,8 @@ extern so_module so_mod_libxmv;
 
 int ret0() { return 0; }
 int ret1() { return 1; }
+
+#define PROFILER_ENABLED 1
 
 // #define TIME_HOOK(ret, name, ...)                                  \
 //     static so_hook name##_hook;                                    \
@@ -284,10 +287,10 @@ void writeConfigDirect() {
 int curWidth = 0;
 so_hook lowestPowerof2NotLessThan_hook;
 int lowestPowerof2NotLessThan(int dimension) {
-	uint32_t caller = (uint32_t)__builtin_return_address(0);
-	if (caller != 0x98521dec && caller != 0x98521dcc) {
-		return SO_CONTINUE(int, lowestPowerof2NotLessThan_hook, dimension);
-	}
+	// uint32_t caller = (uint32_t)__builtin_return_address(0);
+	// if (caller != 0x98521dec && caller != 0x98521dcc) {
+	// 	return SO_CONTINUE(int, lowestPowerof2NotLessThan_hook, dimension);
+	// }
 	
     int alignment = 64;
     int aligned = (dimension + (alignment - 1)) & ~(alignment - 1);
@@ -319,12 +322,12 @@ typedef void (*D3DDevice_SetVertexShaderConstantFastFn)(int reg, uint32_t pConst
 //void D3DDevice_SetVertexShaderConstantNotInline(int register,undefined4 pConstantData,ulong ConstantCount)
 //uint32_t g_pConstantData = 0;
 so_hook D3DDevice_SetVertexShaderConstantNotInline_hook;
-void D3DDevice_SetVertexShaderConstantNotInline(int reg, uint32_t pConstantData, uint32_t ConstantCount) {
-	Profiler_BeginSample("D3DDevice_SetVertexShaderConstantNotInline");
+void D3DDevice_SetVertexShaderConstantNotInline_patched(int reg, uint32_t pConstantData, uint32_t ConstantCount) {
+	//Profiler_BeginSample("D3DDevice_SetVertexShaderConstantNotInline");
 	//SO_CONTINUE(float, D3DDevice_SetVertexShaderConstantNotInline_hook, reg, pConstantData, ConstantCount);
 	D3DDevice_SetVertexShaderConstantFastFn D3DDevice_SetVertexShaderConstantFast = (D3DDevice_SetVertexShaderConstantFastFn)D3DDevice_SetVertexShaderConstantFast_addr;
 	D3DDevice_SetVertexShaderConstantFast(reg, pConstantData, ConstantCount);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 }
 
 void D3DDevice_SetTexture(uint32_t param_1, int param_2) {
@@ -436,8 +439,14 @@ void D3DTexture_LockRect(void *pThis, uint32_t Level, int *pLockedRect, int *pRe
 	g_pitch = pLockedRect[0];
 }
 
-
+void __aeabi_memclr_patched(void *dst, int n) {
+	__aeabi_memclr(dst, n);
+}
 void __aeabi_memcpy_patched(void *dst, const void *src, int n) {
+	//sceRazorCpuPushMarkerWithHud("__aeabi_memcpy_patched", SCE_RAZOR_COLOR_YELLOW, SCE_RAZOR_MARKER_DISABLE_HUD);
+	memcpy(dst, src, n);
+	//sceRazorCpuPopMarker();
+/*
 	//Profiler_BeginSample("memcpy");
 	int* caller = __builtin_return_address(0);
 	if (caller == LOC(0x00132478))
@@ -462,96 +471,62 @@ void __aeabi_memcpy_patched(void *dst, const void *src, int n) {
 
 	//Profiler_EndSample();
 	memcpy(dst, src, n);
+*/
 }
 
 
-
-
-
-// PROF_HOOK_VOID(objectDrawDelayedDrawObjects, "_Z28objectDrawDelayedDrawObjectsv", (void))
-// PROF_HOOK_VOID(animFrame, "_Z9animFramev", (void))
-// PROF_HOOK_VOID(texProcessLoad, "_Z14texProcessLoadv", (void))
-// PROF_HOOK_VOID(texProcessDecompress, "_Z20texProcessDecompressv", (void))
-// PROF_HOOK_VOID(machBlankScreen, "_Z15machBlankScreen", (void))
-// PROF_HOOK_VOID(padProcess, "_Z10padProcessv", (void))
-// PROF_HOOK_VOID(lightVU0StoppedProcessing, "_Z25lightVU0StoppedProcessingv", (void))
-// PROF_HOOK_VOID(gameCameraTask, "_Z14gameCameraTaskv", (void))
 PROF_HOOK_VOID(gameDrawWorld, "_Z13gameDrawWorldv", (void))
 PROF_HOOK_VOID(worldDoDelayDrawTask, "_Z20worldDoDelayDrawTaskv", (void))
-// PROF_HOOK_VOID(drawObjects, "_Z12drawObjectsv", (void))
-// PROF_HOOK_VOID(runObjects, "_Z10runObjectsv", (void))
-// PROF_HOOK_VOID(floorDraw, "_Z9floorDrawv", (void))
-// PROF_HOOK_VOID(snd_frame, "_Z9SND_Framev", (void))
-// PROF_HOOK_VOID(cdProcess, "_Z9cdProcessi", (int param_1), param_1)
-// PROF_HOOK_VOID(worldPlotRouteProcess, "_Z21worldPlotRouteProcessi", (int param_1), (param_1))
-// PROF_HOOK_VOID(updateParticles, "_Z8P_Updatev", (void))
-// //PROF_HOOK_VOID(D3DDevice_ReadCommand, "_ZN3JBE9D3DDevice11ReadCommandEv", (int* param_1), (param_1));
-// PROF_HOOK_VOID(DrawVertices, "_ZN3JBE9D3DDevice12DrawVerticesE17_D3DPRIMITIVETYPEmm", (int *param_1, int *param_2, int *param_3, int *param_4), param_1, param_2, param_3, param_4);
-// PROF_HOOK_VOID(DrawVerticesIndexed, "_ZN3JBE9D3DDevice19DrawIndexedVerticesE17_D3DPRIMITIVETYPEjPKt", (int *thisptr, int param_1, int param_2, ushort *param_3), thisptr, param_1, param_2, param_3);
-// //PROF_HOOK_VOID(JBE_D3DDevice_SetRenderState, "_ZN3JBE9D3DDevice14SetRenderStateE19_D3DRENDERSTATETYPEm", (int *thisptr, int param_2, uint32_t param_3), (thisptr, param_2, param_3))
-//_ZN3JBE9D3DDevice22RegisterTextureCommandER14D3DBaseTextureRiS3_S3_ JBE::D3DDevice::RegisterTextureCommand
-// PROF_HOOK_VOID(D3DDevice_RegisterTextureCommand, "_ZN3JBE9D3DDevice22RegisterTextureCommandER14D3DBaseTextureRiS3_S3_", 
-// 			   (void *pThis, int *param_2, int *param_3, int *param_4), pThis, param_2, param_3, param_4);
-//PROF_HOOK_VOID(machFrameEnd, "_Z12machFrameEndi", (int p), (p))
 PROF_HOOK_VOID(EndFrameFence, "_ZN3JBE9DisplayPF13EndFrameFenceEv", (int* param_1), (param_1));
 PROF_HOOK_VOID(SystemUpdate, "_ZN3JBE6System6UpdateEv", (void));
 PROF_HOOK_VOID(SwapToFront, "_ZN3JBE9D3DDevice11SwapToFrontEi", (int* param_1), (param_1));
 PROF_HOOK_VOID(DisplaySwap, "_ZN3JBE9DisplayPF4SwapEv", (void *param_1), (param_1));
-//_ZN3JBE9D3DDevice11CommitStateEv
 PROF_HOOK_VOID(D3DDevice_CommitState, "_ZN3JBE9D3DDevice11CommitStateEv", (void *param_1), (param_1));
 PROF_HOOK_VOID(Blit, "_ZN3JBE9DisplayPF4BlitEiiiiRKNS_13ShaderProgramEi", (int* param_1, int param_2, int param_3, int param_4, void *param_5, int param_6), (param_1, param_2, param_3, param_4, param_5, param_6));
-//_ZN3JBE9D3DDevice16SetTextureStagesEm
-//PROF_HOOK_VOID(D3DDevice_SetTextureStages, "_ZN3JBE9D3DDevice16SetTextureStagesEm", (uint8_t *param_1, uint32_t param_2), (param_1, param_2));
-//_ZN3JBE9D3DDevice17UpdateComboStatesEv
- PROF_HOOK_VOID(D3DDevice_UpdateComboStates, "_ZN3JBE9D3DDevice17UpdateComboStatesEv", (int *param_1), (param_1));
-// _ZN3JBE9D3DDevice26SetVertexShaderInputDirectE
+PROF_HOOK_VOID(D3DDevice_UpdateComboStates, "_ZN3JBE9D3DDevice17UpdateComboStatesEv", (int *param_1), (param_1));
 PROF_HOOK_VOID(D3DDevice_SetVertexShaderInputDirect, "_ZN3JBE9D3DDevice26SetVertexShaderInputDirectE", (int *thisptr, int param_2, int param_3, int param_4), (thisptr, param_2, param_3, param_4));
-//PROF_HOOK_VOID(D3DDevice_SetVertexShaderConstantNotInlineX, "D3DDevice_SetVertexShaderConstantNotInline", (int* thisptr, int reg, uint32_t pConstantData, uint64_t ConstantCount), (reg, pConstantData, ConstantCount));
-// PROF_HOOK_RET(uint32_t, WorldClipCubeToFrustum, "_Z22worldClipCubeToFrustumPA2_fi", (float *param_1, int param_2), (param_1, param_2));
-// PROF_HOOK_RET(uint32_t, worldClipCubeToClipFrustum, "_Z26worldClipCubeToClipFrustumPA2_fi", (float *param_1, int param_2), (param_1, param_2));
+PROF_HOOK_VOID(D3DBaseTexture_BufferToOGL, "_ZN14D3DBaseTexture11BufferToOGLEP21RegisteredTextureDataPKvi", (void *thisptr, void* param_1, void const* param_2, int param_3), thisptr, param_1, param_2, param_3);
+// _ZN6squish15DecompressImageEPhiiPKvi
+PROF_HOOK_VOID(Squish_DecompressImage, "_ZN6squish15DecompressImageEPhiiPKvi", (unsigned char *pDst, int width, int height, const void *pSrc, int flags), pDst, width, height, pSrc, flags);
+// _Z20decompressBlockAlphaPhS_iiii
+PROF_HOOK_VOID(DecompressBlockAlpha, "_Z20decompressBlockAlphaPhS_iiii", (unsigned char *pDst, unsigned char *pSrc, int width, int height, int flags), pDst, pSrc, width, height, flags);
+// void XGUnswizzleRect_NOTXDK(int param_1,uint param_2,uint param_3,uint param_4,int param_5,int param_6,int param_7)
+PROF_HOOK_VOID(XGUnswizzleRect_NOTXDK, "XGUnswizzleRect_NOTXDK", (int param_1, uint32_t param_2, uint32_t param_3, uint32_t param_4, int param_5, int param_6, int param_7), param_1, param_2, param_3, param_4, param_5, param_6, param_7);
+//_ZN3JBE9D3DDevice17TextureStageState7SetToGLEmN13XGSamplerType4EnumE
+PROF_HOOK_VOID(JBE_D3DDevice_TextureStageState_ManyParams, "_ZN3JBE9D3DDevice17TextureStageState7SetToGLEmN13XGSamplerType4EnumE", (uint8_t *param_1, uint32_t param_2, uint32_t param_3), param_1, param_2, param_3);
+// _ZN17TextureStageState7SetToGLEmP25RegisteredBaseTextureDataN13XGSamplerType4EnumE
+PROF_HOOK_VOID(TextureStageState_SetToGL, "_ZN17TextureStageState7SetToGLEmP25RegisteredBaseTextureDataN13XGSamplerType4EnumE", (uint8_t *param_1, uint32_t param_2, uint32_t param_3), param_1, param_2, param_3);
+PROF_HOOK_VOID(JBE_ThreadSleep, "_ZN3JBE6Thread5SleepEj", (unsigned int param_1), param_1);
+so_hook D3DDevice_SetTextureStages_hook;
+void D3DDevice_SetTextureStages(uint8_t *param_1, uint32_t param_2) {
+	//logv_error("D3DDevice_SetTextureStages(%p, %u)\n", param_1, param_2);
+	//Profiler_BeginSample("D3DDevice_SetTextureStages");
+	SO_CONTINUE(void *, D3DDevice_SetTextureStages_hook, param_1, param_2);
+	//Profiler_EndSample();
+	//log_error("D3DDevice_SetTextureStages finished\n");
+}
 
 
-// _ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm
-// PROF_HOOK_RET(int, D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm, "_ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm", (void *param_1, int *param_2), (param_1, param_2));
+// so_hook D3DBaseTexture_BufferToOGLE_hk;
+// void D3DBaseTexture_BufferToOGLE_wrap(void *thisptr, void *param_1, void const *param_2, int param_3) {
+//    SO_CONTINUE(void *, D3DBaseTexture_BufferToOGLE_hk, thisptr, param_1, param_2, param_3);
+// }
 
 void install_prof_hooks(void) {
-	//PROF_ATTACH(gameLoop, "_Z8gameLoopv");
-	//PROF_ATTACH(machFrameEnd, "_Z12machFrameEndi");
-	// PROF_ATTACH(objectDrawDelayedDrawObjects, "_Z28objectDrawDelayedDrawObjectsv");
-	// PROF_ATTACH(animFrame, "_Z9animFramev");
-	// PROF_ATTACH(texProcessLoad, "_Z14texProcessLoadv");
-	// PROF_ATTACH(texProcessDecompress, "_Z20texProcessDecompressv");
-	// PROF_ATTACH(machBlankScreen, "_Z15machBlankScreen");
-	// PROF_ATTACH(padProcess, "_Z10padProcessv");
-	// PROF_ATTACH(lightVU0StoppedProcessing, "_Z25lightVU0StoppedProcessingv");
-	// PROF_ATTACH(gameCameraTask, "_Z14gameCameraTaskv");
 	PROF_ATTACH(gameDrawWorld, "_Z13gameDrawWorldv");
 	PROF_ATTACH(worldDoDelayDrawTask, "_Z20worldDoDelayDrawTaskv");
-	// PROF_ATTACH(drawObjects, "_Z12drawObjectsv");
-	// PROF_ATTACH(runObjects, "_Z10runObjectsv");
-	// PROF_ATTACH(floorDraw, "_Z9floorDrawv");
-	// PROF_ATTACH(snd_frame, "_Z9SND_Framev");
-	// PROF_ATTACH(cdProcess, "_Z9cdProcessi");
-	// PROF_ATTACH(worldPlotRouteProcess, "_Z21worldPlotRouteProcessi");
-	// PROF_ATTACH(updateParticles, "_Z8P_Updatev");
-	// //PROF_ATTACH(D3DDevice_ReadCommand, "_ZN3JBE9D3DDevice11ReadCommandEv");
-	// PROF_ATTACH(DrawVertices, "_ZN3JBE9D3DDevice12DrawVerticesE17_D3DPRIMITIVETYPEmm");
-	// PROF_ATTACH(DrawVerticesIndexed, "_ZN3JBE9D3DDevice19DrawIndexedVerticesE17_D3DPRIMITIVETYPEjPKt");
-	// //PROF_ATTACH(JBE_D3DDevice_SetRenderState, "_ZN3JBE9D3DDevice14SetRenderStateE19_D3DRENDERSTATETYPEm");
-	//PROF_ATTACH(D3DDevice_RegisterTextureCommand, "_ZN3JBE9D3DDevice22RegisterTextureCommandER14D3DBaseTextureRiS3_S3_");
 	PROF_ATTACH(EndFrameFence, "_ZN3JBE9DisplayPF13EndFrameFenceEv");
 	PROF_ATTACH(SystemUpdate, "_ZN3JBE6System6UpdateEv");
 	PROF_ATTACH(SwapToFront, "_ZN3JBE9D3DDevice11SwapToFrontEi");
 	PROF_ATTACH(DisplaySwap, "_ZN3JBE9DisplayPF4SwapEv");
 	PROF_ATTACH(Blit, "_ZN3JBE9DisplayPF4BlitEiiiiRKNS_13ShaderProgramEi");
 	PROF_ATTACH(D3DDevice_CommitState, "_ZN3JBE9D3DDevice11CommitStateEv");
-	// _ZN3JBE9D3DDevice26SetVertexShaderInputDirectE
-	//PROF_ATTACH(D3DDevice_SetVertexShaderInputDirect, "_ZN3JBE9D3DDevice26SetVertexShaderInputDirectE");
-//	 PROF_ATTACH(D3DDevice_SetTextureStages, "_ZN3JBE9D3DDevice16SetTextureStagesEm");
-	//PROF_ATTACH(D3DDevice_UpdateComboStates, "_ZN3JBE9D3DDevice17UpdateComboStatesEv");
-	//PROF_ATTACH(D3DDevice_SetVertexShaderConstantNotInlineX, "D3DDevice_SetVertexShaderConstantNotInline");
-	// PROF_ATTACH(WorldClipCubeToFrustum, "_Z22worldClipCubeToFrustumPA2_fi");
-	// PROF_ATTACH(worldClipCubeToClipFrustum, "_Z26worldClipCubeToClipFrustumPA2_fi");
+	PROF_ATTACH(D3DBaseTexture_BufferToOGL, "_ZN14D3DBaseTexture11BufferToOGLEP21RegisteredTextureDataPKvi");
+	PROF_ATTACH(Squish_DecompressImage, "_ZN6squish15DecompressImageEPhiiPKvi");
+	PROF_ATTACH(DecompressBlockAlpha, "_Z20decompressBlockAlphaPhS_iiii");
+	PROF_ATTACH(XGUnswizzleRect_NOTXDK, "XGUnswizzleRect_NOTXDK");
+	PROF_ATTACH(TextureStageState_SetToGL, "_ZN3JBE9D3DDevice17TextureStageState7SetToGLEmN13XGSamplerType4EnumE");
+	PROF_ATTACH(JBE_ThreadSleep, "_ZN3JBE6Thread5SleepEj");
 }
 
 so_hook machFrameStart_hook;
@@ -561,7 +536,7 @@ uint32_t frameStartCalledAtTime;
 uint32_t frameStartToEndTime = 0;
 		
 void machFrameStart(int p) {
-	sceKernelChangeThreadCpuAffinityMask(sceKernelGetThreadId(), SCE_KERNEL_CPU_MASK_USER_0);
+	sceKernelChangeThreadCpuAffinityMask(sceKernelGetThreadId(), SCE_KERNEL_CPU_MASK_USER_1);
 
 	frameStartCalledAtTime = sceKernelGetProcessTimeLow();
 	
@@ -594,7 +569,6 @@ void DisplayPF_Swap(void *param_1) {
 	SO_CONTINUE(void *, DisplayPF_Swap_hook, param_1);
 	//Profiler_EndSample();
 	//log_error("DisplayPF_Swap finished\n");
-	
 	// only print every 100 frames
 	static int frameCount = 0;
 	frameCount++;
@@ -674,7 +648,11 @@ void ReadCommandCustom(struct d3dDeviceFake *thisPtr) {
 }
 
 void D3DDevice_AsyncRenderCB(void *device_ptr) {
-	sceKernelChangeThreadCpuAffinityMask(sceKernelGetThreadId(), SCE_KERNEL_CPU_MASK_USER_1);
+	uint32_t threadId = sceKernelGetThreadId();
+	sceKernelChangeThreadPriority(threadId, 100);
+	sceKernelChangeThreadCpuAffinityMask(threadId, SCE_KERNEL_CPU_MASK_USER_0);
+	pthread_setname_np_soloader(threadId, "D3DDevice_AsyncRenderCB");
+
     D3DDevice* device = (D3DDevice*)device_ptr;
 	logv_error("g_Singleton_addr is: %p", (void*)g_Singleton_addr);
     void* display = (void*)((char*)(g_Singleton_addr) + 0x10);
@@ -713,19 +691,47 @@ void D3DDevice_AsyncRenderCB(void *device_ptr) {
 			// Profile with the command type
 			const char *label = gCmdLabels[cmdType];
 	
-			Profiler_BeginSample(label);
+			//Profiler_BeginSample(label);
 			fnReadCommand(device);
-			Profiler_EndSample();
+			//Profiler_EndSample();
 		}
 		else {
+#if PROFILER_ENABLED
+			struct astruct *cmdData = thisPtr->cmd;
+			uint8_t cmdType = cmdData->field0 & 0xFF;
+			uint32_t cmdType32 = cmdData->field0 & 0xFF;
+			const char *label = gCmdLabels[cmdType];
+			sceRazorCpuPushMarkerWithHud(label, SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+			// if (res != 0) {
+			// 	logv_error("sceRazorCpuPushMarkerWithHud failed: %d", res);
+			// }
 			// Just read the command without profiling
-			ReadCommandCustom(thisPtr);
+			fnReadCommand(thisPtr);
+			sceRazorCpuPopMarker();
+#else
+			// Just read the command without profiling
+			fnReadCommand(thisPtr);
+#endif
 		}
     }
 
     // Release context when done
     fnRelease(display);
 }
+
+// void __attribute__((no_instrument_function,always_inline))
+// __cyg_profile_func_enter(void *this_fn, void *call_site) {
+// 	static char label[32];
+//     snprintf(label, sizeof(label), "func_0x%08X", this_fn);
+// 	//logv_debug("Entering function: %p, called from: %p\n", this_fn, call_site);
+// 	sceRazorCpuPushMarkerWithHud(label, SCE_RAZOR_COLOR_YELLOW, SCE_RAZOR_MARKER_DISABLE_HUD);
+// }
+
+// void __attribute__((no_instrument_function,always_inline))
+// __cyg_profile_func_exit(void *this_fn, void *call_site) {
+// 	sceRazorCpuPopMarker();
+// }
+
 
 so_hook System_BeginFrame_hook;
 void System_BeginFrame(void *param_1) {
@@ -806,9 +812,9 @@ so_hook D3DDevice_Swap_hook;
 
 uint64_t lastFrameTimeMainThread = 0;
 void D3DDevice_Swap(int flags) {
-	Profiler_BeginSample("D3DDevice_Swap (main thread)");
+	//Profiler_BeginSample("D3DDevice_Swap (main thread)");
 	SO_CONTINUE(void *, D3DDevice_Swap_hook, flags);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 
 	// if (log_profiler) {
 	// 	// uint64_t timeNow = sceKernelGetProcessTimeWide();
@@ -825,25 +831,25 @@ void D3DDevice_Swap(int flags) {
 so_hook renderDelayedShadows_hook;
 void renderDelayedShadows(void) {
 	//logv_error("renderDelayedShadows()\n");
-	Profiler_BeginSample("renderDelayedShadows");
+	//Profiler_BeginSample("renderDelayedShadows");
 	SO_CONTINUE(void *, renderDelayedShadows_hook);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 	//log_error("renderDelayedShadows finished\n");
 }
 so_hook runObjects_hook;
 void runObjects(void) {
 	//logv_error("runObjects()\n");
-	Profiler_BeginSample("runObjects");
+	//Profiler_BeginSample("runObjects");
 	SO_CONTINUE(void *, runObjects_hook);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 	//log_error("runObjects finished\n");
 }
 so_hook drawObjects_hook;
 void drawObjects(void) {
 	//logv_error("drawObjects()\n");
-	Profiler_BeginSample("drawObjects");
+	//Profiler_BeginSample("drawObjects");
 	SO_CONTINUE(void *, drawObjects_hook);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 	//log_error("drawObjects finished\n");
 }
 so_hook MEMAllocFromExpHeapEx_hook;
@@ -898,7 +904,7 @@ _Static_assert(sizeof(struct FrustumIdx) == 3, "FrustumIdx must be packed to 3 b
 so_hook worldClipCubeToFrustum_hook;
 uint32_t worldClipCubeToFrustum(float *cubeVertices, int clippedPlanes)
 {
-    Profiler_BeginSample("worldClipCubeToFrustum");
+    //Profiler_BeginSample("worldClipCubeToFrustum");
 
     // Rename cryptic variables to meaningful names
     int planeNumber;             // Better than planeIndex starting at -6
@@ -935,7 +941,7 @@ uint32_t worldClipCubeToFrustum(float *cubeVertices, int clippedPlanes)
                 planeNormalY * cubeVertices[xsel + 2] +
                 planeNormalZ * cubeVertices[ysel + 4] < 0.0) {
                 
-                Profiler_EndSample();
+                //Profiler_EndSample();
                 return 0;
             }
             
@@ -954,7 +960,7 @@ uint32_t worldClipCubeToFrustum(float *cubeVertices, int clippedPlanes)
         planeIndices++;
     }
     
-    Profiler_EndSample();
+    //Profiler_EndSample();
     return clippedPlanes;
 }
 
@@ -962,9 +968,9 @@ uint32_t worldClipCubeToFrustum(float *cubeVertices, int clippedPlanes)
 so_hook worldClipCubeToClipFrustum_hook;
 uint32_t worldClipCubeToClipFrustum(float *cubeVertices, int clippedPlanes)
 {	
-	Profiler_BeginSample("worldClipCubeToClipFrustum");
+	//Profiler_BeginSample("worldClipCubeToClipFrustum");
 	uint32_t x = SO_CONTINUE(uint32_t, worldClipCubeToClipFrustum_hook, cubeVertices, clippedPlanes);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 	//log_error("worldClipCubeToClipFrustum finished\n");
 	return x;
 }
@@ -972,27 +978,20 @@ uint32_t worldClipCubeToClipFrustum(float *cubeVertices, int clippedPlanes)
 so_hook worldClipCubeToFrustumOnce_hook;
 uint32_t worldClipCubeToFrustumOnce(float *cubeVertices, int clippedPlanes)
 {
-	Profiler_BeginSample("worldClipCubeToFrustumOnce");
+	//Profiler_BeginSample("worldClipCubeToFrustumOnce");
 	uint32_t x = SO_CONTINUE(uint32_t, worldClipCubeToFrustumOnce_hook, cubeVertices, clippedPlanes);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 	return x;
 }
 
-so_hook D3DDevice_SetTextureStages_hook;
-void D3DDevice_SetTextureStages(uint8_t *param_1, uint32_t param_2) {
-	//logv_error("D3DDevice_SetTextureStages(%p, %u)\n", param_1, param_2);
-	Profiler_BeginSample("D3DDevice_SetTextureStages");
-	SO_CONTINUE(void *, D3DDevice_SetTextureStages_hook, param_1, param_2);
-	Profiler_EndSample();
-	//log_error("D3DDevice_SetTextureStages finished\n");
-}
+
 // _ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm
 so_hook D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_hook;
 int D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm(void *thisptr, uintptr_t* container, uint32_t param_2) {
 	//logv_error("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm(%p, %p, %u)\n", thisptr, container, param_2);
-	Profiler_BeginSample("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm");
+	//Profiler_BeginSample("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm");
 	int result = SO_CONTINUE(int, D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_hook, thisptr, container, param_2);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 	//logv_error("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm finished with result %d\n", result);
 	return result;
 }
@@ -1001,9 +1000,9 @@ int D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm(void *thisptr, uintptr
 so_hook D3DBaseTexture_BufferToOGL_hook;
 void D3DBaseTexture_BufferToOGL(void *pThis, void *pTexData, const void *pBuffer, int size) {
 	//logv_error("D3DBaseTexture_BufferToOGL(%p, %p, %p, %d)\n", pThis, pTexData, pBuffer, size);
-	Profiler_BeginSample("D3DBaseTexture_BufferToOGL");
+	//Profiler_BeginSample("D3DBaseTexture_BufferToOGL");
 	SO_CONTINUE(void *, D3DBaseTexture_BufferToOGL_hook, pThis, pTexData, pBuffer, size);
-	Profiler_EndSample();
+	//Profiler_EndSample();
 	//log_error("D3DBaseTexture_BufferToOGL finished\n");
 }
 
@@ -1119,9 +1118,67 @@ void usprintf_patched(uint16_t *output_buffer, const uint16_t *format_string,
     }
 }
 
+so_hook XGGetPixelBufferMinAlpha_hook;
+uint XGGetPixelBufferMinAlpha(uint8_t (*param_1) [16], uint32_t param_2,int param_3,int param_4) {
+	return 0;
+	//return SO_CONTINUE(uint, XGGetPixelBufferMinAlpha_hook, param_1, param_2, param_3, param_4);
+}
 
+so_hook XGGetPixelBufferMaxAlpha_hook;
+uint XGGetPixelBufferMaxAlpha(uint8_t (*param_1) [16], uint32_t param_2,int param_3,int param_4) {
+	return 255;
+	//return SO_CONTINUE(uint, XGGetPixelBufferMaxAlpha_hook, param_1, param_2, param_3, param_4);
+}
+
+so_hook ProcessAndUploadTexture_hook;
+void ProcessAndUploadTexture
+              (int glTarget,uint8_t *sourceTextureData,uint formatToSwitchParam,int isSwizzled,
+               int isCompressed,uint width,uint height,uint level,uint sourcePitch,int paddingFlag,
+               uint palette,uint allocateNewTexture,int keepSwizzled,ushort *alphaRange)
+{
+	if ((formatToSwitchParam & 0xffffff7f) == 0xb && formatToSwitchParam == 139) 
+	{
+		// For index texture
+		glTexImage2D_fake(glTarget,
+			0, // level
+			0x1908, //GL_RGBA, 
+			width, // whatever original width was passed to DoTheFinalGPUUpload
+			height, // whatever original height
+			0, // border
+			0x1908, //GL_RGBA, // format = internalFormat
+			0x1401, //GL_UNSIGNED_BYTE, // type ?
+			sourceTextureData); // data, comes from the function args
+
+		return;
+	}
+
+
+
+	// log the parameters with name
+	logv_error("ProcessAndUploadTexture(glTarget: %d, sourceTextureData: %p, formatToSwitchParam: %d, isSwizzled: %d, isCompressed: %d, width: %u, height: %u, level: %u, sourcePitch: %u, paddingFlag: %d, palette: %u, allocateNewTexture: %d, keepSwizzled: %d, alphaRange: %p)\n",
+		glTarget, sourceTextureData, formatToSwitchParam, isSwizzled, isCompressed,
+		width, height, level, sourcePitch, paddingFlag, palette, allocateNewTexture, keepSwizzled, alphaRange);
+
+	//sourcePitch = width;
+
+	SO_CONTINUE(void *, ProcessAndUploadTexture_hook, glTarget, sourceTextureData, formatToSwitchParam,
+		isSwizzled, isCompressed, width, height, level, sourcePitch, paddingFlag,
+		palette, allocateNewTexture, keepSwizzled, alphaRange);
+}
+
+so_hook DoTheFinalGPUUpload_hook;
+void DoTheFinalGPUUpload(uint32_t glTarget, uint32_t level, uint8_t (*pixelData) [16],
+                        uint32_t textureFormatToSwitch, uint width, uint height, uint32_t imageSize,
+						int shouldUploadToGPU)
+{
+	logv_error("DoTheFinalGPUUpload(glTarget: 0x%x, level: %u, pixelData: %p, textureFormatToSwitch: 0x%x, width: %u, height: %u, imageSize: %u, shouldUploadToGPU: %d)\n",
+		glTarget, level, pixelData, textureFormatToSwitch, width, height, imageSize, shouldUploadToGPU);
+	SO_CONTINUE(void *, DoTheFinalGPUUpload_hook, glTarget, level, pixelData,
+	textureFormatToSwitch, width, height, imageSize, shouldUploadToGPU);	
+}
 
 void so_patch(void) {	
+	//sceSysmoduleLoadModule(SCE_SYSMODULE_PERF);
 
 	// _Z8usprintfPtPKtfffffff
 	uintptr_t usprintf_addr = (uintptr_t)so_symbol(&so_mod, "_Z8usprintfPtPKtfffffff");
@@ -1171,13 +1228,17 @@ void so_patch(void) {
 	D3DDevice_SetTexture_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetTexture"), (uintptr_t)&D3DDevice_SetTexture);
 	D3DDevice_SetVertexShaderConstantNotInline_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline");
 	D3DDevice_SetVertexShaderConstantFast_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantFast");
-	D3DDevice_SetVertexShaderConstantNotInline_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline"), (uintptr_t)&D3DDevice_SetVertexShaderConstantNotInline);
+	D3DDevice_SetVertexShaderConstantNotInline_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline"), (uintptr_t)&D3DDevice_SetVertexShaderConstantNotInline_patched);
 
 	// _Z11coreAddTaskPFvvEiPKc coreAddTask
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
 	renderDelayedShadows_hook = hook_addr(LOC(0x0013d578), (uintptr_t)&renderDelayedShadows);
 	runObjects_hook = hook_addr(LOC(0x00114a1c), (uintptr_t)&runObjects);
 	drawObjects_hook = hook_addr(LOC(0x00115094), (uintptr_t)&drawObjects);
+	XGGetPixelBufferMinAlpha_hook = hook_addr(LOC(0x00209d0c), (uintptr_t)&XGGetPixelBufferMinAlpha);
+	XGGetPixelBufferMaxAlpha_hook = hook_addr(LOC(0x00209ff0), (uintptr_t)&XGGetPixelBufferMaxAlpha);
+	ProcessAndUploadTexture_hook = hook_addr(LOC(0x0021225c), (uintptr_t)&ProcessAndUploadTexture);
+	DoTheFinalGPUUpload_hook = hook_addr(LOC(0x002160ec), (uintptr_t)&DoTheFinalGPUUpload);
 
 	//uint32_t loc = LOC(0x00132474);
 	//logv_error("COPY TEXTURE at %p\n", loc);
@@ -1461,7 +1522,7 @@ void so_patch(void) {
 		MEMAllocFromExpHeapEx_hook = hook_addr(MEMAllocFromExpHeapEx_addr, (uintptr_t)&MEMAllocFromExpHeapEx);
 	}
 
-	//install_prof_hooks();
+	install_prof_hooks();
 
 	uintptr_t addresses[] = {
 		0x0009caf1,

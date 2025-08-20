@@ -19,7 +19,7 @@ extern "C" {
 
 void so_patch();
 void __aeabi_memcpy_patched(void *dst, const void *src, int n);
-
+void __aeabi_memclr_patched(void *dst, int n);
 
 #ifdef __cplusplus
 };

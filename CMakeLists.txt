@@ -21,7 +21,7 @@ set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
 #set(PSVITAIP "192.168.110.16" CACHE STRING "PSVita IP (for FTP access)") #China
-set(PSVITAIP "192.168.1.66" CACHE STRING "PSVita IP (for FTP access)") #Madrid
+set(PSVITAIP "192.168.1.85" CACHE STRING "PSVita IP (for FTP access)") #Madrid
 set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
 # Game-specific definitions
@@ -53,8 +53,9 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   add_definitions(-DDEBUG_SOLOADER)
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -fno-inline -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q,--wrap,memcpy,--wrap,memset,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -O3 -fno-inline")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O2 -g3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer -finstrument-functions -finstrument-functions-exclude-file-list=third_party/**,allocators/** -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
+
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q,--wrap,memcpy,--wrap,memset,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -O2 -g3 -fno-omit-frame-pointer -finstrument-functions -finstrument-functions-exclude-file-list=third_party/**,allocators/** -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
 
 add_executable(${CMAKE_PROJECT_NAME}
 			   source/main.c
@@ -120,7 +121,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 target_link_libraries(${CMAKE_PROJECT_NAME}
 					  -Wl,--whole-archive pthread -Wl,--no-whole-archive
 					  stdc++
-					  vitagprof
+					  #vitagprof
 					  SceLibKernel_stub
 					  OpenSLES
 					  sndfile
@@ -162,9 +163,12 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  ScePower_stub
 					  SceTouch_stub
 					  SceVshBridge_stub
+					  profilerino
+					  ScePerf_stub
+					  SceSysmodule_stub
 					  )
 
-vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR)
+vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR UNCOMPRESSED GEN_EXPORTS exports.txt)
 vita_create_vpk(${VITA_VPKNAME}.vpk ${VITA_TITLEID} eboot.bin
 				VERSION ${VITA_VERSION}
 				NAME ${VITA_APP_NAME}
@@ -185,6 +189,9 @@ add_custom_target(send
 				  COMMAND echo destroy | nc ${PSVITAIP} 1338
 				  COMMAND echo destroy | nc ${PSVITAIP} 1338
 				  COMMAND curl -T eboot.bin ftp://${PSVITAIP}:1337/ux0:/app/${VITA_TITLEID}/
+				  COMMAND nm --without-symbol-versions --demangle bgda > sym.txt
+				  COMMAND echo "nm output saved to sym.txt"
+				  COMMAND curl -T sym.txt ftp://${PSVITAIP}:1337/ux0:/app/${VITA_TITLEID}/
 				  COMMAND echo launch ${VITA_TITLEID} | nc ${PSVITAIP} 1338
 				  DEPENDS ${VITA_VPKNAME}.vpk-vpk
 				  )

@@ -266,13 +266,13 @@ bool is_dir(const char * path) {
 
 
 
-int ret0(void) {
-    return 0;
-}
+// int ret0(void) {
+//     return 0;
+// }
 
-int ret1(void) {
-    return 1;
-}
+// int ret1(void) {
+//     return 1;
+// }
 
 int retminus1(void) {
     return -1;
