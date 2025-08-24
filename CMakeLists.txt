@@ -53,9 +53,22 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   add_definitions(-DDEBUG_SOLOADER)
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O2 -g3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer -finstrument-functions -finstrument-functions-exclude-file-list=third_party/**,allocators/** -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
+# Option to enable profiler instrumentation
+option(PROFILER_ENABLED "Enable function instrumentation for profiling" OFF)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q,--wrap,memcpy,--wrap,memset,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -O2 -g3 -fno-omit-frame-pointer -finstrument-functions -finstrument-functions-exclude-file-list=third_party/**,allocators/** -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
+# Base compiler flags without instrumentation
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer")
+
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q,--wrap,memcpy,--wrap,memset,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -O3 -fno-omit-frame-pointer")
+
+# Add instrumentation flags only if profiler is enabled
+if(PROFILER_ENABLED)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -finstrument-functions -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -finstrument-functions -finstrument-functions-exclude-file-list=third_party/**,allocators/** -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
+  add_definitions(-DPROFILER_ENABLED=1)
+else()
+  add_definitions(-DPROFILER_ENABLED=0)
+endif()
 
 add_executable(${CMAKE_PROJECT_NAME}
 			   source/main.c
@@ -166,6 +179,8 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  profilerino
 					  ScePerf_stub
 					  SceSysmodule_stub
+					  SceRazorHud_stub
+					  SceRazorCapture_stub
 					  )
 
 vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR UNCOMPRESSED GEN_EXPORTS exports.txt)

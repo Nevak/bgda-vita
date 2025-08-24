@@ -19,6 +19,7 @@
 #include <vitasdk.h>
 #include <libsysmodule.h>
 #include <libperf.h>
+#include <vitaGL.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,174 +40,6 @@ extern so_module so_mod_libxmv;
 int ret0() { return 0; }
 int ret1() { return 1; }
 
-#define PROFILER_ENABLED 1
-
-// #define TIME_HOOK(ret, name, ...)                                  \
-//     static so_hook name##_hook;                                    \
-//     static ret name##_prof(__VA_ARGS__)                            \
-//     {                                                              \
-//         Profiler_BeginSample("Test");                              \
-//         ret _res = SO_CONTINUE(ret, name##_hook, ##__VA_ARGS__);   \
-// 		Profiler_EndSample();                                      \	
-//         return _res;                                               \
-//     }
-
-// TIME_HOOK(void, machFrameEnd, int p);
-
-// typedef void (*TaskFn)(void);   /* adapt if the real prototype differs */
-
-// struct TaskThunk {
-//     TaskFn  orig;      /* the real callback                     */
-//     const char *name;  /* pointer to the label in param_3       */
-// };
-
-// __attribute__((naked)) static void task_thunk_entry(void)
-// {
-//     __asm__ volatile (
-//         "push   {r0-r3, lr}           \n"   /* save ABI-scratch regs        */
-//         "ldr    r0, [sp, #20]         \n"   /* r0 = ptr to TaskThunk ctx    */
-//         "ldr    r1, [r0, #4]          \n"   /* r1 = ctx->name               */
-//         "bl     Profiler_BeginSample  \n"
-
-//         "ldr    r0, [sp, #20]         \n"   /* ctx again                    */
-//         "ldr    r0, [r0, #0]          \n"   /* r0 = ctx->orig               */
-//         "blx    r0                    \n"   /* call real task               */
-
-//         "ldr    r0, [sp, #20]         \n"
-//         "ldr    r1, [r0, #4]          \n"
-//         "bl     Profiler_EndSample    \n"
-
-//         "pop    {r0-r3, lr}           \n"
-//         "bx     lr                    \n"
-//     );
-// }
-
-
-static const char *gCmdLabels[256] = {
-    [0x00] = "0x00 SetRenderTarget",
-    [0x01] = "0x01 RegisterTexture",
-    [0x02] = "0x02 BufferTexture",
-    [0x03] = "0x03 GenerateMipmaps",
-    [0x04] = "0x04 ResolveTexture",
-    [0x05] = "0x05 UnregisterTexture",
-    [0x06] = "0x06 RegisterSurface",
-    [0x07] = "0x07 UnregisterSurface",
-    [0x08] = "0x08 CompileShader",
-    [0x09] = "0x09 ThreadSignal",
-    [0x0A] = "0x0A IncrementFieldCounter",
-    [0x0B] = "0x0B Clear",
-    [0x0C] = "0x0C Swap",
-    [0x0D] = "0x0D SwapToFront",
-    [0x0E] = "0x0E BeginPrimitive",
-    [0x0F] = "0x0F EndPrimitive",
-    [0x10] = "0x10 SetVertexData4f",
-    [0x11] = "0x11 SetVertexAttribute",
-    [0x12] = "0x12 SetConstantMaybe",
-    [0x13] = "0x13 UpdateShaderConstant",
-    [0x14] = "0x14 BindResource",
-    [0x15] = "0x15 SetRenderState",
-    [0x16] = "0x16 SetVertexShaderInput",
-    [0x17] = "0x17 StoreShaderState",
-    [0x18] = "0x18 SetVertexShader",
-    [0x19] = "0x19 CopyToSemaphore",
-    [0x1A] = "0x1A SetVertexShaderAgain",
-    [0x1B] = "0x1B SetPixelShaderProgram",
-    [0x1C] = "0x1C SetPixelShaderConstant",
-    [0x1D] = "0x1D LinkPixelShaderProgram",
-    [0x1E] = "0x1E SetScissors",
-    [0x1F] = "0x1F SetDepthRange",
-    [0x20] = "0x20 RunDynamicPushBuffer",
-    [0x21] = "0x21 DrawIndexedVertices", // 33
-    [0x22] = "0x22 DrawVertices",
-    [0x23] = "0x23 DrawVerticesUP",
-    [0x24] = "0x24 DrawIndexedVerticesInstanced", // 36
-    [0x25] = "0x25 DrawVerticesInstanced",
-    [0x26] = "0x26 StoreVertexData",
-    [0x27] = "0x27 StoreShaderParameters",
-    [0x28] = "0x28 RegisterIndexBuffer",
-    [0x29] = "0x29 BufferIndexBuffer",
-    [0x2A] = "0x2A UnregisterIndexBuffer",
-    [0x2B] = "0x2B RegisterVertexBuffer",
-    [0x2C] = "0x2C BufferVertexBuffer",
-    [0x2D] = "0x2D UnregisterVertexBuffer",
-    [0x2E] = "0x2E BeginVisibilityTest",
-    [0x2F] = "0x2F EndVisibilityTest",
-    [0x30] = "0x30 GetVisibilityTestResult",
-    [0x31] = "0x31 CallFunctionPointer",
-    [0x32] = "0x32 UpdateLightingColor",
-    [0x33] = "0x33 UpdatePalette",
-    [0x34] = "0x34 DrawExtendedParams",
-    [0x35] = "0x35 DrawExtendedParamsIndexed",
-    [0x36] = "0x36 CopyMemoryBlockA",
-    [0x37] = "0x37 CopyMemoryBlockB",
-    [0x38] = "0x38 DrawExtendedParamsC",
-    [0x39] = "0x39 SetViewport",
-    [0x3A] = "0x3A StoreViewportState",
-    [0x3B] = "0x3B UpdateViewportState",
-    [0x3C] = "0x3C StoreViewportStateIndexed",
-    [0x3D] = "0x3D ComputeAspectRatio",
-    [0x3E] = "0x3E ResetRenderFlag",
-    [0xFF] = "0xFF SpecialCommandOffset"
-};
-
-
-// static TaskFn make_standalone_stub(TaskFn orig, const char *label)
-// {
-//     /* 1. allocate RW-X memory for ctx + 2 instructions (12 bytes) */
-//     size_t  sz   = sizeof(struct TaskThunk) + 12;
-//     uint8_t *mem = sceClibMemalign(4, sz);            /* Vita SDK’s aligned malloc */
-//    // sceKernelDClearWritebackDCache(mem, sz);          /* ensure coherency         */
-
-//     struct TaskThunk *ctx = (struct TaskThunk*)mem;
-//     ctx->orig  = orig;
-//     ctx->name  = label;
-
-//     /* 2. patch the two ARM instructions that jump to task_thunk_entry */
-//     uint32_t  *code = (uint32_t*)(ctx + 1);
-
-//     /* ldr r0, =ctx          (literal 4 bytes after the two instructions) */
-//     code[0] = 0x4801;                /* Thumb:  LDR r0, [PC, #4] */
-//     /* bx  task_thunk_entry */
-//     code[1] = 0x4700 | (((uintptr_t)task_thunk_entry & 0xFFFFFFFE) >> 1);
-
-//     /* literal pool entry   */
-//     code[2] = (uint32_t)ctx;
-
-//     /* Flush so the CPU sees the new instructions */
-//     //sceKernelDcacheWritebackInvalidateRange(code, 12);
-//     //sceKernelIcacheInvalidateRange(code, 12);
-
-//     /* Return pointer to the first instruction (Thumb bit set) */
-//     return (TaskFn)((uintptr_t)code | 1);
-// }
-
-/*
-coreAddTask(0x984acaf4, 19, StatCache)←[0m
-coreAddTask(0x984d0a4c, 20, Async Load/Save Daemon)←[0m
-coreAddTask(0x985485a0, 110, Dialog Demon)←[0m
-coreAddTask(0x984c7e78, 125, Script Demon)←[0m
-coreAddTask(0x98504a1c, 10, runObjects)←[0m
-coreAddTask(0x98505094, 21, drawObjects)←[0m
-coreAddTask(0x9857b2a0, 28, drawFloorSprites (must be before drawworld))←[0m
-coreAddTask(0x98593eb8, 15, updateParticles)←[0m
-coreAddTask(0x985923ec, 65, drawParticles)←[0m
-coreAddTask(0x985a8c98, 3, transformSceneLight)←[0m
-coreAddTask(0x9852d578, 22, RenderDelayedShadows)←[0m
-coreAddTask(0x9852e50c, 1, camera)←[0m
-coreAddTask(0x9852edb8, 20, drawWorld)←[0m
-coreAddTask(0x985277a0, 23, delayDrawWorld)←[0m
-coreAddTask(0x98564d48, 50, HelpMessage)←[0m
-coreAddTask(0x9852e50c, 1, camera)←[0m
-coreAddTask(0x9852edb8, 20, drawWorld)←[0m
-coreAddTask(0x985277a0, 23, delayDrawWorld)←[0m
-coreAddTask(0x98564d48, 50, HelpMessage)←[0m
-coreAddTask(0x9852e50c, 1, camera)←[0m
-coreAddTask(0x9852edb8, 20, drawWorld)←[0m
-coreAddTask(0x985277a0, 23, delayDrawWorld)←[0m
-coreAddTask(0x98564d48, 50, HelpMessage)←[0m
-coreAddTask(0x98563a90, 50, HUD)←[0m
-*/
-
 
 so_hook coreAddTask_hook;
 int coreAddTask(void *fn, int prio, char *name) {
@@ -216,32 +49,12 @@ int coreAddTask(void *fn, int prio, char *name) {
 		//logv_error("Ignoring StatCache task\n");
 		return 0;
 	}
-	
-	// if (name && strcmp(name, "drawObjects") == 0) {
-	// 	log_error("Ignoring drawObjects task\n");
-	// 	return 0;
-	// }
-
 
 	if (name && strcmp(name, "RenderDelayedShadows") == 0) {
 	   	log_error("Ignoring renderDelayedShadows task\n");
 	   	return 0;
 	}
 
-	// 	if (name && strcmp(name, "delayDrawWorld") == 0) {
-	//   	log_error("Ignoring delayDrawWorld task\n");
-	//   	return 0;
-	// }
-		
-
-	// int returnval = SO_CONTINUE(int, coreAddTask_hook, param_1, param_2, param_3);
-	// //logv_error("coreAddTask returned %i\n", returnval);
-	// return returnval;
-
-	    /* Turn the user-supplied callback into a profiled stub */
-   // TaskFn wrapped = make_standalone_stub((TaskFn)fn, name);
-
-    /* Pass *our* stub to the original scheduler */
     return SO_CONTINUE(int, coreAddTask_hook, fn, prio, name);
 }
 
@@ -262,36 +75,25 @@ bool usingTouchscreen() {
 }
 
 so_hook frontEndDoControllerScreenInput_hook;
-void frontEndDoControllerScreenInput(int *param_1, int *param_2) {
-
-}
+void frontEndDoControllerScreenInput(int *param_1, int *param_2) {}
 
 so_hook inputRender_hook;
-void inputRender(void *thisptr) {	
-}
+void inputRender(void *thisptr) {}
 
 so_hook virtualControlsRender_hook;
-void virtualControlsRender(void *thisptr) {
-	//logv_error("virtualControlsRender()\n");
-	//SO_CONTINUE(void *, virtualControlsRender_hook);
-}
+void virtualControlsRender(void *thisptr) {}
 
 so_hook writeConfigDirect_hook;
-void writeConfigDirect() {
-	//log_error("writeConfigDirect()\n");
-	//SO_CONTINUE(void *, writeConfigDirect_hook);
-}
-
-
+void writeConfigDirect() {}
 
 int curWidth = 0;
 so_hook lowestPowerof2NotLessThan_hook;
 int lowestPowerof2NotLessThan(int dimension) {
-	// uint32_t caller = (uint32_t)__builtin_return_address(0);
-	// if (caller != 0x98521dec && caller != 0x98521dcc) {
-	// 	return SO_CONTINUE(int, lowestPowerof2NotLessThan_hook, dimension);
-	// }
-	
+	uint32_t caller = (uint32_t)__builtin_return_address(0);
+	if (caller != 0x98521dec && caller != 0x98521dcc) {
+	 	return SO_CONTINUE(int, lowestPowerof2NotLessThan_hook, dimension);
+	}
+
     int alignment = 64;
     int aligned = (dimension + (alignment - 1)) & ~(alignment - 1);
     if (aligned < alignment) 
@@ -309,8 +111,6 @@ int lowestPowerof2NotLessThan(int dimension) {
       (  (uint64_t)(low32)  & 0xFFFFFFFFULL )        \
 )
 
-
-// void D3DDevice_SetTexture(ulong param_1,int param_2)
 so_hook D3DDevice_SetTexture_hook;
 extern float g_uvFactor;
 extern float g_uvFactorY;
@@ -324,7 +124,6 @@ typedef void (*D3DDevice_SetVertexShaderConstantFastFn)(int reg, uint32_t pConst
 so_hook D3DDevice_SetVertexShaderConstantNotInline_hook;
 void D3DDevice_SetVertexShaderConstantNotInline_patched(int reg, uint32_t pConstantData, uint32_t ConstantCount) {
 	//Profiler_BeginSample("D3DDevice_SetVertexShaderConstantNotInline");
-	//SO_CONTINUE(float, D3DDevice_SetVertexShaderConstantNotInline_hook, reg, pConstantData, ConstantCount);
 	D3DDevice_SetVertexShaderConstantFastFn D3DDevice_SetVertexShaderConstantFast = (D3DDevice_SetVertexShaderConstantFastFn)D3DDevice_SetVertexShaderConstantFast_addr;
 	D3DDevice_SetVertexShaderConstantFast(reg, pConstantData, ConstantCount);
 	//Profiler_EndSample();
@@ -378,24 +177,12 @@ void D3DDevice_SetTexture(uint32_t param_1, int param_2) {
 		//logv_debug("D3DDevice_SetTexture: width: %i, height: %i\n", width, height);
 
 		if (width == 249 && height == 314) {
-			//logv_error("D3DDevice_SetTexture: potWidth: %i, potHeight: %i\n", potWidth, potHeight);
-			//logv_error("D3DDevice_SetTexture: scaleX: %f, scaleY: %f\n", scaleX, scaleY);
-			//logv_error("D3DDevice_SetTexture: g_uvFactor: %f, g_uvFactorY: %f\n", g_uvFactor, g_uvFactorY);
 			float scale[4] = {g_uvFactor * scaleX, g_uvFactorY * scaleY, 0.0f, 0.0f};
-			// if (g_uvFactor > 0.0f) {
-			// 	scale[0] = 1.0f;
-			// 	scale[1] = 1.0f;
-			// }
-			//logv_error("D3DDevice_SetTexture: scaleX: %f, scaleY: %f\n", g_uvFactor,  g_uvFactor *);
-			//D3DDevice_SetVertexShaderConstantNotInlineFn D3DDevice_SetVertexShaderConstantNotInline = (D3DDevice_SetVertexShaderConstantNotInlineFn)D3DDevice_SetVertexShaderConstantNotInline_addr;
-			//D3DDevice_SetVertexShaderConstantNotInline(24, (uint32_t)scale, 1);
+
 			SO_CONTINUE(float, D3DDevice_SetVertexShaderConstantNotInline_hook, 24, (uint32_t)scale, 1);
 		}
 		else {
 			float scale[4] = {scaleX, scaleY, 0.0f, 0.0f};
-			//float scale[4] = {g_uvFactor * scaleX, g_uvFactorY * scaleY, 0.0f, 0.0f};
-			//D3DDevice_SetVertexShaderConstantNotInlineFn D3DDevice_SetVertexShaderConstantNotInline = (D3DDevice_SetVertexShaderConstantNotInlineFn)D3DDevice_SetVertexShaderConstantNotInline_addr;
-			//D3DDevice_SetVertexShaderConstantNotInline(24, (uint32_t)scale, 1);
 			SO_CONTINUE(float, D3DDevice_SetVertexShaderConstantNotInline_hook, 24, (uint32_t)scale, 1);
 		}
 	}
@@ -444,9 +231,9 @@ void __aeabi_memclr_patched(void *dst, int n) {
 }
 void __aeabi_memcpy_patched(void *dst, const void *src, int n) {
 	//sceRazorCpuPushMarkerWithHud("__aeabi_memcpy_patched", SCE_RAZOR_COLOR_YELLOW, SCE_RAZOR_MARKER_DISABLE_HUD);
-	memcpy(dst, src, n);
+//	memcpy(dst, src, n);
 	//sceRazorCpuPopMarker();
-/*
+
 	//Profiler_BeginSample("memcpy");
 	int* caller = __builtin_return_address(0);
 	if (caller == LOC(0x00132478))
@@ -471,7 +258,7 @@ void __aeabi_memcpy_patched(void *dst, const void *src, int n) {
 
 	//Profiler_EndSample();
 	memcpy(dst, src, n);
-*/
+
 }
 
 
@@ -564,12 +351,8 @@ void JBE_D3DDevice_Swap(void *param_1, int param_2) {
 
 so_hook DisplayPF_Swap_hook;
 void DisplayPF_Swap(void *param_1) {
-	//logv_error("DisplayPF_Swap(%p)\n", param_1);
-	//Profiler_BeginSample("DisplayPF::Swap");
 	SO_CONTINUE(void *, DisplayPF_Swap_hook, param_1);
-	//Profiler_EndSample();
-	//log_error("DisplayPF_Swap finished\n");
-	// only print every 100 frames
+
 	static int frameCount = 0;
 	frameCount++;
 	if (frameCount == 1) {
@@ -577,13 +360,6 @@ void DisplayPF_Swap(void *param_1) {
 	}
 	bool shouldLog = (frameCount % 100 == 0);
 	if (log_profiler && shouldLog) {
-		//sceClibPrintf("Saving profiling output\n");
-		//char fname[256];
-		//sprintf(fname, "ux0:data/prof_%d.out", profiling_idx++);
-		//gprof_stop(fname, 1);
-
-		// Continue the profiler
-		//gprof_start();
 
 		uint64_t timeNow = sceKernelGetProcessTimeWide();
 		uint64_t deltaSinceLastDump = timeNow - lastFrameTime;
@@ -719,20 +495,6 @@ void D3DDevice_AsyncRenderCB(void *device_ptr) {
     fnRelease(display);
 }
 
-// void __attribute__((no_instrument_function,always_inline))
-// __cyg_profile_func_enter(void *this_fn, void *call_site) {
-// 	static char label[32];
-//     snprintf(label, sizeof(label), "func_0x%08X", this_fn);
-// 	//logv_debug("Entering function: %p, called from: %p\n", this_fn, call_site);
-// 	sceRazorCpuPushMarkerWithHud(label, SCE_RAZOR_COLOR_YELLOW, SCE_RAZOR_MARKER_DISABLE_HUD);
-// }
-
-// void __attribute__((no_instrument_function,always_inline))
-// __cyg_profile_func_exit(void *this_fn, void *call_site) {
-// 	sceRazorCpuPopMarker();
-// }
-
-
 so_hook System_BeginFrame_hook;
 void System_BeginFrame(void *param_1) {
 	// This is never called anyway
@@ -744,18 +506,6 @@ void System_BeginFrame(void *param_1) {
 _Static_assert(offsetof(struct d3dDeviceFake, cmd) == 0x8,
                "`cmd` is not at offset 0x8 – fix the struct or add packed!");
 
-
-//static const char *gCmdLabels[256];
-
-// __attribute__((constructor))
-// static void init_cmd_labels(void)
-// {
-//     static char buf[256][13];   /* "cmdType_0xFF\0" = 12 chars + NUL */
-//     for (int i = 0; i < 256; ++i) {
-//         snprintf(buf[i], sizeof buf[i], "cmdType_0x%02X", i);
-//         gCmdLabels[i] = buf[i];
-//     }
-// }
 
 so_hook D3DDevice_ReadCommand_hook;
 void D3DDevice_ReadCommand(struct d3dDeviceFake *thisPtr) {
@@ -807,50 +557,206 @@ bool System_HasNEON(void) {
 	return result;
 }
 
+typedef struct {
+    void* field0_0x0;
+    uint32_t size;
+} ParamBlock;
+
+typedef struct {
+    void* cmdBufferWritePtr;
+    int frameNumberOfCmdWritter;
+    void* cmdBufferStart;
+    int frameNumberOfCmdReader;
+    void* tmpCmdWrite;
+	uint8_t unknown[14]; // padding or unknown data
+	uint8_t frameBitToToggle;
+	uint8_t unknown2;
+    void* field16_0x24;
+    void* cmdBufferEnd;
+    int commandSize;
+} D3DDevice_2;
+
+_Static_assert(offsetof(D3DDevice_2, tmpCmdWrite) == 0x10,
+			   "`tmpCmdWrite` is not at offset 0x10 – fix the struct or add packed!");
+// assert that field16_0x24 is at offset 0x24
+_Static_assert(offsetof(D3DDevice_2, field16_0x24) == 0x24,
+			   "`field16_0x24` is not at offset 0x24 – fix the struct or add packed!");
+
+void WriteCommand_Optimized(D3DDevice_2* this, 
+                                     const int* param_1, 
+                                     const ParamBlock* paramsBlock, 
+                                     const uint32_t* param_3) {
+	// Cache frequently accessed struct members to reduce pointer dereferencing
+	uint32_t *cmdBufWritePtr = (uint32_t *)this->cmdBufferWritePtr;
+	uint32_t *cmdBufferStart = (uint32_t *)this->cmdBufferStart;
+	uint32_t *cmdBufferEnd = (uint32_t *)this->cmdBufferEnd;
+	int cmdWritterFrameNum = this->frameNumberOfCmdWritter;
+	int cmdReaderFrameNum = this->frameNumberOfCmdReader;
+	
+	// Pre-calculate total size once
+	const uint32_t paramSize = paramsBlock->size;
+	const int totalSizeWords = ((paramSize + 3U) >> 2) + 4;
+	
+	// Fast path for common case: totalSizeWords = 8 (most frequent)
+	if (__builtin_expect(totalSizeWords == 8, 1)) {
+		// Fast buffer check for size 8
+		if (__builtin_expect(cmdBufferEnd >= cmdBufWritePtr + 8, 1)) {
+			// Common case: sufficient buffer space available
+			this->commandSize = 8;
+			
+			// Direct sequential writes for optimal cache performance
+			cmdBufWritePtr[0] = 0x819; // (8 << 8) | 0x19
+			cmdBufWritePtr[1] = *param_1;
+			
+			const uint32_t paramWords = (paramSize + 3U) >> 2;
+			cmdBufWritePtr[2] = paramWords;
+			
+			// Optimized copy for common param sizes: 64, 128, 192 bytes
+			const uint32_t* src = (const uint32_t*)paramsBlock->field0_0x0;
+			uint32_t* dst = &cmdBufWritePtr[3];
+			
+			// Fast unrolled copies for common sizes
+			if (__builtin_expect(paramSize == 64, 1)) {
+				// 64 bytes = 16 words - unrolled copy
+				dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
+				dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
+				dst[8] = src[8]; dst[9] = src[9]; dst[10] = src[10]; dst[11] = src[11];
+				dst[12] = src[12]; dst[13] = src[13]; dst[14] = src[14]; dst[15] = src[15];
+			} else if (__builtin_expect(paramSize == 128, 1)) {
+				// 128 bytes = 32 words - unrolled copy in blocks
+				for (uint32_t i = 0; i < 32; i += 8) {
+					dst[i] = src[i]; dst[i+1] = src[i+1]; dst[i+2] = src[i+2]; dst[i+3] = src[i+3];
+					dst[i+4] = src[i+4]; dst[i+5] = src[i+5]; dst[i+6] = src[i+6]; dst[i+7] = src[i+7];
+				}
+			} else if (__builtin_expect(paramSize == 192, 1)) {
+				// 192 bytes = 48 words - unrolled copy in blocks
+				for (uint32_t i = 0; i < 48; i += 8) {
+					dst[i] = src[i]; dst[i+1] = src[i+1]; dst[i+2] = src[i+2]; dst[i+3] = src[i+3];
+					dst[i+4] = src[i+4]; dst[i+5] = src[i+5]; dst[i+6] = src[i+6]; dst[i+7] = src[i+7];
+				}
+			} else {
+				// Fallback for other sizes
+				__aeabi_memcpy(dst, paramsBlock->field0_0x0, paramSize);
+			}
+			
+			cmdBufWritePtr[3 + paramWords] = *param_3;
+			
+			// Update pointers with single calculation
+			this->tmpCmdWrite = (void*)&cmdBufWritePtr[4 + paramWords];
+			this->cmdBufferWritePtr = (void*)(cmdBufWritePtr + 8);
+			return;
+		}
+	}
+	
+	// Slow path for buffer wrapping or non-standard sizes
+	if (__builtin_expect(cmdBufferEnd < cmdBufWritePtr + totalSizeWords, 0))
+	{
+		// Wait for buffer space, using cached frame numbers
+		while ((cmdWritterFrameNum != cmdReaderFrameNum) && (cmdBufWritePtr == cmdBufferStart)) 
+		{
+			usleep(1000);
+			cmdWritterFrameNum = this->frameNumberOfCmdWritter;
+			cmdReaderFrameNum = this->frameNumberOfCmdReader;
+			cmdBufWritePtr = (uint32_t *)this->cmdBufferWritePtr;
+		}
+
+		*cmdBufWritePtr = 10;
+		cmdBufWritePtr = (uint32_t *)this->field16_0x24;
+		cmdWritterFrameNum++;
+		
+		// Update struct members once
+		this->cmdBufferWritePtr = cmdBufWritePtr;
+		this->frameNumberOfCmdWritter = cmdWritterFrameNum;
+	}
+	
+	// Set command size and temp write pointer
+	this->commandSize = totalSizeWords;
+	uint32_t *tmpCmdWrite = cmdBufWritePtr;
+	
+	// Optimized frame sync check
+	if (__builtin_expect(cmdWritterFrameNum != cmdReaderFrameNum, 0)) 
+	{
+		uint32_t *cmdEndPtr = cmdBufWritePtr + totalSizeWords;
+		do
+		{
+			if ((cmdEndPtr <= cmdBufferStart) || (cmdBufferStart < cmdBufWritePtr)) break;
+			usleep(1000);
+			tmpCmdWrite = (uint32_t *)this->tmpCmdWrite;
+		} while (this->frameNumberOfCmdWritter != this->frameNumberOfCmdReader);
+		cmdBufWritePtr = tmpCmdWrite;
+	}
+	
+	// Write command header efficiently
+	tmpCmdWrite = cmdBufWritePtr + 1;
+	*cmdBufWritePtr = (totalSizeWords << 8) | 0x19;
+	
+	// Write param_1
+	*tmpCmdWrite = *param_1;
+	tmpCmdWrite++;
+	
+	// Calculate words needed for params, cache the calculation
+	const uint32_t paramWords = (paramSize + 3U) >> 2;
+	*tmpCmdWrite = paramWords;
+	tmpCmdWrite++;
+	
+	// Direct memory copy using cached pointers - optimized for common sizes
+	const uint32_t* src = (const uint32_t*)paramsBlock->field0_0x0;
+	uint32_t* dst = tmpCmdWrite;
+	
+	if (__builtin_expect(paramSize == 64, 1)) {
+		// 64 bytes = 16 words - unrolled copy
+		dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
+		dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
+		dst[8] = src[8]; dst[9] = src[9]; dst[10] = src[10]; dst[11] = src[11];
+		dst[12] = src[12]; dst[13] = src[13]; dst[14] = src[14]; dst[15] = src[15];
+	} else if (__builtin_expect(paramSize == 128, 1)) {
+		// 128 bytes = 32 words - unrolled copy in blocks
+		for (uint32_t i = 0; i < 32; i += 8) {
+			dst[i] = src[i]; dst[i+1] = src[i+1]; dst[i+2] = src[i+2]; dst[i+3] = src[i+3];
+			dst[i+4] = src[i+4]; dst[i+5] = src[i+5]; dst[i+6] = src[i+6]; dst[i+7] = src[i+7];
+		}
+	} else if (__builtin_expect(paramSize == 192, 1)) {
+		// 192 bytes = 48 words - unrolled copy in blocks
+		for (uint32_t i = 0; i < 48; i += 8) {
+			dst[i] = src[i]; dst[i+1] = src[i+1]; dst[i+2] = src[i+2]; dst[i+3] = src[i+3];
+			dst[i+4] = src[i+4]; dst[i+5] = src[i+5]; dst[i+6] = src[i+6]; dst[i+7] = src[i+7];
+		}
+	} else {
+		// Fallback for other sizes
+		__aeabi_memcpy(dst, paramsBlock->field0_0x0, paramSize);
+	}
+	tmpCmdWrite += paramWords;
+	
+	// Write final parameter
+	*tmpCmdWrite = *param_3;
+	tmpCmdWrite++;
+	
+	// Update struct members with final values
+	this->tmpCmdWrite = (void*)tmpCmdWrite;
+	this->cmdBufferWritePtr = (void *)((uint8_t*)this->cmdBufferWritePtr + totalSizeWords * 4);
+}
+
+so_hook WriteCommand_hook;
+
 so_hook D3DDevice_Swap_hook;
 
 
 uint64_t lastFrameTimeMainThread = 0;
 void D3DDevice_Swap(int flags) {
-	//Profiler_BeginSample("D3DDevice_Swap (main thread)");
 	SO_CONTINUE(void *, D3DDevice_Swap_hook, flags);
-	//Profiler_EndSample();
-
-	// if (log_profiler) {
-	// 	// uint64_t timeNow = sceKernelGetProcessTimeWide();
-	// 	// uint64_t frameTime = timeNow - lastFrameTimeMainThread;
-	// 	// logv_error("[t:%d]D3DDevice_Swap delta %f ms (%d) thread ID: 0x%X, flags: %x\n",
-	// 	// 	timeNow, (float)frameTime / 1000.0f, (int)frameTime, sceKernelGetThreadId(), flags);
-	// 	// lastFrameTimeMainThread = timeNow;
-
-	// 	Profiler_PrintAll();
-	// 	Profiler_ResetAll();
-	// }
 }
 
 so_hook renderDelayedShadows_hook;
 void renderDelayedShadows(void) {
-	//logv_error("renderDelayedShadows()\n");
-	//Profiler_BeginSample("renderDelayedShadows");
 	SO_CONTINUE(void *, renderDelayedShadows_hook);
-	//Profiler_EndSample();
-	//log_error("renderDelayedShadows finished\n");
 }
 so_hook runObjects_hook;
 void runObjects(void) {
-	//logv_error("runObjects()\n");
-	//Profiler_BeginSample("runObjects");
 	SO_CONTINUE(void *, runObjects_hook);
-	//Profiler_EndSample();
-	//log_error("runObjects finished\n");
 }
 so_hook drawObjects_hook;
 void drawObjects(void) {
-	//logv_error("drawObjects()\n");
-	//Profiler_BeginSample("drawObjects");
 	SO_CONTINUE(void *, drawObjects_hook);
-	//Profiler_EndSample();
-	//log_error("drawObjects finished\n");
 }
 so_hook MEMAllocFromExpHeapEx_hook;
 void *MEMAllocFromExpHeapEx(void *heap, int size, int flags) {
@@ -1120,46 +1026,379 @@ void usprintf_patched(uint16_t *output_buffer, const uint16_t *format_string,
 
 so_hook XGGetPixelBufferMinAlpha_hook;
 uint XGGetPixelBufferMinAlpha(uint8_t (*param_1) [16], uint32_t param_2,int param_3,int param_4) {
-	return 0;
-	//return SO_CONTINUE(uint, XGGetPixelBufferMinAlpha_hook, param_1, param_2, param_3, param_4);
+	//return 0;
+	return SO_CONTINUE(uint, XGGetPixelBufferMinAlpha_hook, param_1, param_2, param_3, param_4);
 }
 
 so_hook XGGetPixelBufferMaxAlpha_hook;
 uint XGGetPixelBufferMaxAlpha(uint8_t (*param_1) [16], uint32_t param_2,int param_3,int param_4) {
-	return 255;
-	//return SO_CONTINUE(uint, XGGetPixelBufferMaxAlpha_hook, param_1, param_2, param_3, param_4);
+	//return 255;
+	return SO_CONTINUE(uint, XGGetPixelBufferMaxAlpha_hook, param_1, param_2, param_3, param_4);
 }
+
+typedef struct registeredPalette {
+	uint32_t paletteAddr;
+	uint32_t glTexId;
+} registeredPalette;
+
+uint32_t curTexIndex = 0;
+registeredPalette registeredPalettes[1024];
+
+void registerPalette(uint32_t paletteAddr, uint32_t glTexId) {
+	if (curTexIndex < 1024) {
+		registeredPalettes[curTexIndex].paletteAddr = paletteAddr;
+		registeredPalettes[curTexIndex].glTexId = glTexId;
+		curTexIndex++;
+		logv_error("registerPalette: registered palette %p with glTexId %u\n", (void*)paletteAddr, glTexId);
+	}
+	else {
+		log_error("registerPalette: exceeded max registered palettes\n");
+	}
+}
+
+int isPaletteRegistered(uint32_t paletteAddr) {
+	for (uint32_t i = 0; i < curTexIndex; i++) {
+		if (registeredPalettes[i].paletteAddr == paletteAddr) {
+			logv_error("isPaletteRegistered: palette %p is already registered with glTexId %u\n", (void*)paletteAddr, registeredPalettes[i].glTexId);
+			return registeredPalettes[i].glTexId;
+		}
+	}
+	return 0;
+}
+
+unsigned char Palette[256][4] = {
+    {0x00,0x00,0x00,0x00},
+    {0x00,0x00,0x00,0x14},
+    {0x00,0x00,0x00,0x0A},
+    {0x02,0x02,0x02,0xF6},
+    {0x02,0x02,0x02,0x42},
+    {0x00,0x00,0x02,0x22},
+    {0x00,0x02,0x02,0x32},
+    {0x00,0x00,0x02,0x3A},
+    {0x02,0x02,0x04,0xD6},
+    {0x02,0x04,0x04,0x2C},
+    {0x02,0x02,0x04,0xEC},
+    {0x02,0x02,0x04,0x66},
+    {0x06,0x08,0x06,0xFE},
+    {0x04,0x04,0x06,0xFE},
+    {0x03,0x06,0x09,0x88},
+    {0x06,0x08,0x08,0xA0},
+    {0x04,0x04,0x09,0x5A},
+    {0x03,0x06,0x09,0xBE},
+    {0x08,0x08,0x08,0xFE},
+    {0x03,0x06,0x09,0x4C},
+    {0x08,0x0A,0x08,0xFE},
+    {0x0A,0x0F,0x0A,0xFE},
+    {0x0A,0x0C,0x0A,0xFE},
+    {0x08,0x08,0x0A,0xFE},
+    {0x0A,0x0A,0x0A,0xFE},
+    {0x03,0x08,0x0D,0xF4},
+    {0x05,0x08,0x0D,0x7A},
+    {0x0C,0x0E,0x0C,0xFE},
+    {0x05,0x08,0x0D,0xCA},
+    {0x0C,0x11,0x0C,0xFE},
+    {0x05,0x08,0x0D,0xFE},
+    {0x0C,0x0C,0x0C,0xFE},
+    {0x0E,0x10,0x0E,0xFE},
+    {0x07,0x0A,0x0F,0xE6},
+    {0x0E,0x13,0x0E,0xFE},
+    {0x0C,0x0C,0x0E,0xFE},
+    {0x09,0x0C,0x0F,0x92},
+    {0x0F,0x17,0x0F,0xFE},
+    {0x10,0x12,0x10,0xFE},
+    {0x07,0x0C,0x11,0xFE},
+    {0x0B,0x0E,0x11,0xA8},
+    {0x0E,0x10,0x10,0xFE},
+    {0x09,0x0C,0x11,0xD8},
+    {0x10,0x15,0x10,0xFE},
+    {0x09,0x0E,0x13,0xFE},
+    {0x11,0x19,0x11,0xFE},
+    {0x0B,0x10,0x13,0x48},
+    {0x0B,0x0E,0x13,0xB6},
+    {0x0F,0x15,0x12,0xFE},
+    {0x12,0x17,0x12,0xFE},
+    {0x0D,0x10,0x13,0xC0},
+    {0x14,0x19,0x14,0xFE},
+    {0x13,0x1B,0x13,0xFE},
+    {0x0F,0x14,0x17,0x3C},
+    {0x15,0x20,0x15,0xFE},
+    {0x0D,0x12,0x17,0xC6},
+    {0x06,0x0E,0x18,0xF8},
+    {0x15,0x1D,0x15,0xFE},
+    {0x15,0x22,0x15,0xFE},
+    {0x13,0x1B,0x16,0xFE},
+    {0x0A,0x12,0x17,0xDC},
+    {0x11,0x14,0x17,0xFE},
+    {0x11,0x16,0x16,0x3C},
+    {0x13,0x19,0x16,0xFE},
+    {0x0B,0x10,0x18,0xFE},
+    {0x0F,0x16,0x19,0xDE},
+    {0x13,0x18,0x18,0x3C},
+    {0x15,0x1D,0x18,0xFE},
+    {0x17,0x24,0x17,0xFE},
+    {0x19,0x26,0x19,0xFE},
+    {0x0C,0x16,0x1C,0xA0},
+    {0x15,0x22,0x1A,0xFE},
+    {0x0C,0x16,0x1C,0xFA},
+    {0x0F,0x14,0x1C,0xF4},
+    {0x15,0x1A,0x1A,0x3C},
+    {0x0A,0x12,0x1C,0xFE},
+    {0x17,0x21,0x1A,0xFE},
+    {0x1B,0x2A,0x1B,0xFE},
+    {0x19,0x23,0x1C,0xFE},
+    {0x13,0x1A,0x1D,0x52},
+    {0x17,0x24,0x1C,0xFE},
+    {0x1B,0x28,0x1B,0xFE},
+    {0x0A,0x14,0x1E,0xFE},
+    {0x0B,0x18,0x20,0xE4},
+    {0x0B,0x18,0x20,0x88},
+    {0x10,0x18,0x20,0xF6},
+    {0x16,0x26,0x1E,0xFE},
+    {0x12,0x1A,0x1F,0xB4},
+    {0x1D,0x2C,0x1D,0xFE},
+    {0x15,0x1A,0x1F,0xFE},
+    {0x1B,0x28,0x1D,0xFE},
+    {0x1B,0x2A,0x1D,0xFE},
+    {0x0E,0x16,0x20,0xFE},
+    {0x19,0x23,0x1E,0xFE},
+    {0x18,0x28,0x1E,0xFE},
+    {0x1F,0x31,0x1F,0xFE},
+    {0x0D,0x1A,0x22,0x88},
+    {0x1C,0x2F,0x1F,0xFE},
+    {0x0B,0x18,0x23,0x88},
+    {0x0B,0x18,0x25,0xFE},
+    {0x1D,0x2A,0x22,0xFE},
+    {0x1F,0x2C,0x21,0xFE},
+    {0x21,0x30,0x21,0xFE},
+    {0x1C,0x2C,0x22,0xFE},
+    {0x0D,0x1D,0x24,0x88},
+    {0x1F,0x2E,0x21,0xFE},
+    {0x22,0x3C,0x22,0xFE},
+    {0x0F,0x1C,0x27,0xFE},
+    {0x20,0x35,0x23,0xFE},
+    {0x1E,0x30,0x23,0xFE},
+    {0x14,0x19,0x26,0xFE},
+    {0x1C,0x2E,0x24,0xFE},
+    {0x20,0x33,0x23,0xFE},
+    {0x1E,0x30,0x26,0xFE},
+    {0x13,0x20,0x28,0xFE},
+    {0x21,0x2B,0x26,0xFE},
+    {0x18,0x20,0x28,0x96},
+    {0x16,0x20,0x28,0xA2},
+    {0x0D,0x1C,0x29,0xFE},
+    {0x11,0x1E,0x2B,0xEA},
+    {0x20,0x35,0x28,0xFE},
+    {0x15,0x22,0x2A,0xF0},
+    {0x22,0x32,0x28,0xFE},
+    {0x17,0x27,0x2A,0xFE},
+    {0x0F,0x1E,0x2B,0xFE},
+    {0x1D,0x22,0x2A,0xC0},
+    {0x22,0x34,0x27,0xFE},
+    {0x16,0x20,0x2A,0xFE},
+    {0x20,0x32,0x28,0xFE},
+    {0x0E,0x21,0x2B,0xFE},
+    {0x26,0x3B,0x26,0xFE},
+    {0x22,0x37,0x27,0xFE},
+    {0x13,0x25,0x2D,0xFE},
+    {0x22,0x37,0x2A,0xFE},
+    {0x15,0x22,0x2D,0xFE},
+    {0x24,0x39,0x29,0xFE},
+    {0x0E,0x20,0x2D,0xFE},
+    {0x24,0x36,0x29,0xFE},
+    {0x25,0x32,0x2A,0xFE},
+    {0x1E,0x26,0x2E,0xB8},
+    {0x10,0x20,0x30,0xEE},
+    {0x1E,0x28,0x2E,0x5E},
+    {0x24,0x39,0x2C,0xFE},
+    {0x10,0x22,0x2F,0xFE},
+    {0x1A,0x24,0x2E,0xFE},
+    {0x15,0x27,0x2F,0xFE},
+    {0x28,0x3F,0x2D,0xFE},
+    {0x2C,0x48,0x2C,0xFE},
+    {0x0E,0x22,0x32,0xFE},
+    {0x14,0x27,0x31,0xFE},
+    {0x26,0x3B,0x2E,0xFE},
+    {0x1F,0x36,0x2F,0xFE},
+    {0x2A,0x41,0x2D,0xFE},
+    {0x15,0x22,0x31,0xFE},
+    {0x26,0x3D,0x2D,0xFE},
+    {0x19,0x26,0x31,0xFE},
+    {0x23,0x3B,0x2E,0xFE},
+    {0x12,0x24,0x31,0xFE},
+    {0x2A,0x44,0x2C,0xFE},
+    {0x10,0x24,0x34,0xFE},
+    {0x22,0x2A,0x32,0xA8},
+    {0x19,0x28,0x33,0xFE},
+    {0x26,0x36,0x30,0xFE},
+    {0x2A,0x3F,0x2F,0xFE},
+    {0x2A,0x41,0x2F,0xFE},
+    {0x2C,0x43,0x2F,0xFE},
+    {0x28,0x3D,0x30,0xFE},
+    {0x14,0x29,0x36,0xFE},
+    {0x2D,0x3A,0x32,0xFE},
+    {0x28,0x3A,0x32,0xFE},
+    {0x0F,0x24,0x36,0xFE},
+    {0x1B,0x2D,0x35,0xFE},
+    {0x19,0x28,0x35,0xFE},
+    {0x26,0x2E,0x36,0xAE},
+    {0x16,0x2B,0x38,0xFE},
+    {0x2C,0x3E,0x34,0xFE},
+    {0x2E,0x45,0x33,0xFE},
+    {0x11,0x29,0x38,0xFE},
+    {0x1F,0x2F,0x36,0xFE},
+    {0x2E,0x48,0x33,0xFE},
+    {0x0F,0x26,0x39,0xFE},
+    {0x2C,0x43,0x33,0xFE},
+    {0x16,0x23,0x38,0xFE},
+    {0x30,0x4A,0x35,0xFE},
+    {0x1A,0x2F,0x39,0xFE},
+    {0x1D,0x2C,0x39,0xFE},
+    {0x32,0x4C,0x34,0xFE},
+    {0x15,0x2D,0x3A,0xFE},
+    {0x1C,0x33,0x39,0xFE},
+    {0x11,0x28,0x3B,0xFE},
+    {0x13,0x2A,0x3D,0xFE},
+    {0x2F,0x49,0x37,0xFE},
+    {0x1C,0x31,0x3B,0xFE},
+    {0x2C,0x36,0x3C,0xB8},
+    {0x1E,0x38,0x3D,0xFE},
+    {0x17,0x2F,0x3E,0xFE},
+    {0x1E,0x33,0x3D,0xFE},
+    {0x32,0x49,0x39,0xFE},
+    {0x33,0x50,0x39,0xFE},
+    {0x20,0x3A,0x3C,0xFE},
+    {0x19,0x31,0x3E,0xFE},
+    {0x27,0x39,0x3E,0xFE},
+    {0x19,0x33,0x40,0xFE},
+    {0x25,0x34,0x3F,0xFE},
+    {0x2E,0x3B,0x3D,0xFE},
+    {0x1E,0x35,0x3F,0xFE},
+    {0x29,0x3B,0x40,0xFE},
+    {0x25,0x32,0x41,0xEA},
+    {0x1D,0x39,0x44,0xFE},
+    {0x36,0x48,0x40,0xFE},
+    {0x24,0x39,0x43,0xFE},
+    {0x24,0x3E,0x43,0xFE},
+    {0x1D,0x35,0x44,0xFE},
+    {0x22,0x37,0x44,0xFE},
+    {0x22,0x34,0x44,0xFE},
+    {0x18,0x35,0x45,0xFE},
+    {0x21,0x3B,0x43,0xFE},
+    {0x2B,0x3D,0x42,0xFE},
+    {0x3A,0x4F,0x3F,0xFE},
+    {0x2A,0x42,0x44,0xFE},
+    {0x1F,0x39,0x46,0xFE},
+    {0x2B,0x3D,0x45,0xFE},
+    {0x1F,0x3B,0x46,0xFE},
+    {0x23,0x3D,0x48,0xFE},
+    {0x21,0x3D,0x4A,0xFA},
+    {0x25,0x3D,0x4A,0xFE},
+    {0x21,0x3D,0x4A,0xFE},
+    {0x25,0x42,0x49,0xFE},
+    {0x2A,0x3F,0x49,0xFE},
+    {0x2A,0x41,0x49,0xFE},
+    {0x22,0x42,0x4C,0xFA},
+    {0x21,0x3B,0x4D,0xFE},
+    {0x25,0x3D,0x4C,0xFA},
+    {0x27,0x41,0x4C,0xFE},
+    {0x29,0x46,0x4B,0xFE},
+    {0x27,0x3C,0x4E,0xFA},
+    {0x27,0x3F,0x4E,0xFA},
+    {0x24,0x41,0x51,0xFA},
+    {0x30,0x42,0x4F,0xFC},
+    {0x2C,0x40,0x50,0xFE},
+    {0x23,0x3A,0x51,0xFA},
+    {0x2B,0x48,0x4F,0xFE},
+    {0x24,0x43,0x50,0xFE},
+    {0x20,0x3F,0x51,0xFE},
+    {0x24,0x46,0x50,0xFE},
+    {0x22,0x3C,0x51,0xFA},
+    {0x32,0x49,0x53,0xFE},
+    {0x2C,0x4C,0x56,0xFE},
+    {0x33,0x4D,0x58,0xFE},
+    {0x35,0x4F,0x5A,0xFE},
+    {0x37,0x53,0x5E,0xFE},
+    {0x3D,0x57,0x5F,0xFE},
+    {0x41,0x5E,0x63,0xFE},
+    {0x40,0x60,0x6A,0xFE},
+    {0x47,0x66,0x6E,0xFE},
+    {0x4F,0x69,0x71,0xFE}
+};
+
 
 so_hook ProcessAndUploadTexture_hook;
 void ProcessAndUploadTexture
               (int glTarget,uint8_t *sourceTextureData,uint formatToSwitchParam,int isSwizzled,
                int isCompressed,uint width,uint height,uint level,uint sourcePitch,int paddingFlag,
-               uint palette,uint allocateNewTexture,int keepSwizzled,ushort *alphaRange)
+               uint8_t * palette,uint allocateNewTexture,int keepSwizzled,ushort *alphaRange)
 {
-	if ((formatToSwitchParam & 0xffffff7f) == 0xb && formatToSwitchParam == 139) 
+	// SO_CONTINUE(void *, ProcessAndUploadTexture_hook, glTarget, sourceTextureData, formatToSwitchParam,
+	// 	isSwizzled, isCompressed, width, height, level, sourcePitch, paddingFlag,
+	// 	palette, allocateNewTexture, keepSwizzled, alphaRange);
+	// return;
+	
+	// // log the parameters with name
+	// logv_error("ProcessAndUploadTexture(glTarget: %d, sourceTextureData: %p, formatToSwitchParam: %d, isSwizzled: %d, isCompressed: %d, width: %u, height: %u, level: %u, sourcePitch: %u, paddingFlag: %d, palette: %u, allocateNewTexture: %d, keepSwizzled: %d, alphaRange: %p)\n",
+	// 	glTarget, sourceTextureData, formatToSwitchParam, isSwizzled, isCompressed,
+	//  	width, height, level, sourcePitch, paddingFlag, palette, allocateNewTexture, keepSwizzled, alphaRange);
+
+
+	if (level != 1) {
+		return;
+	}
+
+	if ((formatToSwitchParam & 0xffffff7f) == 0xb && formatToSwitchParam == 139 && sourcePitch != 4096 && palette) 
 	{
+		//glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 		// For index texture
 		glTexImage2D_fake(glTarget,
 			0, // level
-			0x1908, //GL_RGBA, 
+			GL_LUMINANCE, //GL_RGBA, 
 			width, // whatever original width was passed to DoTheFinalGPUUpload
 			height, // whatever original height
 			0, // border
-			0x1908, //GL_RGBA, // format = internalFormat
-			0x1401, //GL_UNSIGNED_BYTE, // type ?
+			GL_LUMINANCE, //GL_RGBA, // format = internalFormat
+			GL_UNSIGNED_BYTE, //GL_UNSIGNED_BYTE, // type ?
 			sourceTextureData); // data, comes from the function args
+
+ 		glTexParameteri(glTarget,0x813d,level - 1);
+
+		if (palette != NULL) {
+			//palette = (uint8_t*)Palette;
+			uint32_t paletteId = isPaletteRegistered((uint32_t)palette);
+			if (paletteId == 0) {
+				// not registered yet
+				uint32_t paletteId;		
+				glGenTextures(1, &paletteId);
+				registerPalette((uint32_t)palette, paletteId);
+			}
+
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_2D, paletteId);
+
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // defensive; rows are 256*4 = 1024 (already aligned)
+			// fin
+			glTexImage2D(GL_TEXTURE_2D, 0,
+						GL_RGBA,              // internalFormat
+						256, 1, 0,
+						GL_RGBA,              // format
+						GL_UNSIGNED_BYTE,
+						palette);
+
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			//glUniform1i(glGetUniformLocation(program, "u2"), 2);
+		}
 
 		return;
 	}
 
-
-
-	// log the parameters with name
-	logv_error("ProcessAndUploadTexture(glTarget: %d, sourceTextureData: %p, formatToSwitchParam: %d, isSwizzled: %d, isCompressed: %d, width: %u, height: %u, level: %u, sourcePitch: %u, paddingFlag: %d, palette: %u, allocateNewTexture: %d, keepSwizzled: %d, alphaRange: %p)\n",
-		glTarget, sourceTextureData, formatToSwitchParam, isSwizzled, isCompressed,
-		width, height, level, sourcePitch, paddingFlag, palette, allocateNewTexture, keepSwizzled, alphaRange);
-
-	//sourcePitch = width;
+	if (sourcePitch != 4096) {
+		sourcePitch = width;
+	}
 
 	SO_CONTINUE(void *, ProcessAndUploadTexture_hook, glTarget, sourceTextureData, formatToSwitchParam,
 		isSwizzled, isCompressed, width, height, level, sourcePitch, paddingFlag,
@@ -1171,8 +1410,8 @@ void DoTheFinalGPUUpload(uint32_t glTarget, uint32_t level, uint8_t (*pixelData)
                         uint32_t textureFormatToSwitch, uint width, uint height, uint32_t imageSize,
 						int shouldUploadToGPU)
 {
-	logv_error("DoTheFinalGPUUpload(glTarget: 0x%x, level: %u, pixelData: %p, textureFormatToSwitch: 0x%x, width: %u, height: %u, imageSize: %u, shouldUploadToGPU: %d)\n",
-		glTarget, level, pixelData, textureFormatToSwitch, width, height, imageSize, shouldUploadToGPU);
+	// logv_error("DoTheFinalGPUUpload(glTarget: 0x%x, level: %u, pixelData: %p, textureFormatToSwitch: 0x%x, width: %u, height: %u, imageSize: %u, shouldUploadToGPU: %d)\n",
+	// 	glTarget, level, pixelData, textureFormatToSwitch, width, height, imageSize, shouldUploadToGPU);
 	SO_CONTINUE(void *, DoTheFinalGPUUpload_hook, glTarget, level, pixelData,
 	textureFormatToSwitch, width, height, imageSize, shouldUploadToGPU);	
 }
@@ -1226,6 +1465,11 @@ void so_patch(void) {
 	
 
 	D3DDevice_SetTexture_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetTexture"), (uintptr_t)&D3DDevice_SetTexture);
+	
+	// Hook WriteCommand function using direct address
+	WriteCommand_hook = hook_addr(LOC(0x001dc604), (uintptr_t)&WriteCommand_Optimized);
+	logv_error("WriteCommand hooked at address 0x001dc604 -> %p\n", &WriteCommand_Optimized);
+	
 	D3DDevice_SetVertexShaderConstantNotInline_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline");
 	D3DDevice_SetVertexShaderConstantFast_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantFast");
 	D3DDevice_SetVertexShaderConstantNotInline_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline"), (uintptr_t)&D3DDevice_SetVertexShaderConstantNotInline_patched);
@@ -1281,15 +1525,6 @@ void so_patch(void) {
 		logv_error("memInit found at %p\n", memInit_addr);
 		memInit_hook = hook_addr(memInit_addr, (uintptr_t)&memInit);
 	}
-
-	// // _Z8memAllociPKc
-	// uintptr_t memAlloc_addr = (uintptr_t)so_symbol(&so_mod, "_Z8memAllociPKc");
-	// if (memAlloc_addr == 0) {
-	// 	log_error("memAlloc not found\n");
-	// } else {
-	// 	logv_error("memAlloc found at %p\n", memAlloc_addr);
-	// 	memAlloc_hook = hook_addr(memAlloc_addr, (uintptr_t)&memAlloc);
-	// }
 
 	// _Z17writeConfigDirectv
 	uintptr_t writeConfigDirect_addr = (uintptr_t)so_symbol(&so_mod, "_Z17writeConfigDirectv");
@@ -1522,7 +1757,9 @@ void so_patch(void) {
 		MEMAllocFromExpHeapEx_hook = hook_addr(MEMAllocFromExpHeapEx_addr, (uintptr_t)&MEMAllocFromExpHeapEx);
 	}
 
+	#if PROFILER_ENABLED
 	install_prof_hooks();
+	#endif
 
 	uintptr_t addresses[] = {
 		0x0009caf1,
