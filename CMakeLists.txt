@@ -21,7 +21,7 @@ set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
 #set(PSVITAIP "192.168.110.16" CACHE STRING "PSVita IP (for FTP access)") #China
-set(PSVITAIP "192.168.1.85" CACHE STRING "PSVita IP (for FTP access)") #Madrid
+set(PSVITAIP "192.168.110.38" CACHE STRING "PSVita IP (for FTP access)") #Madrid
 set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
 # Game-specific definitions

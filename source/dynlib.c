@@ -320,7 +320,6 @@ void glVertexAttrib4fv_profiled(GLuint index, const GLfloat *v) {
 	//Profiler_EndSample();
 }
 
-
 // glTexImage2D_fake
 void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) {
 
@@ -426,6 +425,20 @@ void glBufferSubData_profiled(GLenum target, GLintptr offset, GLsizeiptr size, c
 	//Profiler_BeginSample("glBufferSubData");
 	glBufferSubData(target, offset, size, data);
 	//Profiler_EndSample();
+}
+
+//glGetUniformLocation_fake
+GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
+	GLint res = glGetUniformLocation(program, name);
+	logv_error("glGetUniformLocation(%u, %s) called, returning %d", program, name, res);
+	return res;
+}
+
+// glBindTexture_fake
+void glBindTexture_fake(GLenum target, GLuint texture) {
+	int caller = (int)__builtin_return_address(0);
+	logv_error("glBindTexture(%i, %u) called from %p", target, texture, (void*)caller);
+	glBindTexture(target, texture);
 }
 
 so_default_dynlib default_dynlib[] = {
@@ -813,7 +826,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glBindBuffer", (uintptr_t)&glBindBuffer_profiled },
 		{ "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
 		{ "glBindRenderbuffer", (uintptr_t)&glBindRenderbuffer },
-		{ "glBindTexture", (uintptr_t)&glBindTexture },
+		{ "glBindTexture", (uintptr_t)&glBindTexture_fake },
 		{ "glBlendEquation", (uintptr_t)&glBlendEquation },
 		{ "glBlendEquationSeparate", (uintptr_t)&glBlendEquationSeparate },
 		{ "glBlendFunc", (uintptr_t)&glBlendFunc },
@@ -876,7 +889,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glGetShaderInfoLog", (uintptr_t)&glGetShaderInfoLog },
 		{ "glGetShaderiv", (uintptr_t)&glGetShaderiv },
 		{ "glGetString", (uintptr_t)&glGetString },
-		{ "glGetUniformLocation", (uintptr_t)&glGetUniformLocation },
+		{ "glGetUniformLocation", (uintptr_t)&glGetUniformLocation_fake },
 		{ "glHint", (uintptr_t)&glHint },
 		{ "glLightModelxv", (uintptr_t)&glLightModelxv },
 		{ "glLightx", (uintptr_t)&ret0 },
