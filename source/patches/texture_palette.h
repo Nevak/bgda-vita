@@ -1,9 +1,22 @@
 #ifndef TEXTURE_PALETTE_H
 #define TEXTURE_PALETTE_H
 
+#include "bgda_types.h"
 #include <so_util/so_util.h>
+#include <string.h>
 
-
+/*
+    Call chain：
+        1. [ReadCommand from any draw command]
+        2. void JBE::D3DDevice::CommitState(D3DDevice *thisPtr)
+        3. void __thiscall JBE::D3DDevice::SetTextureStages(D3DDevice *this,ulong stageStateMask)
+    X   4. void __thiscall JBE::D3DDevice::TextureStageState::SetToGL(TextureStageState *this,ulong textureStageIndex,Enum samplerType)
+        5. void __thiscall TextureStageState::SetToGL(TextureStageState *this,ulong updateFlags,RegisteredBaseTextureData *registeredTexPtr, Enum samplerType)
+        6. void __thiscall D3DBaseTexture::BufferToOGL(D3DBaseTexture *this,RegisteredTextureData *registeredTex,D3DPalette *palette, int sample_count)
+        7. void ProcessAndUploadTexture(...)
+        8. void DoTheFinalGPUUpload(...)
+        9. glTexImage2D
+*/
 
 so_hook XGGetPixelBufferMinAlpha_hook;
 uint XGGetPixelBufferMinAlpha(uint8_t (*param_1) [16], uint32_t param_2,int param_3,int param_4) {
@@ -23,7 +36,7 @@ typedef struct registeredPalette {
 } registeredPalette;
 
 uint32_t curTexIndex = 0;
-registeredPalette registeredPalettes[1024];
+registeredPalette registeredPalettes[4096];
 
 typedef struct {
 	unsigned char colors[256][4];
@@ -33,303 +46,47 @@ typedef struct {
 PaletteStruct palettes[1024];
 
 void registerPalette(uint8_t* paletteAddr, uint32_t glTexId) {
-	if (curTexIndex < 1024) {
-		registeredPalettes[curTexIndex].paletteAddr = paletteAddr;
-		registeredPalettes[curTexIndex].glTexId = glTexId;
-		curTexIndex++;
-		logv_error("registerPalette: registered palette %p with glTexId %u\n", (void*)paletteAddr, glTexId);
-		// copythe palette to our local array
-		memcpy(palettes[curTexIndex].colors, paletteAddr, 256 * 4);
+    if (curTexIndex < 1024) {
+        uint8_t* actualPaletteAddr = (uint8_t*)((uint32_t)paletteAddr & 0xfffffffe);
 
-		glTexImage2D(GL_TEXTURE_2D, 0,
-			GL_RGBA,              // internalFormat
-			256, 1, 0,
-			GL_RGBA,              // format
-			GL_UNSIGNED_BYTE,
-			palettes[curTexIndex].colors);
+        registeredPalettes[curTexIndex].paletteAddr = paletteAddr;
+        registeredPalettes[curTexIndex].glTexId = glTexId;
 
-		// glTexImage2D(GL_TEXTURE_2D, 0,
-		// 	GL_RGBA,              // internalFormat
-		// 	256, 1, 0,
-		// 	GL_RGBA,              // format
-		// 	GL_UNSIGNED_BYTE,
-		// 	paletteAddr);
-	}
+        // DEBUG: Log first few palette entries to see what colors we're getting
+        // logv_error("=== Palette %u (glTexId %u) first 8 colors ===", curTexIndex, glTexId);
+        // for (int i = 0; i < 8; i++) {
+        //     logv_error("Color %d: R=%02X G=%02X B=%02X A=%02X", i,
+        //         actualPaletteAddr[i*4+0], actualPaletteAddr[i*4+1],
+        //         actualPaletteAddr[i*4+2], actualPaletteAddr[i*4+3]);
+        // }
+
+        // Swap R and B channels while copying
+        for (int i = 0; i < 256; i++) {
+            palettes[curTexIndex].colors[i][0] = actualPaletteAddr[i*4 + 2]; // R = source B
+            palettes[curTexIndex].colors[i][1] = actualPaletteAddr[i*4 + 1]; // G = source G
+            palettes[curTexIndex].colors[i][2] = actualPaletteAddr[i*4 + 0]; // B = source R
+            palettes[curTexIndex].colors[i][3] = actualPaletteAddr[i*4 + 3]; // A = source A
+        }
+
+        glBindTexture(GL_TEXTURE_2D, glTexId);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, palettes[curTexIndex].colors);
+        curTexIndex++;
+    }
 	else {
 		log_error("registerPalette: exceeded max registered palettes\n");
 	}
 }
 
 int isPaletteRegistered(uint32_t paletteAddr) {
-	for (uint32_t i = 0; i < curTexIndex; i++) {
-		if (registeredPalettes[i].paletteAddr == paletteAddr) {
-			//logv_error("isPaletteRegistered: palette %p is already registered with glTexId %u\n", (void*)paletteAddr, registeredPalettes[i].glTexId);
-			return registeredPalettes[i].glTexId;
-		}
-	}
-	return 0;
+    uint32_t maskedAddr = paletteAddr & 0xfffffffe;  // Mask the input too
+    for (uint32_t i = 0; i < curTexIndex; i++) {
+        uint32_t registeredMasked = (uint32_t)registeredPalettes[i].paletteAddr & 0xfffffffe;
+        if (registeredMasked == maskedAddr) {
+            return registeredPalettes[i].glTexId;
+        }
+    }
+    return 0;
 }
-
-unsigned char Palette[256][4] = {
-    {0x00,0x00,0x00,0x00},
-    {0x00,0x00,0x00,0x14},
-    {0x00,0x00,0x00,0x0A},
-    {0x02,0x02,0x02,0xF6},
-    {0x02,0x02,0x02,0x42},
-    {0x00,0x00,0x02,0x22},
-    {0x00,0x02,0x02,0x32},
-    {0x00,0x00,0x02,0x3A},
-    {0x02,0x02,0x04,0xD6},
-    {0x02,0x04,0x04,0x2C},
-    {0x02,0x02,0x04,0xEC},
-    {0x02,0x02,0x04,0x66},
-    {0x06,0x08,0x06,0xFE},
-    {0x04,0x04,0x06,0xFE},
-    {0x03,0x06,0x09,0x88},
-    {0x06,0x08,0x08,0xA0},
-    {0x04,0x04,0x09,0x5A},
-    {0x03,0x06,0x09,0xBE},
-    {0x08,0x08,0x08,0xFE},
-    {0x03,0x06,0x09,0x4C},
-    {0x08,0x0A,0x08,0xFE},
-    {0x0A,0x0F,0x0A,0xFE},
-    {0x0A,0x0C,0x0A,0xFE},
-    {0x08,0x08,0x0A,0xFE},
-    {0x0A,0x0A,0x0A,0xFE},
-    {0x03,0x08,0x0D,0xF4},
-    {0x05,0x08,0x0D,0x7A},
-    {0x0C,0x0E,0x0C,0xFE},
-    {0x05,0x08,0x0D,0xCA},
-    {0x0C,0x11,0x0C,0xFE},
-    {0x05,0x08,0x0D,0xFE},
-    {0x0C,0x0C,0x0C,0xFE},
-    {0x0E,0x10,0x0E,0xFE},
-    {0x07,0x0A,0x0F,0xE6},
-    {0x0E,0x13,0x0E,0xFE},
-    {0x0C,0x0C,0x0E,0xFE},
-    {0x09,0x0C,0x0F,0x92},
-    {0x0F,0x17,0x0F,0xFE},
-    {0x10,0x12,0x10,0xFE},
-    {0x07,0x0C,0x11,0xFE},
-    {0x0B,0x0E,0x11,0xA8},
-    {0x0E,0x10,0x10,0xFE},
-    {0x09,0x0C,0x11,0xD8},
-    {0x10,0x15,0x10,0xFE},
-    {0x09,0x0E,0x13,0xFE},
-    {0x11,0x19,0x11,0xFE},
-    {0x0B,0x10,0x13,0x48},
-    {0x0B,0x0E,0x13,0xB6},
-    {0x0F,0x15,0x12,0xFE},
-    {0x12,0x17,0x12,0xFE},
-    {0x0D,0x10,0x13,0xC0},
-    {0x14,0x19,0x14,0xFE},
-    {0x13,0x1B,0x13,0xFE},
-    {0x0F,0x14,0x17,0x3C},
-    {0x15,0x20,0x15,0xFE},
-    {0x0D,0x12,0x17,0xC6},
-    {0x06,0x0E,0x18,0xF8},
-    {0x15,0x1D,0x15,0xFE},
-    {0x15,0x22,0x15,0xFE},
-    {0x13,0x1B,0x16,0xFE},
-    {0x0A,0x12,0x17,0xDC},
-    {0x11,0x14,0x17,0xFE},
-    {0x11,0x16,0x16,0x3C},
-    {0x13,0x19,0x16,0xFE},
-    {0x0B,0x10,0x18,0xFE},
-    {0x0F,0x16,0x19,0xDE},
-    {0x13,0x18,0x18,0x3C},
-    {0x15,0x1D,0x18,0xFE},
-    {0x17,0x24,0x17,0xFE},
-    {0x19,0x26,0x19,0xFE},
-    {0x0C,0x16,0x1C,0xA0},
-    {0x15,0x22,0x1A,0xFE},
-    {0x0C,0x16,0x1C,0xFA},
-    {0x0F,0x14,0x1C,0xF4},
-    {0x15,0x1A,0x1A,0x3C},
-    {0x0A,0x12,0x1C,0xFE},
-    {0x17,0x21,0x1A,0xFE},
-    {0x1B,0x2A,0x1B,0xFE},
-    {0x19,0x23,0x1C,0xFE},
-    {0x13,0x1A,0x1D,0x52},
-    {0x17,0x24,0x1C,0xFE},
-    {0x1B,0x28,0x1B,0xFE},
-    {0x0A,0x14,0x1E,0xFE},
-    {0x0B,0x18,0x20,0xE4},
-    {0x0B,0x18,0x20,0x88},
-    {0x10,0x18,0x20,0xF6},
-    {0x16,0x26,0x1E,0xFE},
-    {0x12,0x1A,0x1F,0xB4},
-    {0x1D,0x2C,0x1D,0xFE},
-    {0x15,0x1A,0x1F,0xFE},
-    {0x1B,0x28,0x1D,0xFE},
-    {0x1B,0x2A,0x1D,0xFE},
-    {0x0E,0x16,0x20,0xFE},
-    {0x19,0x23,0x1E,0xFE},
-    {0x18,0x28,0x1E,0xFE},
-    {0x1F,0x31,0x1F,0xFE},
-    {0x0D,0x1A,0x22,0x88},
-    {0x1C,0x2F,0x1F,0xFE},
-    {0x0B,0x18,0x23,0x88},
-    {0x0B,0x18,0x25,0xFE},
-    {0x1D,0x2A,0x22,0xFE},
-    {0x1F,0x2C,0x21,0xFE},
-    {0x21,0x30,0x21,0xFE},
-    {0x1C,0x2C,0x22,0xFE},
-    {0x0D,0x1D,0x24,0x88},
-    {0x1F,0x2E,0x21,0xFE},
-    {0x22,0x3C,0x22,0xFE},
-    {0x0F,0x1C,0x27,0xFE},
-    {0x20,0x35,0x23,0xFE},
-    {0x1E,0x30,0x23,0xFE},
-    {0x14,0x19,0x26,0xFE},
-    {0x1C,0x2E,0x24,0xFE},
-    {0x20,0x33,0x23,0xFE},
-    {0x1E,0x30,0x26,0xFE},
-    {0x13,0x20,0x28,0xFE},
-    {0x21,0x2B,0x26,0xFE},
-    {0x18,0x20,0x28,0x96},
-    {0x16,0x20,0x28,0xA2},
-    {0x0D,0x1C,0x29,0xFE},
-    {0x11,0x1E,0x2B,0xEA},
-    {0x20,0x35,0x28,0xFE},
-    {0x15,0x22,0x2A,0xF0},
-    {0x22,0x32,0x28,0xFE},
-    {0x17,0x27,0x2A,0xFE},
-    {0x0F,0x1E,0x2B,0xFE},
-    {0x1D,0x22,0x2A,0xC0},
-    {0x22,0x34,0x27,0xFE},
-    {0x16,0x20,0x2A,0xFE},
-    {0x20,0x32,0x28,0xFE},
-    {0x0E,0x21,0x2B,0xFE},
-    {0x26,0x3B,0x26,0xFE},
-    {0x22,0x37,0x27,0xFE},
-    {0x13,0x25,0x2D,0xFE},
-    {0x22,0x37,0x2A,0xFE},
-    {0x15,0x22,0x2D,0xFE},
-    {0x24,0x39,0x29,0xFE},
-    {0x0E,0x20,0x2D,0xFE},
-    {0x24,0x36,0x29,0xFE},
-    {0x25,0x32,0x2A,0xFE},
-    {0x1E,0x26,0x2E,0xB8},
-    {0x10,0x20,0x30,0xEE},
-    {0x1E,0x28,0x2E,0x5E},
-    {0x24,0x39,0x2C,0xFE},
-    {0x10,0x22,0x2F,0xFE},
-    {0x1A,0x24,0x2E,0xFE},
-    {0x15,0x27,0x2F,0xFE},
-    {0x28,0x3F,0x2D,0xFE},
-    {0x2C,0x48,0x2C,0xFE},
-    {0x0E,0x22,0x32,0xFE},
-    {0x14,0x27,0x31,0xFE},
-    {0x26,0x3B,0x2E,0xFE},
-    {0x1F,0x36,0x2F,0xFE},
-    {0x2A,0x41,0x2D,0xFE},
-    {0x15,0x22,0x31,0xFE},
-    {0x26,0x3D,0x2D,0xFE},
-    {0x19,0x26,0x31,0xFE},
-    {0x23,0x3B,0x2E,0xFE},
-    {0x12,0x24,0x31,0xFE},
-    {0x2A,0x44,0x2C,0xFE},
-    {0x10,0x24,0x34,0xFE},
-    {0x22,0x2A,0x32,0xA8},
-    {0x19,0x28,0x33,0xFE},
-    {0x26,0x36,0x30,0xFE},
-    {0x2A,0x3F,0x2F,0xFE},
-    {0x2A,0x41,0x2F,0xFE},
-    {0x2C,0x43,0x2F,0xFE},
-    {0x28,0x3D,0x30,0xFE},
-    {0x14,0x29,0x36,0xFE},
-    {0x2D,0x3A,0x32,0xFE},
-    {0x28,0x3A,0x32,0xFE},
-    {0x0F,0x24,0x36,0xFE},
-    {0x1B,0x2D,0x35,0xFE},
-    {0x19,0x28,0x35,0xFE},
-    {0x26,0x2E,0x36,0xAE},
-    {0x16,0x2B,0x38,0xFE},
-    {0x2C,0x3E,0x34,0xFE},
-    {0x2E,0x45,0x33,0xFE},
-    {0x11,0x29,0x38,0xFE},
-    {0x1F,0x2F,0x36,0xFE},
-    {0x2E,0x48,0x33,0xFE},
-    {0x0F,0x26,0x39,0xFE},
-    {0x2C,0x43,0x33,0xFE},
-    {0x16,0x23,0x38,0xFE},
-    {0x30,0x4A,0x35,0xFE},
-    {0x1A,0x2F,0x39,0xFE},
-    {0x1D,0x2C,0x39,0xFE},
-    {0x32,0x4C,0x34,0xFE},
-    {0x15,0x2D,0x3A,0xFE},
-    {0x1C,0x33,0x39,0xFE},
-    {0x11,0x28,0x3B,0xFE},
-    {0x13,0x2A,0x3D,0xFE},
-    {0x2F,0x49,0x37,0xFE},
-    {0x1C,0x31,0x3B,0xFE},
-    {0x2C,0x36,0x3C,0xB8},
-    {0x1E,0x38,0x3D,0xFE},
-    {0x17,0x2F,0x3E,0xFE},
-    {0x1E,0x33,0x3D,0xFE},
-    {0x32,0x49,0x39,0xFE},
-    {0x33,0x50,0x39,0xFE},
-    {0x20,0x3A,0x3C,0xFE},
-    {0x19,0x31,0x3E,0xFE},
-    {0x27,0x39,0x3E,0xFE},
-    {0x19,0x33,0x40,0xFE},
-    {0x25,0x34,0x3F,0xFE},
-    {0x2E,0x3B,0x3D,0xFE},
-    {0x1E,0x35,0x3F,0xFE},
-    {0x29,0x3B,0x40,0xFE},
-    {0x25,0x32,0x41,0xEA},
-    {0x1D,0x39,0x44,0xFE},
-    {0x36,0x48,0x40,0xFE},
-    {0x24,0x39,0x43,0xFE},
-    {0x24,0x3E,0x43,0xFE},
-    {0x1D,0x35,0x44,0xFE},
-    {0x22,0x37,0x44,0xFE},
-    {0x22,0x34,0x44,0xFE},
-    {0x18,0x35,0x45,0xFE},
-    {0x21,0x3B,0x43,0xFE},
-    {0x2B,0x3D,0x42,0xFE},
-    {0x3A,0x4F,0x3F,0xFE},
-    {0x2A,0x42,0x44,0xFE},
-    {0x1F,0x39,0x46,0xFE},
-    {0x2B,0x3D,0x45,0xFE},
-    {0x1F,0x3B,0x46,0xFE},
-    {0x23,0x3D,0x48,0xFE},
-    {0x21,0x3D,0x4A,0xFA},
-    {0x25,0x3D,0x4A,0xFE},
-    {0x21,0x3D,0x4A,0xFE},
-    {0x25,0x42,0x49,0xFE},
-    {0x2A,0x3F,0x49,0xFE},
-    {0x2A,0x41,0x49,0xFE},
-    {0x22,0x42,0x4C,0xFA},
-    {0x21,0x3B,0x4D,0xFE},
-    {0x25,0x3D,0x4C,0xFA},
-    {0x27,0x41,0x4C,0xFE},
-    {0x29,0x46,0x4B,0xFE},
-    {0x27,0x3C,0x4E,0xFA},
-    {0x27,0x3F,0x4E,0xFA},
-    {0x24,0x41,0x51,0xFA},
-    {0x30,0x42,0x4F,0xFC},
-    {0x2C,0x40,0x50,0xFE},
-    {0x23,0x3A,0x51,0xFA},
-    {0x2B,0x48,0x4F,0xFE},
-    {0x24,0x43,0x50,0xFE},
-    {0x20,0x3F,0x51,0xFE},
-    {0x24,0x46,0x50,0xFE},
-    {0x22,0x3C,0x51,0xFA},
-    {0x32,0x49,0x53,0xFE},
-    {0x2C,0x4C,0x56,0xFE},
-    {0x33,0x4D,0x58,0xFE},
-    {0x35,0x4F,0x5A,0xFE},
-    {0x37,0x53,0x5E,0xFE},
-    {0x3D,0x57,0x5F,0xFE},
-    {0x41,0x5E,0x63,0xFE},
-    {0x40,0x60,0x6A,0xFE},
-    {0x47,0x66,0x6E,0xFE},
-    {0x4F,0x69,0x71,0xFE}
-};
-
-
 
 so_hook ProcessAndUploadTexture_hook;
 void ProcessAndUploadTexture
@@ -337,9 +94,6 @@ void ProcessAndUploadTexture
                int isCompressed,uint width,uint height,uint level,uint sourcePitch,int paddingFlag,
                uint8_t * palette,uint allocateNewTexture,int keepSwizzled,ushort *alphaRange)
 {
-
-
-
 	// SO_CONTINUE(void *, ProcessAndUploadTexture_hook, glTarget, sourceTextureData, formatToSwitchParam,
 	// 	isSwizzled, isCompressed, width, height, level, sourcePitch, paddingFlag,
 	// 	palette, allocateNewTexture, keepSwizzled, alphaRange);
@@ -351,17 +105,34 @@ void ProcessAndUploadTexture
 	//  	width, height, level, sourcePitch, paddingFlag, palette, allocateNewTexture, keepSwizzled, alphaRange);
 
 
-	if (level != 1) {
+	if (level != 1)
+    {
 		return;
 	}
 
-	if ((formatToSwitchParam & 0xffffff7f) == 0xb && formatToSwitchParam == 139 && sourcePitch != 4096 && palette) 
+	//if ((formatToSwitchParam & 0xffffff7f) == 0xb && formatToSwitchParam == 139 && sourcePitch != 4096 && palette) 
+    if ((formatToSwitchParam & 0xffffff7f) == 0xb && palette)
 	{
 		// store the currently active texture
 		GLint currentActiveTexUnit;
 		glGetIntegerv(GL_ACTIVE_TEXTURE, (GLint*)&currentActiveTexUnit);
 
-		glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+        // if (width == 192 && height == 64)
+        // {
+        //     logv_error("Text start (pitch %d)", sourcePitch);
+        //     // print the first 2 rows
+        //     for (int i = 0; i < 2; ++i)
+        //     {
+        //         logv_error("Row %d:", i);
+        //         for (int j = 0; j < width; ++j)
+        //         {
+        //             logv_error(" %02X", sourceTextureData[i * width + j]);
+        //         }
+        //     }
+        // }
+
 		// For index texture
 		glTexImage2D_fake(glTarget,
 			0, // level
@@ -373,100 +144,49 @@ void ProcessAndUploadTexture
 			GL_UNSIGNED_BYTE, //GL_UNSIGNED_BYTE, // type ?
 			sourceTextureData); // data, comes from the function args
 
-		// time_t t = time(NULL);
-		// if (t % 2 == 0) {
-		// // initialize a new palette of shades of red for testing
-		// 	for (int i = 0; i < 256; i++) {
-		// 		Palette[i][0] = 255; // R
-		// 		Palette[i][1] = 0; // G
-		// 		Palette[i][2] = 0; // B
-		// 		Palette[i][3] = 255; // A
-		// 	}
-		// }
-		// else {
-		// 	// use a blue palette for testing
-		// 	for (int i = 0; i < 256; i++) {
-		// 		Palette[i][0] = 0; // R
-		// 		Palette[i][1] = 0; // G
-		// 		Palette[i][2] = 255; // B
-		// 		Palette[i][3] = 255; // A
-		// 	}
-		// }
-
-		// glTexImage2D(GL_TEXTURE_2D, 0,
-		// 	GL_RGBA,              // internalFormat
-		// 	256, 1, 0,
-		// 	GL_RGBA,              // format
-		// 	GL_UNSIGNED_BYTE,
-		// 	Palette);
-
-
  		glTexParameteri(glTarget,0x813d,level - 1);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-		if (palette != NULL && allocateNewTexture) {
-			//palette = (uint8_t*)Palette;
+		if (palette != NULL && allocateNewTexture) 
+        {
 			glActiveTexture(GL_TEXTURE6);
+            
 			uint32_t paletteId = isPaletteRegistered((uint32_t)palette);
-			if (paletteId == 0) {
-				// not registered yet
-				uint32_t paletteId;
+			if (paletteId == 0)
+            {
+                // not registered yet
+				///uint32_t paletteId;
 				glGenTextures(1, &paletteId);
-				
-				// if the current time is even, use a red palette for testing
-				time_t t = time(NULL);
-				if (t % 2 == 0) {
-				// initialize a new palette of shades of red for testing
-					for (int i = 0; i < 256; i++) {
-						Palette[i][0] = i; // R
-						Palette[i][1] = 0; // G
-						Palette[i][2] = 0; // B
-						Palette[i][3] = 255; // A
-					}
-				}
-				else {
-					// use a blue palette for testing
-					for (int i = 0; i < 256; i++) {
-						Palette[i][0] = 0; // R
-						Palette[i][1] = 0; // G
-						Palette[i][2] = i; // B
-						Palette[i][3] = 255; // A
-					}
-				}
-				
-
-				
-
-
-				registerPalette(Palette, paletteId);
+			    //logv_error("ProcessAndUploadTexture: registering new palette %p with glTexId %u", (void*)palette, paletteId);	
+				registerPalette(palette, paletteId);
+                glBindTexture(GL_TEXTURE_2D, paletteId);
+                //logv_error("paletteId after calling register: %u", paletteId);
 			}
 
-			glBindTexture(GL_TEXTURE_2D, paletteId);
 
 			glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // defensive; rows are 256*4 = 1024 (already aligned)
-			// fin
-			// glTexImage2D(GL_TEXTURE_2D, 0,
-			// 			GL_RGBA,              // internalFormat
-			// 			256, 1, 0,
-			// 			GL_RGBA,              // format
-			// 			GL_UNSIGNED_BYTE,
-			// 			palette);
 
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-
-			GLint prog = 0;
-			glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
-			GLint loc = glGetUniformLocation(prog, "uPalette");
-			// logv_error("Palette texture bound to unit 6, uniform location is %d\n", loc);
-			if (loc >= 0) {
-				glUniform1i(loc, 6); // set the sampler to texture unit 6
-			}
-			else {
-				log_error("Could not find uniform location for uPalette\n");
-			}
+            GLint prog = 0;
+            glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+            GLint loc = glGetUniformLocation(prog, "uPalette");
+            // logv_error("Palette texture bound to unit 6, uniform location is %d\n", loc);
+            if (loc >= 0)
+            {
+                //logv_error("Palette texture (id: %d at addr: %p) bound to unit 6, uniform location is %d, progid is %d", paletteId, (void*)palette, loc, prog);
+                glUniform1i(loc, 6); // set the sampler to texture unit 6
+            }
+            else
+            {
+                //logv_error("Could not find uniform location for uPalette 1111. ProgId: %d", prog);
+            }
 
 			// restore the previously active texture
 			glActiveTexture(currentActiveTexUnit);
@@ -475,7 +195,8 @@ void ProcessAndUploadTexture
 		return;
 	}
 
-	if (sourcePitch != 4096) {
+	if (sourcePitch != 4096) 
+    {
 		sourcePitch = width;
 	}
 
@@ -493,6 +214,171 @@ void DoTheFinalGPUUpload(uint32_t glTarget, uint32_t level, uint8_t (*pixelData)
 	// 	glTarget, level, pixelData, textureFormatToSwitch, width, height, imageSize, shouldUploadToGPU);
 	SO_CONTINUE(void *, DoTheFinalGPUUpload_hook, glTarget, level, pixelData,
 	textureFormatToSwitch, width, height, imageSize, shouldUploadToGPU);	
+}
+
+so_hook D3DDevice_TextureStageState_SetToGL_hook;
+void D3DDevice_TextureStageState_SetToGL(D3DDevice_TextureStageState* this, uint32_t textureStageIndex, uint32_t samplerType)
+{
+    if (textureStageIndex != 0)
+    {
+        return SO_CONTINUE(void *, D3DDevice_TextureStageState_SetToGL_hook, this, textureStageIndex, samplerType);
+    }
+
+    RegisteredTextureData* textureData = this->registeredTexturePtr;
+    if (textureData != 0x0) {
+        //logv_error("D3DDevice_TextureStageState_SetToGL 1: textureData %p, d3dBaseTexture %p, unk_bytes[0] = 0x%02x\n", (void*)textureData, (void*)textureData->d3dBaseTexture, textureData->unk_bytes[0]);
+        if (textureData->unk_bytes[0] != '\0')
+        {
+            textureData = textureData->d3dBaseTexture->registeredTextureData;
+        }
+        //logv_error("D3DDevice_TextureStageState_SetToGL 2: textureData %p has unk_bytes[0] = 0x%02x, skipping palette setup\n", (void*)textureData, textureData->unk_bytes[0]);
+        if (textureData->d3dBaseTexture != 0x0) {
+            // print the contents around "this"
+            //logv_error("D3DDevice_TextureStageState_SetToGL 2a: textureData %p has unk_bytes[0] = 0x%02x, but d3dBaseTexture is %p\n", (void*)textureData, textureData->unk_bytes[0], (void*)textureData->d3dBaseTexture);
+            //TextureStageState * textureStageState = &textureData->state;
+            TextureStageState * textureStageState = &textureData->state;
+            if (textureStageState != NULL) {
+                //logv_error("D3DDevice_TextureStageState_SetToGL 3: textureStageState %p\n", (void*)textureStageState);
+                uint8_t* palette = textureStageState->palettePtr;
+                //logv_error("D3DDevice_TextureStageState_SetToGL 3a: palettePtr %p\n", (void*)textureStageState->palettePtr);
+                //log_error("OK");
+                //uint8_t* palette = (uint8_t*)(this + 0x80);
+                if (palette) {
+                    //logv_error("D3DDevice_TextureStageState_SetToGL 4: palette %p\n", (void*)palette);
+                    // print the palette color values
+                    // for (int i = 0; i < 256; i++) {
+                    //     logv_error("Palette color %d: R=%02X G=%02X B=%02X A=%02X", i,
+                    //         palette[i*4+0],
+                    //         palette[i*4+1],
+                    //         palette[i*4+2],
+                    //         palette[i*4+3]);
+                    // }
+
+                    GLint currentActiveTexUnit;
+                    glGetIntegerv(GL_ACTIVE_TEXTURE, (GLint*)&currentActiveTexUnit);
+
+                    glActiveTexture(GL_TEXTURE6);
+
+                    uint32_t paletteId = isPaletteRegistered((uint32_t)palette);
+                    if (paletteId != 0) 
+                    {
+                        glBindTexture(GL_TEXTURE_2D, paletteId);
+                        glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // defensive; rows are 256*4 = 1024 (already aligned)          
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+                        //GLint prog = 8;
+                        GLint prog = 0;
+                        glGetIntegerv(GL_CURRENT_PROGRAM, &prog); 
+                        if (glIsProgram(prog))
+                        {
+                            //glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+                            GLint loc = glGetUniformLocation(prog, "uPalette");
+                            //logv_error("Palette texture bound to unit 6, uniform location is %d\n", loc);
+                            if (loc >= 0) {
+                                //logv_error("33333 Palette texture (id: %d at addr: %p) bound to unit 6, uniform location is %d, progid is %d", paletteId, (void*)palette, loc, prog);
+                                glUniform1i(loc, 6); // set the sampler to texture unit 6
+                            }
+                            else {
+                                //logv_error("Could not find uniform location for uPalette 33333, progid is %d", prog);
+                            }
+                        }
+                    }
+                    else {
+                        glGenTextures(1, &paletteId);
+                        //logv_error("D3DDevice_TextureStageState_SetToGL: registering new palette %p with glTexId %u", (void*)palette, paletteId);
+
+                        registerPalette(palette, paletteId);
+                        glBindTexture(GL_TEXTURE_2D, paletteId);
+
+                        glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // defensive; rows are 256*4 = 1024 (already aligned)
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+                        GLint prog = 8;
+                        if (glIsProgram(prog))
+                        {
+                            //glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+                            GLint loc = glGetUniformLocation(prog, "uPalette");
+                            // logv_error("Palette texture bound to unit 6, uniform location is %d\n", loc);
+                            if (loc >= 0) {
+                                //logv_error("4444 Palette texture (id: %d at addr: %p) bound to unit 6, uniform location is %d, progid is %d", paletteId, (void*)palette, loc, prog);
+                                glUniform1i(loc, 6); // set the sampler to texture unit 6
+                            }
+                            else {
+                                //logv_error("Could not find uniform location for uPalette 33333, progid is %d", prog);
+                            }
+                        }
+                    }
+
+                    // restore the previously active texture
+                    glActiveTexture(currentActiveTexUnit);
+                }
+            }
+        }
+        
+    }
+        
+    // RegisteredTextureData* textureData = this->registeredTexturePtr;
+    // if (textureData != 0x0) {
+    //     if (textureData->d3dBaseTexture == 0x0) {
+    //         return;
+    //     }
+    //     RegisteredTextureData* textureData2 = (RegisteredTextureData*)textureData->d3dBaseTexture->registeredTextureData;
+    //     RegisteredBaseTextureData * textureDataBase = (RegisteredBaseTextureData*)textureData2;
+    //     if (textureDataBase != 0x0) {
+    //         TextureStageState * textureStageState = &this->textureStageStates[textureStageIndex];
+    //     }
+    // }
+    SO_CONTINUE(void*, D3DDevice_TextureStageState_SetToGL_hook, this, textureStageIndex, samplerType);
+}
+
+void cleanupPaletteForTexture(RegisteredTextureData* textureData) {
+    // Fix: Take address of state, don't dereference it
+    TextureStageState* textureStageState = &textureData->state;
+
+    logv_error("cleanupPaletteCalled: textureStageState: %p", textureStageState);
+
+    if (textureStageState && textureStageState->palettePtr) {
+        uint32_t paletteAddr = (uint32_t)textureStageState->palettePtr;
+
+        for (uint32_t i = 0; i < curTexIndex; i++) {
+            if (((uint32_t)registeredPalettes[i].paletteAddr & 0xfffffffe) ==
+                (paletteAddr & 0xfffffffe)) {
+
+                logv_error("Cleaning up palette glTexId %u for address %p",
+                        registeredPalettes[i].glTexId, (void*)paletteAddr);
+
+                glDeleteTextures(1, &registeredPalettes[i].glTexId);
+
+                // Remove from registry (shift array down)
+                for (uint32_t j = i; j < curTexIndex - 1; j++) {
+                    registeredPalettes[j] = registeredPalettes[j + 1];
+                    palettes[j] = palettes[j + 1];
+                }
+                curTexIndex--;
+                break;
+            }
+        }
+    }
+}
+
+// Add this hook before the existing glDeleteTextures call
+so_hook D3DBaseTexture_Unregister_hook;
+void D3DBaseTexture_Unregister(D3DBaseTexture *this, int param_1) {
+    RegisteredTextureData *textureData = this->registeredTextureData;
+    logv_error("D3DBaseTexture_Unregister called with this: %p, textureData: %p", this, textureData);
+
+    if (textureData && textureData->glTextureId != 0) {
+        // Cleanup any associated palette textures
+        cleanupPaletteForTexture(textureData);
+    }
+
+    SO_CONTINUE(void*, D3DBaseTexture_Unregister_hook, this, param_1);
 }
 
 #endif

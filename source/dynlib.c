@@ -436,8 +436,8 @@ GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
 
 // glBindTexture_fake
 void glBindTexture_fake(GLenum target, GLuint texture) {
-	int caller = (int)__builtin_return_address(0);
-	logv_error("glBindTexture(%i, %u) called from %p", target, texture, (void*)caller);
+	// int caller = (int)__builtin_return_address(0);
+	// logv_error("glBindTexture(%i, %u) called from %p", target, texture, (void*)caller);
 	glBindTexture(target, texture);
 }
 
@@ -473,9 +473,9 @@ so_default_dynlib default_dynlib[] = {
 		{ "__aeabi_memclr", (uintptr_t)&__aeabi_memclr_patched },
 		{ "__aeabi_memclr4", (uintptr_t)&__aeabi_memclr_patched },
 		{ "__aeabi_memclr8", (uintptr_t)&__aeabi_memclr_patched },
-		{ "__aeabi_memcpy", (uintptr_t)&__aeabi_memcpy_patched },
-		{ "__aeabi_memcpy4", (uintptr_t)&__aeabi_memcpy_patched },
-		{ "__aeabi_memcpy8", (uintptr_t)&__aeabi_memcpy_patched },
+		{ "__aeabi_memcpy", (uintptr_t)&__aeabi_memcpy },
+		{ "__aeabi_memcpy4", (uintptr_t)&__aeabi_memcpy },
+		{ "__aeabi_memcpy8", (uintptr_t)&__aeabi_memcpy },
 		{ "__aeabi_memmove", (uintptr_t)&__aeabi_memmove },
 		{ "__aeabi_memmove4", (uintptr_t)&__aeabi_memmove },
 		{ "__aeabi_memmove8", (uintptr_t)&__aeabi_memmove },

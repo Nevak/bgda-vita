@@ -14,7 +14,7 @@
 #include <so_util/so_util.h>
 #include <stdint.h>
 #include <utils/trophies.h>
-#include <utils/prof.h>
+
 #include <stdio.h>
 #include <vitasdk.h>
 #include <libsysmodule.h>
@@ -24,6 +24,7 @@
 
 #include "utils/macros.h"
 
+#include "patches/bgda_types.h"
 #include "patches/frustum_culling.h"
 #include "patches/texture_decomp.h"
 #include "patches/texture_palette.h"
@@ -32,6 +33,7 @@
 #include "patches/memory.h"
 
 #if PROFILER_ENABLED
+#include <utils/prof.h>
 #include "patches/profiler_hooks.h"
 #endif
 
@@ -105,17 +107,12 @@ int cdDirectoryLookup(const char *path, int *param_2, int *param_3) {
 
 so_hook D3DDevice_SetTextureStages_hook;
 void D3DDevice_SetTextureStages(uint8_t *param_1, uint32_t param_2) {
-	//logv_error("D3DDevice_SetTextureStages(%p, %u)\n", param_1, param_2);
-	//Profiler_BeginSample("D3DDevice_SetTextureStages");
 	SO_CONTINUE(void *, D3DDevice_SetTextureStages_hook, param_1, param_2);
-	//Profiler_EndSample();
-	//log_error("D3DDevice_SetTextureStages finished\n");
 }
 
 so_hook machFrameStart_hook;
 void machFrameStart(int p) {
 	sceKernelChangeThreadCpuAffinityMask(sceKernelGetThreadId(), SCE_KERNEL_CPU_MASK_USER_1);
-	//logv_error("machFrameStart(%i)\n", p);
 	SO_CONTINUE(void *, machFrameStart_hook, p);
 }
 
@@ -140,8 +137,6 @@ uintptr_t D3DDevice_ReadCommand_addr;
 uintptr_t g_Singleton_addr;
 uintptr_t displayPF_AcquireContext_addr;
 uintptr_t displayPF_ReleaseContext_addr;
-
-
 
 struct astruct {
     uint32_t field0;           // offset 0x0
@@ -369,7 +364,8 @@ void so_patch(void) {
 	D3DDevice_SetVertexShaderConstantNotInline_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline");
 	D3DDevice_SetVertexShaderConstantFast_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantFast");
 	D3DDevice_SetVertexShaderConstantNotInline_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline"), (uintptr_t)&D3DDevice_SetVertexShaderConstantNotInline_patched);
-
+	D3DBaseTexture_Unregister_hook =  hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture10UnregisterEi"), (uintptr_t)&D3DBaseTexture_Unregister);
+	
 	// _Z11coreAddTaskPFvvEiPKc coreAddTask
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
 	renderDelayedShadows_hook = hook_addr(LOC(0x0013d578), (uintptr_t)&renderDelayedShadows);
@@ -379,7 +375,9 @@ void so_patch(void) {
 	XGGetPixelBufferMaxAlpha_hook = hook_addr(LOC(0x00209ff0), (uintptr_t)&XGGetPixelBufferMaxAlpha);
 	ProcessAndUploadTexture_hook = hook_addr(LOC(0x0021225c), (uintptr_t)&ProcessAndUploadTexture);
 	DoTheFinalGPUUpload_hook = hook_addr(LOC(0x002160ec), (uintptr_t)&DoTheFinalGPUUpload);
+	XGSetTextureHeader_hook = hook_addr(LOC(0x0020fca4), (uintptr_t)&XGSetTextureHeader);
 
+	D3DDevice_TextureStageState_SetToGL_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice17TextureStageState7SetToGLEmN13XGSamplerType4EnumE"), (uintptr_t)&D3DDevice_TextureStageState_SetToGL);
 	//uint32_t loc = LOC(0x00132474);
 	//logv_error("COPY TEXTURE at %p\n", loc);
 	//texture_copy_hook = hook_addr(loc, (uintptr_t)&texture_copy);
@@ -400,9 +398,7 @@ void so_patch(void) {
 	} else {
 		logv_error("D3DBaseTexture_BufferToOGL found at %p\n", D3DBaseTexture_BufferToOGL_addr);
 		//D3DBaseTexture_BufferToOGL_hook = hook_addr(D3DBaseTexture_BufferToOGL_addr, (uintptr_t)&D3DBaseTexture_BufferToOGL);
-	}
-	
-	
+	}	
 
 	// _ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm
 	uintptr_t D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm");
@@ -494,7 +490,6 @@ void so_patch(void) {
 		usingTouchscreen_hook = hook_addr(usingTouchscreen_addr, (uintptr_t)&usingTouchscreen);
 	}
 
-
 	//_ZN14CommonControls16RenderTouchIconsEP4Menu
 	uintptr_t renderTouchIcons_addr = (uintptr_t)so_symbol(&so_mod, "_ZN14CommonControls16RenderTouchIconsEP4Menu");
 	if (renderTouchIcons_addr == 0) {
@@ -557,6 +552,7 @@ void so_patch(void) {
 		logv_error("JBE_D3DDevice_Swap found at %p\n", JBE_D3DDevice_Swap_addr);
 		JBE_D3DDevice_Swap_hook = hook_addr(JBE_D3DDevice_Swap_addr, (uintptr_t)&JBE_D3DDevice_Swap);
 	}
+
 	//_ZN3JBE9D3DDevice13AsyncRenderCBEPv
 	uintptr_t D3DDevice_AsyncRenderCB_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice13AsyncRenderCBEPv");
 	if (D3DDevice_AsyncRenderCB_addr == 0) {
@@ -593,7 +589,6 @@ void so_patch(void) {
 		//D3DDevice_RegisterTextureCommand_hook = hook_addr(D3DDevice_RegisterTextureCommand_addr, (uintptr_t)&D3DDevice_RegisterTextureCommand);
 	}
 
-
 	// D3DDevice_Swap
 	uintptr_t D3DDevice_Swap_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_Swap");
 	if (D3DDevice_Swap_addr == 0) {
@@ -627,6 +622,7 @@ void so_patch(void) {
 	} else {
 		logv_error("displayPF_AcquireContext found at %p\n", displayPF_AcquireContext_addr);
 	}
+
 	// _ZN3JBE9DisplayPF14ReleaseContextEv
 	displayPF_ReleaseContext_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9DisplayPF14ReleaseContextEv");
 	if (displayPF_ReleaseContext_addr == 0) {
@@ -648,6 +644,8 @@ void so_patch(void) {
 	install_prof_hooks();
 	#endif
 
+	// Patch big and useless texture names so we don't load them
+	// Mostly touchscreen UI stuff
 	uintptr_t addresses[] = {
 		0x0009caf1,
 		0x000a326a,
@@ -682,11 +680,6 @@ void so_patch(void) {
 	char* stringToPatch = "arrowA.tex";
 	for(int i = 0; i < sizeof(addresses) / sizeof(uintptr_t); i++) {
 		uintptr_t addressToPatch = so_mod.text_base + addresses[i] - 0x00010000;
-		
-		// print original string
-		//logv_error("Original string at %p: %s\n", addressToPatch, (char *)addressToPatch);
 		kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, stringToPatch, strlen(stringToPatch)+1);
-		// print new string
-		//logv_error("Patched string at %p: %s\n", addressToPatch, (char *)addressToPatch);
 	}
 }

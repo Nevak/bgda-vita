@@ -26,9 +26,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <psp2/gxm.h>
+#ifdef PROFILER_ENABLED
 #include "utils/prof.h"
-#include "utils/vorbis_patch.h"
 #include <profilerino.h>
+#endif
+
+#include "utils/vorbis_patch.h"
 
 __attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_calloc(uint32_t nmember, uint32_t size) { return vglCalloc(nmember, size); }
