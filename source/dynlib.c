@@ -322,12 +322,48 @@ void glVertexAttrib4fv_profiled(GLuint index, const GLfloat *v) {
 
 // glTexImage2D_fake
 void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) {
+	// if (level > 0)
+	// {
+	// 	return;
+	// }
+    GLint prog = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    int usePalette = 0;
+	if (width == 1024 && height == 1024) {
+		      int* caller = __builtin_return_address(0);
 
-	if (level > 0)
-	{
-		return;
+		logv_error("1024 found, prog=%d from: %p", prog, caller);
 	}
 	glTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
+}
+
+void glTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) {
+	//logv_error("glTexSubImage2D: target=0x%x, level=%d, offset=(%d,%d), size=(%dx%d), format=0x%x, type=0x%x, pixels=%p",
+	//	target, level, xoffset, yoffset, width, height, format, type, pixels);
+
+	glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
+}
+
+void glTexParameteri_fake(GLenum target, GLenum pname, GLint param) {
+	// Override filtering parameters to always use GL_NEAREST
+	if (pname == GL_TEXTURE_MIN_FILTER || pname == GL_TEXTURE_MAG_FILTER) {
+		//logv_error("glTexParameteri: Overriding filter 0x%x from %d to GL_NEAREST", pname, param);
+		param = GL_NEAREST;
+	}
+
+	glTexParameteri(target, pname, param);
+}
+
+void glDeleteTextures_fake(GLsizei n, const GLuint *textures) {
+	// Clean up texture uniform states before deleting textures
+	for (GLsizei i = 0; i < n; i++) {
+		if (textures[i] != 0) {
+			removeTextureUniformState(textures[i]);
+			//logv_error("Cleaned up texture state for texture %u", textures[i]);
+		}
+	}
+
+	glDeleteTextures(n, textures);
 }
 
 void app_dummy(void)
@@ -434,11 +470,62 @@ GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
 	return res;
 }
 
+// Forward declarations
+int getTextureUniformState(uint32_t glTexId);
+void removeTextureUniformState(uint32_t glTexId);
+
 // glBindTexture_fake
 void glBindTexture_fake(GLenum target, GLuint texture) {
-	// int caller = (int)__builtin_return_address(0);
-	// logv_error("glBindTexture(%i, %u) called from %p", target, texture, (void*)caller);
 	glBindTexture(target, texture);
+
+	// Apply stored uniform state when texture is bound for rendering
+	if (target == GL_TEXTURE_2D && texture != 0) {
+		GLint prog = 0;
+		glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+
+		if (prog != 0) {
+			GLint usePaletteLoc = glGetUniformLocation(prog, "uUsePalette");
+			if (usePaletteLoc >= 0) {
+				int usePalette = getTextureUniformState(texture);
+				glUniform1i(usePaletteLoc, usePalette);
+				//logv_error("Applied palette state for texture %u in program %d: usePalette=%d", texture, prog, usePalette);
+			}
+		}
+	}
+}
+
+void glShaderSource_fake(GLuint shader, GLsizei count, const GLchar * const *string, const GLint *length) {
+	uint32_t threadId = sceKernelGetThreadId();
+	logv_error("----------[T%u] glShaderSource: shader=%u, count=%d", threadId, shader, count);
+
+	// Write shader to file
+	char filename[256];
+	snprintf(filename, sizeof(filename), "ux0:data/dump_shaders/shader_%u.glsl", shader);
+
+	FILE* file = fopen(filename, "w");
+	if (file) {
+		fprintf(file, "// Shader ID: %u, Thread: %u, Count: %d\n", shader, threadId, count);
+
+		// Write each string in the array
+		for (GLsizei i = 0; i < count; i++) {
+			if (string[i]) {
+				int len = length ? length[i] : strlen(string[i]);
+				fprintf(file, "%.*s", len, string[i]);
+			}
+		}
+		fclose(file);
+		logv_error("[T%u] Shader %u written to %s", threadId, shader, filename);
+	} else {
+		logv_error("[T%u] Failed to write shader %u to file", threadId, shader);
+	}
+
+	glShaderSource(shader, count, string, length);
+}
+
+void glAttachShader_fake(GLuint program, GLuint shader) {
+	uint32_t threadId = sceKernelGetThreadId();
+	logv_error("[T%u] glAttachShader: program=%u, shader=%u", threadId, program, shader);
+	glAttachShader(program, shader);
 }
 
 so_default_dynlib default_dynlib[] = {
@@ -821,7 +908,7 @@ so_default_dynlib default_dynlib[] = {
 		// OpenGL
 		{ "glActiveTexture", (uintptr_t)&glActiveTexture },
 		{ "glAlphaFuncx", (uintptr_t)&glAlphaFuncx },
-		{ "glAttachShader", (uintptr_t)&glAttachShader },
+		{ "glAttachShader", (uintptr_t)&glAttachShader_fake },
 		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation },
 		{ "glBindBuffer", (uintptr_t)&glBindBuffer_profiled },
 		{ "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
@@ -856,7 +943,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glDeleteProgram", (uintptr_t)&glDeleteProgram },
 		{ "glDeleteRenderbuffers", (uintptr_t)&glDeleteRenderbuffers },
 		{ "glDeleteShader", (uintptr_t)&glDeleteShader },
-		{ "glDeleteTextures", (uintptr_t)&glDeleteTextures },
+		{ "glDeleteTextures", (uintptr_t)&glDeleteTextures_fake },
 		{ "glDepthFunc", (uintptr_t)&glDepthFunc },
 		{ "glDepthMask", (uintptr_t)&glDepthMask },
 		{ "glDepthRangef", (uintptr_t) &glDepthRangef },
@@ -910,7 +997,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glRenderbufferStorage", (uintptr_t)&glRenderbufferStorage },
 		{ "glScissor", (uintptr_t)&glScissor },
 		{ "glShadeModel", (uintptr_t)&glShadeModel },
-		{ "glShaderSource", (uintptr_t)&glShaderSource },
+		{ "glShaderSource", (uintptr_t)&glShaderSource_fake },
 		{ "glStencilFunc", (uintptr_t)&glStencilFunc },
 		{ "glStencilFuncSeparate", (uintptr_t)&glStencilFuncSeparate },
 		{ "glStencilMask", (uintptr_t)&glStencilMask },
@@ -921,8 +1008,8 @@ so_default_dynlib default_dynlib[] = {
 		{ "glTexEnvxv", (uintptr_t)&glTexEnvxv },
 		{ "glTexImage2D", (uintptr_t)&glTexImage2D_fake },
 		{ "glTexParameterf", (uintptr_t)&glTexParameterf },
-		{ "glTexParameteri", (uintptr_t)&glTexParameteri },
-		{ "glTexSubImage2D", (uintptr_t)&glTexSubImage2D },
+		{ "glTexParameteri", (uintptr_t)&glTexParameteri_fake },
+		{ "glTexSubImage2D", (uintptr_t)&glTexSubImage2D_fake },
 		{ "glUniform1f", (uintptr_t)&glUniform1f },
 		{ "glUniform1fv", (uintptr_t)&glUniform1fv },
 		{ "glUniform1i", (uintptr_t)&glUniform1i },

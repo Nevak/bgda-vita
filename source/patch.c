@@ -378,6 +378,8 @@ void so_patch(void) {
 	XGSetTextureHeader_hook = hook_addr(LOC(0x0020fca4), (uintptr_t)&XGSetTextureHeader);
 
 	D3DDevice_TextureStageState_SetToGL_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice17TextureStageState7SetToGLEmN13XGSamplerType4EnumE"), (uintptr_t)&D3DDevice_TextureStageState_SetToGL);
+	D3DDevice_UnregisterTextureCommand_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice24UnregisterTextureCommandEP25RegisteredBaseTextureDataRi"), (uintptr_t)&D3DDevice_UnregisterTextureCommand);
+	D3DBaseTexture_UnbufferToOGL_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture13UnbufferToOGLEv"), (uintptr_t)&D3DBaseTexture_UnbufferToOGL);
 	//uint32_t loc = LOC(0x00132474);
 	//logv_error("COPY TEXTURE at %p\n", loc);
 	//texture_copy_hook = hook_addr(loc, (uintptr_t)&texture_copy);
@@ -682,4 +684,11 @@ void so_patch(void) {
 		uintptr_t addressToPatch = so_mod.text_base + addresses[i] - 0x00010000;
 		kuKernelCpuUnrestrictedMemcpy((void *)addressToPatch, stringToPatch, strlen(stringToPatch)+1);
 	}
+
+	// Patch the minimum pitch check in D3DDevice_CreateTexture2 to NOP
+	// This removes the "if (pitch < 0x41) { pitch = 0x40; }" constraint
+	uintptr_t pitchCheckAddress = so_mod.text_base + 0x00215c4c - 0x00010000;
+	uint32_t nopInstruction = 0xe1a00000; // NOP instruction for ARM (mov r0, r0)
+	logv_error("Patching pitch check at address %p with NOP", (void*)pitchCheckAddress);
+	//kuKernelCpuUnrestrictedMemcpy((void *)pitchCheckAddress, &nopInstruction, sizeof(nopInstruction));
 }

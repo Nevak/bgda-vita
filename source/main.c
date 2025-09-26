@@ -91,22 +91,22 @@ int input_thread_fn(SceSize args, void *argp) {
 		SceCtrlData pad;
 		sceCtrlPeekBufferPositiveExt2(0, &pad, 1);
 	
-		if (pad.buttons & SCE_CTRL_L1 && !(pad_previous.buttons & SCE_CTRL_L1)) {
-			// toggle log_allocs
-			log_allocs = !log_allocs;
-		}
-		if (pad.buttons & SCE_CTRL_R1 && !(pad_previous.buttons & SCE_CTRL_R1)) {
-			log_profiler = !log_profiler;
-			if (log_profiler) {
-				sceClibPrintf("Starting profiling\n");
-				//gprof_start();
-			} else {
-				sceClibPrintf("Stopping profiling\n");
-				//char fname[256];
-				//sprintf(fname, "ux0:data/prof_%d.out", profiling_idx++);
-				//gprof_stop(fname, 1);
-			}
-		}
+		// if (pad.buttons & SCE_CTRL_L1 && !(pad_previous.buttons & SCE_CTRL_L1)) {
+		// 	// toggle log_allocs
+		// 	log_allocs = !log_allocs;
+		// }
+		// if (pad.buttons & SCE_CTRL_R1 && !(pad_previous.buttons & SCE_CTRL_R1)) {
+		// 	log_profiler = !log_profiler;
+		// 	if (log_profiler) {
+		// 		sceClibPrintf("Starting profiling\n");
+		// 		//gprof_start();
+		// 	} else {
+		// 		sceClibPrintf("Stopping profiling\n");
+		// 		//char fname[256];
+		// 		//sprintf(fname, "ux0:data/prof_%d.out", profiling_idx++);
+		// 		//gprof_stop(fname, 1);
+		// 	}
+		// }
 		// if (pad.buttons & SCE_CTRL_R1) {
 		// 	g_uvFactor -= 0.001f;
 		// 	logv_error("g_uvFactor: %f\n", g_uvFactor);
@@ -184,7 +184,7 @@ int main() {
 	}
 	else
 	{
-		log_info("inputDeviceAdded is not NULL");
+		//log_info("inputDeviceAdded is not NULL");
 
 		/*
 		enum Device {
@@ -217,11 +217,11 @@ int main() {
 	}
 
 	// poll input in another thread
-	SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
-	sceKernelStartThread(input_thread, 0, NULL);
+	// SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
+	// sceKernelStartThread(input_thread, 0, NULL);
 
 
-	log_info("Main  thread shutting down");
+	log_info("Main thread shutting down");
 	
 	sceKernelExitDeleteThread(0);
 }

@@ -23,7 +23,7 @@ int lowestPowerof2NotLessThan(int dimension) {
 	 	return SO_CONTINUE(int, lowestPowerof2NotLessThan_hook, dimension);
 	}
 
-    int alignment = 64;
+    int alignment = 32;
     int aligned = (dimension + (alignment - 1)) & ~(alignment - 1);
     if (aligned < alignment) 
 		aligned = alignment;
@@ -73,15 +73,15 @@ void D3DDevice_SetTexture(uint32_t param_1, int param_2) {
 		while (potWidth < width) {
 			potWidth <<= 1;
 		}
-		if (potWidth < 64)
-			potWidth = 64;
+		if (potWidth < 32)
+			potWidth = 32;
 		int potHeight = 1;
 
 		while (potHeight < height) {
 			potHeight <<= 1;
 		}
-		if (potHeight < 64)
-			potHeight = 64;
+		if (potHeight < 32)
+			potHeight = 32;
 
 			
 		// calculate the scale factor for width and height to pass it to the shader so it can scale the UV coordinates
@@ -101,12 +101,9 @@ int g_pitch = 0;
 so_hook D3DDevice_CreateTexture2_hook;
 // D3DBaseTexture *D3DDevice_CreateTexture2(int width,int height,undefined4 depth,int levels,uint usage,undefined4 format,undefined4 resourceType)
 void *D3DDevice_CreateTexture2(int width, int height, uint32_t depth, int levels, uint32_t usage, uint32_t format, uint32_t resourceType) {
-	//logv_error("D3DDevice_CreateTexture2(%i, %i, %u, %i, %u, %u, %u)\n", width, height, depth, levels, usage, format, resourceType);
 	void *res = SO_CONTINUE(void *, D3DDevice_CreateTexture2_hook, width, height, depth, levels, usage, format, resourceType);
-
 	g_width = width;
 	g_height = height;
-
 	return res;
 }
 
