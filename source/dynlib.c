@@ -326,14 +326,14 @@ void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei
 	// {
 	// 	return;
 	// }
-    GLint prog = 0;
-    glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
-    int usePalette = 0;
-	if (width == 1024 && height == 1024) {
-		      int* caller = __builtin_return_address(0);
+    // GLint prog = 0;
+    // glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    // int usePalette = 0;
+	// if (width == 1024 && height == 1024) {
+	// 	      int* caller = __builtin_return_address(0);
 
-		logv_error("1024 found, prog=%d from: %p", prog, caller);
-	}
+	// 	logv_error("1024 found, prog=%d from: %p", prog, caller);
+	// }
 	glTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
 }
 
@@ -346,23 +346,16 @@ void glTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GLint yoffs
 
 void glTexParameteri_fake(GLenum target, GLenum pname, GLint param) {
 	// Override filtering parameters to always use GL_NEAREST
-	if (pname == GL_TEXTURE_MIN_FILTER || pname == GL_TEXTURE_MAG_FILTER) {
-		//logv_error("glTexParameteri: Overriding filter 0x%x from %d to GL_NEAREST", pname, param);
-		param = GL_NEAREST;
-	}
+	// if (pname == GL_TEXTURE_MIN_FILTER || pname == GL_TEXTURE_MAG_FILTER) {
+	// 	//logv_error("glTexParameteri: Overriding filter 0x%x from %d to GL_NEAREST", pname, param);
+	// 	param = GL_NEAREST;
+	// }
 
 	glTexParameteri(target, pname, param);
 }
 
 void glDeleteTextures_fake(GLsizei n, const GLuint *textures) {
-	// Clean up texture uniform states before deleting textures
-	for (GLsizei i = 0; i < n; i++) {
-		if (textures[i] != 0) {
-			removeTextureUniformState(textures[i]);
-			//logv_error("Cleaned up texture state for texture %u", textures[i]);
-		}
-	}
-
+	// Native GXM palettes don't need manual state cleanup
 	glDeleteTextures(n, textures);
 }
 
@@ -470,28 +463,10 @@ GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
 	return res;
 }
 
-// Forward declarations
-int getTextureUniformState(uint32_t glTexId);
-void removeTextureUniformState(uint32_t glTexId);
-
-// glBindTexture_fake
+// glBindTexture_fake - simplified for native GXM palettes
 void glBindTexture_fake(GLenum target, GLuint texture) {
 	glBindTexture(target, texture);
-
-	// Apply stored uniform state when texture is bound for rendering
-	if (target == GL_TEXTURE_2D && texture != 0) {
-		GLint prog = 0;
-		glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
-
-		if (prog != 0) {
-			GLint usePaletteLoc = glGetUniformLocation(prog, "uUsePalette");
-			if (usePaletteLoc >= 0) {
-				int usePalette = getTextureUniformState(texture);
-				glUniform1i(usePaletteLoc, usePalette);
-				//logv_error("Applied palette state for texture %u in program %d: usePalette=%d", texture, prog, usePalette);
-			}
-		}
-	}
+	// No longer need shader uniform management - GXM handles palettes natively
 }
 
 void glShaderSource_fake(GLuint shader, GLsizei count, const GLchar * const *string, const GLint *length) {
@@ -1006,10 +981,10 @@ so_default_dynlib default_dynlib[] = {
 		{ "glTexCoordPointer", (uintptr_t)&glTexCoordPointer },
 		{ "glTexEnvx", (uintptr_t)&glTexEnvx },
 		{ "glTexEnvxv", (uintptr_t)&glTexEnvxv },
-		{ "glTexImage2D", (uintptr_t)&glTexImage2D_fake },
+		{ "glTexImage2D", (uintptr_t)&glTexImage2D },
 		{ "glTexParameterf", (uintptr_t)&glTexParameterf },
-		{ "glTexParameteri", (uintptr_t)&glTexParameteri_fake },
-		{ "glTexSubImage2D", (uintptr_t)&glTexSubImage2D_fake },
+		{ "glTexParameteri", (uintptr_t)&glTexParameteri },
+		{ "glTexSubImage2D", (uintptr_t)&glTexSubImage2D },
 		{ "glUniform1f", (uintptr_t)&glUniform1f },
 		{ "glUniform1fv", (uintptr_t)&glUniform1fv },
 		{ "glUniform1i", (uintptr_t)&glUniform1i },
