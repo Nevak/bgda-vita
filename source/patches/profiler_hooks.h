@@ -1,6 +1,6 @@
 #ifndef PROFILER_HOOKS_H
 #define PROFILER_HOOKS_H
-#ifdef USE_PROFILER
+#if PROFILER_ENABLED
 #include <so_util/so_util.h>
 #include "utils/prof.h"
 
@@ -44,5 +44,10 @@ void install_prof_hooks(void) {
 	PROF_ATTACH(JBE_ThreadSleep, "_ZN3JBE6Thread5SleepEj");
 }
 
+#else
+// Stub function when profiling is disabled
+void install_prof_hooks(void) {
+	// No-op when profiling is disabled
+}
 #endif
 #endif

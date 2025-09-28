@@ -37,14 +37,14 @@ void vglSetTexPalette(SceGxmTexture *texture, void *data);
 
 so_hook XGGetPixelBufferMinAlpha_hook;
 uint XGGetPixelBufferMinAlpha(uint8_t (*param_1) [16], uint32_t param_2,int param_3,int param_4) {
-	//return 0;
-	return SO_CONTINUE(uint, XGGetPixelBufferMinAlpha_hook, param_1, param_2, param_3, param_4);
+    return 0;
+	//return SO_CONTINUE(uint, XGGetPixelBufferMinAlpha_hook, param_1, param_2, param_3, param_4);
 }
 
 so_hook XGGetPixelBufferMaxAlpha_hook;
 uint XGGetPixelBufferMaxAlpha(uint8_t (*param_1) [16], uint32_t param_2,int param_3,int param_4) {
-	//return 255;
-	return SO_CONTINUE(uint, XGGetPixelBufferMaxAlpha_hook, param_1, param_2, param_3, param_4);
+	return 255;
+	//return SO_CONTINUE(uint, XGGetPixelBufferMaxAlpha_hook, param_1, param_2, param_3, param_4);
 }
 
 // Native GXM palette implementation - no shader-based palette management needed
@@ -63,45 +63,35 @@ void ProcessAndUploadTexture
     // Check for palette format
     if ((formatToSwitchParam & 0xffffff7f) == 0xb && palette)
 	{
-        // if (width == 1024 && height == 1024) {
-        //     log_error("1024x1024 palette texture found, falling back to regular processing");
-        //     goto regular_processing;
-        // }
-
-       // logv_error("Using vitaGL native palette texture: %dx%d", width, height);
-
-        // Use GL_COLOR_INDEX8_EXT approach but set palette directly per texture
-        //glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-        // Create the paletted texture data
         uint8_t* indexData;
-        if (width == sourcePitch) {
-            // Direct use of source data
-            indexData = sourceTextureData;
-            //logv_error("Using source data directly: %d bytes", width * height);
-        } else if (width < 64) {
-            // Allocate and copy row by row
-            indexData = malloc(width * height);
-            if (!indexData) {
-                log_error("Failed to allocate texture index data");
-                goto regular_processing;
-            }
-            for (int y = 0; y < height; y++) {
-                memcpy(indexData + y * width,
-                       sourceTextureData + y * sourcePitch,
-                       width);
-            }
-            logv_error("Row-by-row copy: width=%d, height=%d, sourcePitch=%d", width, height, sourcePitch);
-        } else {
-            // Allocate and direct copy
-            indexData = malloc(width * height);
-            if (!indexData) {
-                log_error("Failed to allocate texture index data");
-                goto regular_processing;
-            }
-            memcpy(indexData, sourceTextureData, width * height);
-            logv_error("Allocated and copied: %d bytes", width * height);
-        }
+        indexData = sourceTextureData;
+        // if (width == sourcePitch) {
+        //     // Direct use of source data
+        //     indexData = sourceTextureData;
+        //     //logv_error("Using source data directly: %d bytes", width * height);
+        // } else if (width < 64) {
+        //     // Allocate and copy row by row
+        //     indexData = malloc(width * height);
+        //     if (!indexData) {
+        //         log_error("Failed to allocate texture index data");
+        //         goto regular_processing;
+        //     }
+        //     for (int y = 0; y < height; y++) {
+        //         memcpy(indexData + y * width,
+        //                sourceTextureData + y * sourcePitch,
+        //                width);
+        //     }
+        //     logv_error("Row-by-row copy: width=%d, height=%d, sourcePitch=%d", width, height, sourcePitch);
+        // } else {
+        //     // Allocate and direct copy
+        //     indexData = malloc(width * height);
+        //     if (!indexData) {
+        //         log_error("Failed to allocate texture index data");
+        //         goto regular_processing;
+        //     }
+        //     memcpy(indexData, sourceTextureData, width * height);
+        //     logv_error("Allocated and copied: %d bytes", width * height);
+        // }
 
         // Upload the paletted texture
         //logv_error("Calling glTexImage2D_fake with internalFormat=GL_COLOR_INDEX8_EXT (0x%X)", GL_COLOR_INDEX8_EXT);
@@ -114,39 +104,8 @@ void ProcessAndUploadTexture
 
         // Now set the palette data directly for this texture
         SceGxmTexture* gxmTex = vglGetGxmTexture(GL_TEXTURE_2D);
-        if (gxmTex) {
-            // Allocate GPU-accessible palette data
-            void* paletteData = gpu_alloc_mapped_aligned(SCE_GXM_PALETTE_ALIGNMENT, 256 * sizeof(uint32_t), VGL_MEM_VRAM);
-            if (paletteData) {
-                // Convert palette from BGRA to ABGR for GXM
-                uint32_t* srcPalette = (uint32_t*)palette;
-                uint32_t* gxmPalette = (uint32_t*)paletteData;
-                for (int i = 0; i < 256; i++) {
-                    uint32_t srcColor = srcPalette[i];
-                    // Source: BGRA (little endian), Target: ABGR for GXM
-                    uint8_t b = (srcColor >> 0) & 0xFF;
-                    uint8_t g = (srcColor >> 8) & 0xFF;
-                    uint8_t r = (srcColor >> 16) & 0xFF;
-                    uint8_t a = (srcColor >> 24) & 0xFF;
-                    gxmPalette[i] = (a << 24) | (b << 16) | (g << 8) | r; // ABGR
-                }
-
-                // Set the palette directly using vitaGL's function
-                int r = sceGxmTextureSetPalette(gxmTex, paletteData);
-                //logv_error("Set per-texture palette data at %p, r=%X", paletteData, r);
-            } else {
-                log_error("Failed to allocate palette data for texture");
-            }
-        } else {
-            log_error("Failed to get GXM texture handle");
-        }
-
-        // Set texture parameters
-        // glTexParameteri(glTarget, GL_TEXTURE_MAX_LEVEL, 0);
-        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        void* paletteData = gpu_alloc_palette((uint32_t*)palette, 256, 4);
+        sceGxmTextureSetPalette(gxmTex, paletteData);
 
         return;
 	}

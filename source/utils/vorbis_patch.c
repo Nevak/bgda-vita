@@ -291,7 +291,7 @@ int ov_read_fake(OggVorbis_File *vf, char *buffer, int length, int bigendianp, i
 
 void SND_Frame_fake()
 {
-	return;
+	//return;
 	
 	main_thread_id = sceKernelGetThreadId();
 
@@ -375,7 +375,7 @@ void patch_vorbis(void) {
 	hook_addr(so_symbol(&so_mod, "ov_raw_tell"), (uintptr_t)ov_raw_tell);
 	hook_addr(so_symbol(&so_mod, "ov_raw_total"), (uintptr_t)ov_raw_total);
 	ov_read_hook = hook_addr(so_symbol(&so_mod, "ov_read"), (uintptr_t)ov_read);
-	snd_frame_hook = hook_addr(so_symbol(&so_mod, "_Z9SND_Framev"), (uintptr_t)SND_Frame_fake);
+	//snd_frame_hook = hook_addr(so_symbol(&so_mod, "_Z9SND_Framev"), (uintptr_t)SND_Frame_fake);
 	hook_addr(so_symbol(&so_mod, "ov_seekable"), (uintptr_t)ov_seekable);
 	hook_addr(so_symbol(&so_mod, "ov_serialnumber"), (uintptr_t)ov_serialnumber);
 	hook_addr(so_symbol(&so_mod, "ov_streams"), (uintptr_t)ov_streams);

@@ -245,9 +245,9 @@ static ButtonMapping mapping[] = {
 		{ SCE_CTRL_SQUARE,	AKEYCODE_BUTTON_X },
 		{ SCE_CTRL_TRIANGLE,  AKEYCODE_BUTTON_Y },
 		{ SCE_CTRL_L1,		AKEYCODE_BUTTON_L1 },
-		{ SCE_CTRL_L2,		AKEYCODE_BUTTON_L2 },
+		//{ SCE_CTRL_L2,		AKEYCODE_BUTTON_L2 },
 		{ SCE_CTRL_R1,		AKEYCODE_BUTTON_R1 },
-		{ SCE_CTRL_R2,		AKEYCODE_BUTTON_R2 },
+		//{ SCE_CTRL_R2,		AKEYCODE_BUTTON_R2 },
 		{ SCE_CTRL_START,	 AKEYCODE_BUTTON_START },
 		{ SCE_CTRL_SELECT,	AKEYCODE_BUTTON_SELECT },
 };
@@ -326,11 +326,11 @@ void sendJoyEvent(const JoyState& state) {
 
 	bool ltPressed = (state.trigger_mask & TRIGGER_L2) != 0;
 	bool rtPressed = (state.trigger_mask & TRIGGER_R2) != 0;
-	bool lbPressed = (state.trigger_mask & TRIGGER_L1) != 0;
-	bool rbPressed = (state.trigger_mask & TRIGGER_R1) != 0;
+	//bool lbPressed = (state.trigger_mask & TRIGGER_L1) != 0;
+	//bool rbPressed = (state.trigger_mask & TRIGGER_R1) != 0;
 	
-	stickInputEvent.motion_lt[0] = (lbPressed || ltPressed) ? 1.0f : 0.0f;
-	stickInputEvent.motion_rt[0] = (rbPressed || rtPressed) ? 1.0f : 0.0f;
+	stickInputEvent.motion_lt[0] = (/*lbPressed ||*/ ltPressed) ? 1.0f : 0.0f;
+	stickInputEvent.motion_rt[0] = (/*rbPressed ||*/ rtPressed) ? 1.0f : 0.0f;
 
 	stickInputEvent.motion_ptridx[0] = 0;
 	stickInputEvent.type = AINPUT_EVENT_TYPE_MOTION;

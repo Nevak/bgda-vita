@@ -643,7 +643,7 @@ void so_patch(void) {
 	}
 
 	#if PROFILER_ENABLED
-	install_prof_hooks();
+	//install_prof_hooks();
 	#endif
 
 	// Patch big and useless texture names so we don't load them
