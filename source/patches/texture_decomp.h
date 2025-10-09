@@ -99,12 +99,27 @@ int g_width = 0;
 int g_height = 0;
 int g_pitch = 0;
 so_hook D3DDevice_CreateTexture2_hook;
+extern float g_D3DDevice_CreateTexture2Ms;
 // D3DBaseTexture *D3DDevice_CreateTexture2(int width,int height,undefined4 depth,int levels,uint usage,undefined4 format,undefined4 resourceType)
 void *D3DDevice_CreateTexture2(int width, int height, uint32_t depth, int levels, uint32_t usage, uint32_t format, uint32_t resourceType) {
-	void *res = SO_CONTINUE(void *, D3DDevice_CreateTexture2_hook, width, height, depth, levels, usage, format, resourceType);
+
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	void* result = SO_CONTINUE(void *, D3DDevice_CreateTexture2_hook, width, height, depth, levels, usage, format, resourceType);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_D3DDevice_CreateTexture2Ms += elapsedMs;
 	g_width = width;
 	g_height = height;
-	return res;
+	return result;
+
+
+	// void *res = SO_CONTINUE(void *, D3DDevice_CreateTexture2_hook, width, height, depth, levels, usage, format, resourceType);
+	// g_width = width;
+	// g_height = height;
+	// return res;
 }
 
 so_hook XGSetTextureHeader_hook;

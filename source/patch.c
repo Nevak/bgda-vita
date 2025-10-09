@@ -21,6 +21,7 @@
 #include <libperf.h>
 #include <vitaGL.h>
 #include "utils/logger.h"
+#include "worldAllocateSegments.h"
 
 #include "utils/macros.h"
 
@@ -32,7 +33,7 @@
 #include "patches/write_render_command.h"
 #include "patches/memory.h"
 
-#if PROFILER_ENABLED
+#ifdef PROFILER_ENABLED
 #include <utils/prof.h>
 #include "patches/profiler_hooks.h"
 #endif
@@ -53,6 +54,25 @@ extern so_module so_mod_libxmv;
 #include <arm_neon.h>
 
 extern int log_profiler;
+
+// Global accumulator for cdProcess time tracking
+static float g_cdProcessTotalMs = 0.0f;
+static float g_MC_LoadLevelEntitiesMs = 0.0f;
+float g_ProcessAndUploadTextureMs = 0.0f;  // Non-static because it's extern'd in texture_palette.h
+static float g_lumpLoadTotalMs = 0.0f;
+static float g_lumpLoadGlobTotalMs = 0.0f;
+static float g_worldAllocateSegmentsMs = 0.0f;
+static float g_worldResetMs = 0.0f;
+static float g_gameClearMs = 0.0f;
+static float g_SND_StartStreamMs = 0.0f;
+ float g_D3DDevice_CreateTexture2Ms = 0.0f;
+static float g_D3DDevice_CreatePalette2Ms = 0.0f;
+static float g_D3DTexture_LockRectMs = 0.0f;
+static float g_D3DTexture_UnlockRectMs = 0.0f;
+static float g_machHostOpenMs = 0.0f;
+static float g_machHostReadMs = 0.0f;
+static float g_machHostSeekMs = 0.0f;
+static float g_machHostCloseMs = 0.0f;
 
 int ret0() { return 0; }
 int ret1() { return 1; }
@@ -207,7 +227,7 @@ void D3DDevice_AsyncRenderCB(void *device_ptr) {
 	struct d3dDeviceFake *thisPtr = (struct d3dDeviceFake *)device;
     // Process commands while still work remains
     while (device->hasRenderWork) {
-#if PROFILER_ENABLED
+#ifdef PROFILER_ENABLED
 		struct astruct *cmdData = thisPtr->cmd;
 		uint8_t cmdType = cmdData->field0 & 0xFF;
 		uint32_t cmdType32 = cmdData->field0 & 0xFF;
@@ -309,9 +329,347 @@ void D3DBaseTexture_BufferToOGL(void *pThis, void *pTexData, const void *pBuffer
 	SO_CONTINUE(void *, D3DBaseTexture_BufferToOGL_hook, pThis, pTexData, pBuffer, size);
 }
 
-void so_patch(void) {	
-	//sceSysmoduleLoadModule(SCE_SYSMODULE_PERF);
+void DoNothing()
+{
+}
 
+so_hook gameLoadWorld_hook;
+void gameLoadWorld(char *worldName) {
+	// Reset accumulators
+	g_cdProcessTotalMs = 0.0f;
+	g_MC_LoadLevelEntitiesMs = 0.0f;
+	g_ProcessAndUploadTextureMs = 0.0f;
+	g_lumpLoadTotalMs = 0.0f;
+	g_lumpLoadGlobTotalMs = 0.0f;
+	g_worldAllocateSegmentsMs = 0.0f;
+	g_worldResetMs = 0.0f;
+	g_gameClearMs = 0.0f;
+	g_SND_StartStreamMs = 0.0f;
+	g_D3DDevice_CreateTexture2Ms = 0.0f;
+	g_D3DDevice_CreatePalette2Ms = 0.0f;
+	g_D3DTexture_LockRectMs = 0.0f;
+	g_D3DTexture_UnlockRectMs = 0.0f;
+	g_machHostOpenMs = 0.0f;
+	g_machHostReadMs = 0.0f;
+	g_machHostSeekMs = 0.0f;
+	g_machHostCloseMs = 0.0f;
+
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	SO_CONTINUE(void *, gameLoadWorld_hook, worldName);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	logv_error("gameLoadWorld('%s') took %.2f ms (%.2f seconds)\n", worldName, elapsedMs, elapsedMs / 1000.0f);
+	logv_error("  -> worldAllocateSegments: %.2f ms (%.1f%%)\n", g_worldAllocateSegmentsMs, (g_worldAllocateSegmentsMs / elapsedMs) * 100.0f);
+	logv_error("    -> machHostOpen: %.2f ms (%.1f%%)\n", g_machHostOpenMs, (g_machHostOpenMs / elapsedMs) * 100.0f);
+	logv_error("    -> machHostRead: %.2f ms (%.1f%%)\n", g_machHostReadMs, (g_machHostReadMs / elapsedMs) * 100.0f);
+	logv_error("    -> machHostSeek: %.2f ms (%.1f%%)\n", g_machHostSeekMs, (g_machHostSeekMs / elapsedMs) * 100.0f);
+	logv_error("    -> machHostClose: %.2f ms (%.1f%%)\n", g_machHostCloseMs, (g_machHostCloseMs / elapsedMs) * 100.0f);
+	logv_error("    -> D3DDevice_CreateTexture2: %.2f ms (%.1f%%)\n", g_D3DDevice_CreateTexture2Ms, (g_D3DDevice_CreateTexture2Ms / elapsedMs) * 100.0f);
+	logv_error("    -> D3DDevice_CreatePalette2: %.2f ms (%.1f%%)\n", g_D3DDevice_CreatePalette2Ms, (g_D3DDevice_CreatePalette2Ms / elapsedMs) * 100.0f);
+	logv_error("    -> D3DTexture_LockRect: %.2f ms (%.1f%%)\n", g_D3DTexture_LockRectMs, (g_D3DTexture_LockRectMs / elapsedMs) * 100.0f);
+	logv_error("    -> D3DTexture_UnlockRect: %.2f ms (%.1f%%)\n", g_D3DTexture_UnlockRectMs, (g_D3DTexture_UnlockRectMs / elapsedMs) * 100.0f);
+	logv_error("  -> worldReset: %.2f ms (%.1f%%)\n", g_worldResetMs, (g_worldResetMs / elapsedMs) * 100.0f);
+	logv_error("  -> gameClear: %.2f ms (%.1f%%)\n", g_gameClearMs, (g_gameClearMs / elapsedMs) * 100.0f);
+	logv_error("  -> SND_StartStream: %.2f ms (%.1f%%)\n", g_SND_StartStreamMs, (g_SND_StartStreamMs / elapsedMs) * 100.0f);
+	logv_error("  -> lumpLoad: %.2f ms (%.1f%%)\n", g_lumpLoadTotalMs, (g_lumpLoadTotalMs / elapsedMs) * 100.0f);
+	logv_error("  -> lumpLoadGlob: %.2f ms (%.1f%%)\n", g_lumpLoadGlobTotalMs, (g_lumpLoadGlobTotalMs / elapsedMs) * 100.0f);
+	logv_error("  -> cdProcess: %.2f ms (%.1f%%)\n", g_cdProcessTotalMs, (g_cdProcessTotalMs / elapsedMs) * 100.0f);
+	logv_error("  -> MC_LoadLevelEntities: %.2f ms (%.1f%%)\n", g_MC_LoadLevelEntitiesMs, (g_MC_LoadLevelEntitiesMs / elapsedMs) * 100.0f);
+	logv_error("  -> ProcessAndUploadTexture: %.2f ms (%.1f%%)\n", g_ProcessAndUploadTextureMs, (g_ProcessAndUploadTextureMs / elapsedMs) * 100.0f);
+}
+
+so_hook cdProcess_hook;
+void cdProcess(int param_1) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	SO_CONTINUE(void*, cdProcess_hook, param_1);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	// Accumulate time
+	g_cdProcessTotalMs += elapsedMs;
+}
+
+so_hook lumpLoad_hook;
+int lumpLoad(char *lumpName) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	int result = SO_CONTINUE(int, lumpLoad_hook, lumpName);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_lumpLoadTotalMs += elapsedMs;
+
+	if (elapsedMs > 100)
+	{
+		logv_error("lumpLoad('%s') took %.2f ms (%.2f seconds)\n", lumpName, elapsedMs, elapsedMs / 1000.0f);
+	}
+
+	return result;
+}
+
+so_hook lumpLoadGlob_hook;
+int lumpLoadGlob(char *lumpName) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	int result = SO_CONTINUE(int, lumpLoadGlob_hook, lumpName);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_lumpLoadGlobTotalMs += elapsedMs;
+
+	if (elapsedMs > 100)
+	{
+		logv_error("lumpLoadGlob('%s') took %.2f ms (%.2f seconds)\n", lumpName, elapsedMs, elapsedMs / 1000.0f);
+	}
+
+	return result;
+}
+
+so_hook MC_LoadLevelEntities_hook;
+void MC_LoadLevelEntities(char *worldName) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	SO_CONTINUE(void*, MC_LoadLevelEntities_hook, worldName);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_MC_LoadLevelEntitiesMs = elapsedMs;
+}
+
+// so_hook lockLoadingMutex_hook;
+// void lockLoadingMutex(bool param_1) {
+// 	SO_CONTINUE(void*, lockLoadingMutex_hook, param_1);
+// }
+
+// so_hook releaseLoadingMutex_hook;
+// void releaseLoadingMutex(void) {
+// 	SO_CONTINUE(void*, releaseLoadingMutex_hook);
+// }
+
+so_hook worldAllocateSegments_hook;
+// void worldAllocateSegments(void *worldHeader) {
+// 	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+// 	worldAllocateSegments_impl((_worldHeader*)worldHeader);
+
+// 	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+// 	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+// 	g_worldAllocateSegmentsMs = elapsedMs;
+// }
+
+so_hook worldReset_hook;
+void worldReset(void *worldHeader) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	SO_CONTINUE(void*, worldReset_hook, worldHeader);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_worldResetMs = elapsedMs;
+}
+
+so_hook gameClear_hook;
+void gameClear(int param_1) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	SO_CONTINUE(void*, gameClear_hook, param_1);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_gameClearMs = elapsedMs;
+}
+
+so_hook SND_StartStream_hook;
+void SND_StartStream(int param_1, char *path, int param_3, int param_4, int param_5) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	SO_CONTINUE(void*, SND_StartStream_hook, param_1, path, param_3, param_4, param_5);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_SND_StartStreamMs = elapsedMs;
+}
+
+// so_hook D3DDevice_CreateTexture2_hook;
+// void* D3DDevice_CreateTexture2(int width, int height, int levels, int usage, int format, int d3dFormat, int pool) {
+// 	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+// 	void* result = SO_CONTINUE(void*, D3DDevice_CreateTexture2_hook, width, height, levels, usage, format, d3dFormat, pool);
+
+// 	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+// 	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+// 	g_D3DDevice_CreateTexture2Ms += elapsedMs;
+
+// 	return result;
+// }
+
+so_hook D3DDevice_CreatePalette2_hook;
+void* D3DDevice_CreatePalette2(int param_1) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	void* result = SO_CONTINUE(void*, D3DDevice_CreatePalette2_hook, param_1);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_D3DDevice_CreatePalette2Ms += elapsedMs;
+
+	return result;
+}
+
+so_hook D3DPalette_Lock2_hook;
+int D3DPalette_Lock2(void* palette, int param_1) {
+	return SO_CONTINUE(int, D3DPalette_Lock2_hook, palette, param_1);
+}
+
+// so_hook D3DTexture_LockRect_hook;
+// int D3DTexture_LockRect(void* texture, int level, int* lockedRect, int* rect, int flags) {
+// 	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+// 	int result = SO_CONTINUE(int, D3DTexture_LockRect_hook, texture, level, lockedRect, rect, flags);
+
+// 	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+// 	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+// 	g_D3DTexture_LockRectMs += elapsedMs;
+
+// 	return result;
+// }
+
+so_hook D3DTexture_UnlockRect_hook;
+int D3DTexture_UnlockRect(void* texture, int level) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	int result = SO_CONTINUE(int, D3DTexture_UnlockRect_hook, texture, level);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_D3DTexture_UnlockRectMs += elapsedMs;
+
+	return result;
+}
+
+so_hook machHostOpen_hook;
+int machHostOpen(char* path, char* mode) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	int result = SO_CONTINUE(int, machHostOpen_hook, path, mode);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_machHostOpenMs += elapsedMs;
+
+	return result;
+}
+
+so_hook machHostRead_hook;
+int machHostRead(int handle, void* buffer, int size) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	int result = SO_CONTINUE(int, machHostRead_hook, handle, buffer, size);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_machHostReadMs += elapsedMs;
+
+	return result;
+}
+
+so_hook machHostSeek_hook;
+int machHostSeek(int handle, int offset, int whence) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	int result = SO_CONTINUE(int, machHostSeek_hook, handle, offset, whence);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_machHostSeekMs += elapsedMs;
+
+	return result;
+}
+
+so_hook machHostClose_hook;
+int machHostClose(int handle) {
+	uint64_t timeStart = sceKernelGetProcessTimeWide();
+
+	int result = SO_CONTINUE(int, machHostClose_hook, handle);
+
+	uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+
+	g_machHostCloseMs += elapsedMs;
+
+	return result;
+}
+
+uintptr_t lockLoadingMutex_addr;
+uintptr_t releaseLoadingMutex_addr;
+
+// Direct function addresses for worldAllocateSegments
+uintptr_t lumpLoad_addr;
+uintptr_t machHostOpen_addr;
+uintptr_t machHostRead_addr;
+uintptr_t machHostSeek_addr;
+uintptr_t machHostClose_addr;
+uintptr_t lowestPowerof2NotLessThan_addr;
+uintptr_t D3DDevice_CreatePalette2_addr;
+uintptr_t D3DPalette_Lock2_addr;
+uintptr_t D3DDevice_CreateTexture2_addr;
+uintptr_t D3DTexture_LockRect_addr;
+uintptr_t D3DTexture_UnlockRect_addr;
+
+void so_patch(void) {
+	//sceSysmoduleLoadModule(SCE_SYSMODULE_PERF);
+  	gameLoadWorld_hook = hook_addr(LOC(0x0013f154), (uintptr_t)&gameLoadWorld);
+	cdProcess_hook = hook_addr(LOC(0x000cd80c), (uintptr_t)&cdProcess);
+	MC_LoadLevelEntities_hook = hook_addr(LOC(0x000e133c), (uintptr_t)&MC_LoadLevelEntities);
+	lumpLoad_hook = hook_addr(LOC(0x000f810c), (uintptr_t)&lumpLoad);
+	lumpLoadGlob_hook = hook_addr(LOC(0x000f82bc), (uintptr_t)&lumpLoadGlob);
+	//lockLoadingMutex_hook = hook_addr(LOC(0x0018364c), (uintptr_t)&lockLoadingMutex);
+	//releaseLoadingMutex_hook = hook_addr(LOC(0x0018367c), (uintptr_t)&releaseLoadingMutex);
+	lockLoadingMutex_addr = LOC(0x0018364c);
+	releaseLoadingMutex_addr = LOC(0x0018367c);
+
+	// Store direct addresses for worldAllocateSegments
+	lumpLoad_addr = LOC(0x000f810c);
+	machHostOpen_addr = LOC(0x00180520);
+	machHostRead_addr = LOC(0x001805cc);
+	machHostSeek_addr = LOC(0x001806a4);
+	machHostClose_addr = LOC(0x00180674);
+	D3DDevice_CreatePalette2_addr = LOC(0x0020a2b0);
+	D3DPalette_Lock2_addr = LOC(0x0020a314);
+	D3DTexture_UnlockRect_addr = LOC(0x00215380);
+
+	worldAllocateSegments_hook = hook_addr(LOC(0x00131aec), (uintptr_t)&worldAllocateSegments);
+	worldReset_hook = hook_addr(LOC(0x0013a0bc), (uintptr_t)&worldReset);
+	gameClear_hook = hook_addr(LOC(0x0013ef90), (uintptr_t)&gameClear);
+	SND_StartStream_hook = hook_addr(LOC(0x0010a690), (uintptr_t)&SND_StartStream);
+	//D3DDevice_CreateTexture2_hook = hook_addr(LOC(0x00215bb0), (uintptr_t)&D3DDevice_CreateTexture2);
+	D3DDevice_CreatePalette2_hook = hook_addr(LOC(0x0020a2b0), (uintptr_t)&D3DDevice_CreatePalette2);
+	D3DPalette_Lock2_hook = hook_addr(LOC(0x0020a314), (uintptr_t)&D3DPalette_Lock2);
+	//D3DTexture_LockRect_hook = hook_addr(LOC(0x00215260), (uintptr_t)&D3DTexture_LockRect);
+	D3DTexture_UnlockRect_hook = hook_addr(LOC(0x00215380), (uintptr_t)&D3DTexture_UnlockRect);
+	machHostOpen_hook = hook_addr(LOC(0x00180520), (uintptr_t)&machHostOpen);
+	machHostRead_hook = hook_addr(LOC(0x001805cc), (uintptr_t)&machHostRead);
+	machHostSeek_hook = hook_addr(LOC(0x001806a4), (uintptr_t)&machHostSeek);
+	machHostClose_hook = hook_addr(LOC(0x00180674), (uintptr_t)&machHostClose);
 	// _Z8usprintfPtPKtfffffff
 	uintptr_t usprintf_addr = (uintptr_t)so_symbol(&so_mod, "_Z8usprintfPtPKtfffffff");
 	if (usprintf_addr == 0) {
@@ -358,34 +716,40 @@ void so_patch(void) {
 	D3DDevice_SetTexture_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetTexture"), (uintptr_t)&D3DDevice_SetTexture);
 	
 	// Hook WriteCommand function using direct address
-	WriteCommand_hook = hook_addr(LOC(0x001dc604), (uintptr_t)&WriteCommand_Optimized);
+	//WriteCommand_hook = hook_addr(LOC(0x001dc604), (uintptr_t)&WriteCommand_Optimized);
 	logv_error("WriteCommand hooked at address 0x001dc604 -> %p\n", &WriteCommand_Optimized);
 	
 	D3DDevice_SetVertexShaderConstantNotInline_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline");
 	D3DDevice_SetVertexShaderConstantFast_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantFast");
+	D3DDevice_ReadCommand_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice11ReadCommandEv");
 	D3DDevice_SetVertexShaderConstantNotInline_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline"), (uintptr_t)&D3DDevice_SetVertexShaderConstantNotInline_patched);
-	D3DBaseTexture_Unregister_hook =  hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture10UnregisterEi"), (uintptr_t)&D3DBaseTexture_Unregister);
 	
 	// _Z11coreAddTaskPFvvEiPKc coreAddTask
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
-	renderDelayedShadows_hook = hook_addr(LOC(0x0013d578), (uintptr_t)&renderDelayedShadows);
-	runObjects_hook = hook_addr(LOC(0x00114a1c), (uintptr_t)&runObjects);
-	drawObjects_hook = hook_addr(LOC(0x00115094), (uintptr_t)&drawObjects);
+	//renderDelayedShadows_hook = hook_addr(LOC(0x0013d578), (uintptr_t)&renderDelayedShadows);
+	//runObjects_hook = hook_addr(LOC(0x00114a1c), (uintptr_t)&runObjects);
+	//drawObjects_hook = hook_addr(LOC(0x00115094), (uintptr_t)&drawObjects);
 	XGGetPixelBufferMinAlpha_hook = hook_addr(LOC(0x00209d0c), (uintptr_t)&XGGetPixelBufferMinAlpha);
 	XGGetPixelBufferMaxAlpha_hook = hook_addr(LOC(0x00209ff0), (uintptr_t)&XGGetPixelBufferMaxAlpha);
 	ProcessAndUploadTexture_hook = hook_addr(LOC(0x0021225c), (uintptr_t)&ProcessAndUploadTexture);
-	DoTheFinalGPUUpload_hook = hook_addr(LOC(0x002160ec), (uintptr_t)&DoTheFinalGPUUpload);
+	//DoTheFinalGPUUpload_hook = hook_addr(LOC(0x002160ec), (uintptr_t)&DoTheFinalGPUUpload);
 	XGSetTextureHeader_hook = hook_addr(LOC(0x0020fca4), (uintptr_t)&XGSetTextureHeader);
 
-	D3DDevice_TextureStageState_SetToGL_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice17TextureStageState7SetToGLEmN13XGSamplerType4EnumE"), (uintptr_t)&D3DDevice_TextureStageState_SetToGL);
+	//D3DDevice_TextureStageState_SetToGL_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice17TextureStageState7SetToGLEmN13XGSamplerType4EnumE"), (uintptr_t)&D3DDevice_TextureStageState_SetToGL);
 	D3DDevice_UnregisterTextureCommand_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice24UnregisterTextureCommandEP25RegisteredBaseTextureDataRi"), (uintptr_t)&D3DDevice_UnregisterTextureCommand);
 	D3DBaseTexture_UnbufferToOGL_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture13UnbufferToOGLEv"), (uintptr_t)&D3DBaseTexture_UnbufferToOGL);
+	D3DBaseTexture_Unregister_hook =  hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture10UnregisterEi"), (uintptr_t)&D3DBaseTexture_Unregister);
+
+
+	hook_addr(so_symbol(&so_mod, "_Z9SND_Framev"), (uintptr_t)&DoNothing);
+
+
 	//uint32_t loc = LOC(0x00132474);
 	//logv_error("COPY TEXTURE at %p\n", loc);
 	//texture_copy_hook = hook_addr(loc, (uintptr_t)&texture_copy);
 
 	//_Z25lowestPowerof2NotLessThani
-	uintptr_t lowestPowerof2NotLessThan_addr = (uintptr_t)so_symbol(&so_mod, "_Z25lowestPowerof2NotLessThani");
+	lowestPowerof2NotLessThan_addr = (uintptr_t)so_symbol(&so_mod, "_Z25lowestPowerof2NotLessThani");
 	if (lowestPowerof2NotLessThan_addr == 0) {
 		log_error("lowestPowerof2NotLessThan not found\n");
 	} else {
@@ -393,23 +757,6 @@ void so_patch(void) {
 		lowestPowerof2NotLessThan_hook = hook_addr(lowestPowerof2NotLessThan_addr, (uintptr_t)&lowestPowerof2NotLessThan);
 	}
 
-	// _ZN14D3DBaseTexture11BufferToOGLEP21RegisteredTextureDataPKvi
-	uintptr_t D3DBaseTexture_BufferToOGL_addr = (uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture11BufferToOGLEP21RegisteredTextureDataPKvi");
-	if (D3DBaseTexture_BufferToOGL_addr == 0) {
-		log_error("D3DBaseTexture_BufferToOGL not found\n");
-	} else {
-		logv_error("D3DBaseTexture_BufferToOGL found at %p\n", D3DBaseTexture_BufferToOGL_addr);
-		//D3DBaseTexture_BufferToOGL_hook = hook_addr(D3DBaseTexture_BufferToOGL_addr, (uintptr_t)&D3DBaseTexture_BufferToOGL);
-	}	
-
-	// _ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm
-	uintptr_t D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice8GetFVFVSEPNS0_24FVFVertexShaderContainerERm");
-	if (D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_addr == 0) {
-		log_error("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm not found\n");
-	} else {
-		logv_error("D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm found at %p\n", D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_addr);
-		//D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_hook = hook_addr(D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm_addr, (uintptr_t)&D3DDevice_GetFVFVSEPNS0_24FVFVertexShaderContainerERm);
-	}
 
 	//_Z7memInitPvi
 	uintptr_t memInit_addr = (uintptr_t)so_symbol(&so_mod, "_Z7memInitPvi");
@@ -430,7 +777,7 @@ void so_patch(void) {
 	}
 
 	//void D3DTexture_LockRect(D3DBaseTexture *pThis,undefined4 Level,int *pLockedRect,int *pRect,int flags)
-	uintptr_t D3DTexture_LockRect_addr = (uintptr_t)so_symbol(&so_mod, "D3DTexture_LockRect");
+	D3DTexture_LockRect_addr = (uintptr_t)so_symbol(&so_mod, "D3DTexture_LockRect");
 	if (D3DTexture_LockRect_addr == 0) {
 		log_error("D3DTexture_LockRect not found\n");
 	} else {
@@ -439,30 +786,12 @@ void so_patch(void) {
 	}
 
 	//D3DDevice_CreateTexture2
-	uintptr_t D3DDevice_CreateTexture2_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_CreateTexture2");
+	D3DDevice_CreateTexture2_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_CreateTexture2");
 	if (D3DDevice_CreateTexture2_addr == 0) {
 		log_error("D3DDevice_CreateTexture2 not found\n");
 	} else {
 		logv_error("D3DDevice_CreateTexture2 found at %p\n", D3DDevice_CreateTexture2_addr);
 		D3DDevice_CreateTexture2_hook = hook_addr(D3DDevice_CreateTexture2_addr, (uintptr_t)&D3DDevice_CreateTexture2);
-	}
-
-	//_ZN3JBE9D3DDevice16SetTextureStagesEm
-	uintptr_t D3DDevice_SetTextureStages_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice16SetTextureStagesEm");
-	if (D3DDevice_SetTextureStages_addr == 0) {
-		log_error("D3DDevice_SetTextureStages not found\n");
-	} else {
-		logv_error("D3DDevice_SetTextureStages found at %p\n", D3DDevice_SetTextureStages_addr);
-		D3DDevice_SetTextureStages_hook = hook_addr(D3DDevice_SetTextureStages_addr, (uintptr_t)&D3DDevice_SetTextureStages);
-	}
-
-	// _ZN3JBE5Input6RenderEv
-	uintptr_t inputRender_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE5Input6RenderEv");
-	if (inputRender_addr == 0) {
-		log_error("inputRender not found\n");
-	} else {
-		logv_error("inputRender found at %p\n", inputRender_addr);
-		//inputRender_hook = hook_addr(inputRender_addr, (uintptr_t)&inputRender);
 	}
 
 	// _ZN15VirtualControls6RenderEv
@@ -510,24 +839,6 @@ void so_patch(void) {
 		cdDirectoryLookup_hook = hook_addr(cdDirectoryLookup_addr, (uintptr_t)&cdDirectoryLookup);
 	}
 
-	//_ZN3JBE6System10BeginFrameEv
-	uintptr_t System_BeginFrame_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE6System10BeginFrameEv");
-	if (System_BeginFrame_addr == 0) {
-		log_error("System_BeginFrame not found\n");
-	} else {
-		logv_error("System_BeginFrame found at %p\n", System_BeginFrame_addr);
-		//System_BeginFrame_hook = hook_addr(System_BeginFrame_addr, (uintptr_t)&System_BeginFrame);
-	}
-
-	// // _Z8gameLoopv
-	// uintptr_t gameLoop_addr = (uintptr_t)so_symbol(&so_mod, "_Z8gameLoopv");
-	// if (gameLoop_addr == 0) {
-	// 	log_error("gameLoop not found\n");
-	// } else {
-	// 	logv_error("gameLoop found at %p\n", gameLoop_addr);
-	// 	gameLoop_hook = hook_addr(gameLoop_addr, (uintptr_t)&gameLoop);
-	// }
-
 	// _Z14machFrameStartv
 	uintptr_t machFrameStart_addr = (uintptr_t)so_symbol(&so_mod, "_Z14machFrameStartv");
 	if (machFrameStart_addr == 0) {
@@ -535,24 +846,6 @@ void so_patch(void) {
 	} else {
 		logv_error("machFrameStart found at %p\n", machFrameStart_addr);
 		machFrameStart_hook = hook_addr(machFrameStart_addr, (uintptr_t)&machFrameStart);
-	}
-
-	// _Z12machFrameEndi
-	uintptr_t machFrameEnd_addr = (uintptr_t)so_symbol(&so_mod, "_Z12machFrameEndi");
-	if (machFrameEnd_addr == 0) {
-		log_error("machFrameEnd not found\n");
-	} else {
-		logv_error("machFrameEnd found at %p\n", machFrameEnd_addr);
-		mach_frameEnd_hook = hook_addr(machFrameEnd_addr, (uintptr_t)&machFrameEnd);
-	}
-
-	//_ZN3JBE9D3DDevice4SwapEm
-	uintptr_t JBE_D3DDevice_Swap_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice4SwapEm");
-	if (JBE_D3DDevice_Swap_addr == 0) {
-		log_error("JBE_D3DDevice_Swap not found\n");
-	} else {
-		logv_error("JBE_D3DDevice_Swap found at %p\n", JBE_D3DDevice_Swap_addr);
-		JBE_D3DDevice_Swap_hook = hook_addr(JBE_D3DDevice_Swap_addr, (uintptr_t)&JBE_D3DDevice_Swap);
 	}
 
 	//_ZN3JBE9D3DDevice13AsyncRenderCBEPv
@@ -573,24 +866,6 @@ void so_patch(void) {
 		TrackScheduler_ThreadProcCB_hook = hook_addr(TrackScheduler_ThreadProcCB_addr, (uintptr_t)&TrackScheduler_ThreadProcCB);
 	}
 
-	//_ZN3JBE9D3DDevice11ReadCommandEv
-	D3DDevice_ReadCommand_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice11ReadCommandEv");
-	if (D3DDevice_ReadCommand_addr == 0) {
-		log_error("D3DDevice_ReadCommand not found\n");
-	} else {
-		logv_error("D3DDevice_ReadCommand found at %p\n", D3DDevice_ReadCommand_addr);
-	//	D3DDevice_ReadCommand_hook = hook_addr(D3DDevice_ReadCommand_addr, (uintptr_t)&D3DDevice_ReadCommand);
-	}
-
-	// _ZN3JBE9D3DDevice22RegisterTextureCommandER14D3DBaseTextureRiS3_S3_
-	uintptr_t D3DDevice_RegisterTextureCommand_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice22RegisterTextureCommandER14D3DBaseTextureRiS3_S3_");
-	if (D3DDevice_RegisterTextureCommand_addr == 0) {
-		log_error("D3DDevice_RegisterTextureCommand not found\n");
-	} else {
-		logv_error("D3DDevice_RegisterTextureCommand found at %p\n", D3DDevice_RegisterTextureCommand_addr);
-		//D3DDevice_RegisterTextureCommand_hook = hook_addr(D3DDevice_RegisterTextureCommand_addr, (uintptr_t)&D3DDevice_RegisterTextureCommand);
-	}
-
 	// D3DDevice_Swap
 	uintptr_t D3DDevice_Swap_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_Swap");
 	if (D3DDevice_Swap_addr == 0) {
@@ -600,15 +875,6 @@ void so_patch(void) {
 		D3DDevice_Swap_hook = hook_addr(D3DDevice_Swap_addr, (uintptr_t)&D3DDevice_Swap);
 	}
 	
-	//_ZN3JBE9DisplayPF4SwapEv
-	uintptr_t DisplayPF_Swap_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9DisplayPF4SwapEv");
-	if (DisplayPF_Swap_addr == 0) {
-		log_error("DisplayPF_Swap not found\n");
-	} else {
-		logv_error("DisplayPF_Swap found at %p\n", DisplayPF_Swap_addr);
-		DisplayPF_Swap_hook = hook_addr(DisplayPF_Swap_addr, (uintptr_t)&DisplayPF_Swap);
-	}
-
 	//_ZN3JBE9SingletonINS_7DisplayEE11s_pInstanceE
 	g_Singleton_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE9SingletonINS_7DisplayEE11s_pInstanceE");
 	if (g_Singleton_addr == 0) {
@@ -633,16 +899,7 @@ void so_patch(void) {
 		logv_error("displayPF_ReleaseContext found at %p\n", displayPF_ReleaseContext_addr);
 	}
 
-	//MEMAllocFromExpHeapEx
-	uintptr_t MEMAllocFromExpHeapEx_addr = (uintptr_t)so_symbol(&so_mod, "MEMAllocFromExpHeapEx");
-	if (MEMAllocFromExpHeapEx_addr == 0) {
-		log_error("MEMAllocFromExpHeapEx not found\n");
-	} else {
-		logv_error("MEMAllocFromExpHeapEx found at %p\n", MEMAllocFromExpHeapEx_addr);
-		MEMAllocFromExpHeapEx_hook = hook_addr(MEMAllocFromExpHeapEx_addr, (uintptr_t)&MEMAllocFromExpHeapEx);
-	}
-
-	#if PROFILER_ENABLED
+	#ifdef PROFILER_ENABLED
 	//install_prof_hooks();
 	#endif
 

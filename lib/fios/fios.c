@@ -57,6 +57,7 @@ int fios_init(void) {
         return res;
     
     psarc_exists = file_exists("ux0:data/bgda/assets/res.psarc");
+    //psarc_exists = 0;
 	if (psarc_exists) {
 		sceClibMemset(&g_PsarcContext, 0, sizeof(SceFiosPsarcDearchiverContext));
 		g_PsarcContext.size = sizeof(SceFiosPsarcDearchiverContext);

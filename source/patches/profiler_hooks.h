@@ -1,6 +1,6 @@
 #ifndef PROFILER_HOOKS_H
 #define PROFILER_HOOKS_H
-#if PROFILER_ENABLED
+#ifdef PROFILER_ENABLED
 #include <so_util/so_util.h>
 #include "utils/prof.h"
 

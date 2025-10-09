@@ -1,7 +1,7 @@
 /*
  * main.c
  *
- * ARMv7 Shared Libraries loader. Soulcalibur Edition
+ * ARMv7 Shared Libraries loader. Baldur's Gate Dark Alliance Edition
  *
  * Copyright (C) 2021 Andy Nguyen
  * Copyright (C) 2021-2023 Rinnegatamante
@@ -62,7 +62,7 @@ void *__wrap_memset (void *ptr, int value, size_t num) { return sceClibMemset(pt
 int _newlib_heap_size_user = 128 * 1024 * 1024;
 
 #ifdef USE_SCELIBC_IO
-int sceLibcHeapSize = 1 * 1024 * 1024;
+int sceLibcHeapSize = 32 * 1024 * 1024;
 #endif
 
 so_module so_mod;
@@ -134,7 +134,10 @@ int input_thread_fn(SceSize args, void *argp) {
 int main() {
 	log_error("main()");
 	//gprof_stop("ux0:/data/gmon.out", 0);
+#ifdef PROFILER_ENABLED
+	log_error("profilerino_init!");
 	profilerino_init();
+#endif
 
 	SceAppUtilInitParam appUtilParam;
 	SceAppUtilBootParam appUtilBootParam;

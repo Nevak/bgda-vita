@@ -21,7 +21,7 @@ set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
 #set(PSVITAIP "192.168.110.16" CACHE STRING "PSVita IP (for FTP access)") #China
-set(PSVITAIP "192.168.110.38" CACHE STRING "PSVita IP (for FTP access)") #Madrid
+set(PSVITAIP "192.168.110.38" CACHE STRING "PSVita IP (for FTP access)") #China devkit
 set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
 # Game-specific definitions
@@ -35,6 +35,11 @@ set(SO_PATH_LIBCPUFEATURES "${DATA_PATH}lib/armeabi-v7a/libcpufeatures.so" CACHE
 option(USE_SCELIBC_IO "Use SceLibcBridge for IO and some other std functions" ON)
 if (USE_SCELIBC_IO)
   add_definitions(-DUSE_SCELIBC_IO)
+endif()
+
+option(USE_TEXCACHE "Enable texture caching for faster world loading" OFF)
+if (USE_TEXCACHE)
+  add_definitions(-DUSE_TEXCACHE)
 endif()
 
 add_definitions(-DDATA_PATH="${DATA_PATH}" 
@@ -54,20 +59,18 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # Option to enable profiler instrumentation
-option(PROFILER_ENABLED "Enable function instrumentation for profiling" OFF)
+option(RAZOR_PROFILER_ENABLED "Enable function instrumentation for profiling" OFF)
 
 # Base compiler flags without instrumentation
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer -save-temps")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q,--wrap,memcpy,--wrap,memset,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -O3 -fno-omit-frame-pointer")
 
 # Add instrumentation flags only if profiler is enabled
-if(PROFILER_ENABLED)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -finstrument-functions -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -finstrument-functions -finstrument-functions-exclude-file-list=third_party/**,allocators/** -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
-  add_definitions(-DPROFILER_ENABLED=1)
-else()
-  add_definitions(-DPROFILER_ENABLED=0)
+if(RAZOR_PROFILER_ENABLED)
+  #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -finstrument-functions -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
+  #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -finstrument-functions -finstrument-functions-exclude-file-list=third_party/**,allocators/** -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
+  add_definitions(-DPROFILER_ENABLED)
 endif()
 
 add_executable(${CMAKE_PROJECT_NAME}
@@ -76,6 +79,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   #source/dll_psp2.c
 			   source/falso_jni_impl.c
 			   source/patch.c
+			   source/texcache.c
 			   source/reimpl/ctype_patch.c
 			   source/reimpl/egl.c
 			   source/reimpl/env.c
@@ -86,8 +90,8 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   source/reimpl/mem.c
 			   source/reimpl/pthr.c
 			   source/reimpl/sys.c
-			   source/utils/ogg_patch.c
-			   source/utils/vorbis_patch.c
+			   #source/utils/ogg_patch.c
+			   #source/utils/vorbis_patch.c
 			   #source/utils/ffmpeg_patch.c
 			   source/utils/prof.c
 			   source/utils/dialog.c
@@ -138,9 +142,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  SceLibKernel_stub
 					  OpenSLES
 					  sndfile
-					  ogg
-					  FLAC
-					  vorbisidec
+					 # ogg
+					  #FLAC
+					  #vorbisidec
 					  openal
 					#   avcodec
 					#   avfilter
@@ -176,11 +180,11 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  ScePower_stub
 					  SceTouch_stub
 					  SceVshBridge_stub
-					  profilerino
-					  ScePerf_stub
+					  #profilerino
+					  #ScePerf_stub
 					  SceSysmodule_stub
-					  SceRazorHud_stub
-					  SceRazorCapture_stub
+					  
+					  #SceRazorCapture_stub
 					  )
 
 vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR UNCOMPRESSED GEN_EXPORTS exports.txt)

@@ -46,7 +46,7 @@
  }
  
  void gl_init() {
-    vglSetVertexPoolSize(80 * 1024 * 1024);
+    vglSetVertexPoolSize(32 * 1024 * 1024);
     vglSetParamBufferSize(8 * 1024 * 1024);
     vglWaitVblankStart(GL_FALSE);
     vglUseTripleBuffering(GL_FALSE);
