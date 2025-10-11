@@ -27,7 +27,7 @@
 
  // Helpers for our handling of shaders
  GLboolean skip_next_compile = GL_FALSE;
- char next_shader_fname[256];
+ //char next_shader_fname[256];
  void load_shader(GLuint shader, const char * string, size_t length);
  
  extern known_shaders_struct known_shaders[256];
@@ -46,8 +46,8 @@
  }
  
  void gl_init() {
-    vglSetVertexPoolSize(32 * 1024 * 1024);
-    vglSetParamBufferSize(8 * 1024 * 1024);
+    vglSetVertexPoolSize(20 * 1024 * 1024);
+    vglSetParamBufferSize(4 * 1024 * 1024);
     vglWaitVblankStart(GL_FALSE);
     vglUseTripleBuffering(GL_FALSE);
     //vglSetSemanticBindingMode(VGL_MODE_POSTPONED);

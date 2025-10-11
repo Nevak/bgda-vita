@@ -116,8 +116,9 @@ void ProcessAndUploadTexture
         // Free existing palette if there is one (in case texture is being re-uploaded)
         void* oldPalette = sceGxmTextureGetPalette(gxmTex);
         if (oldPalette) {
-            log_error("Freeing old palette");
+            logv_error("Freeing old palette: %p (width=%u, height=%u)", oldPalette, width, height);
             gpu_free_palette(oldPalette);
+            sceGxmTextureSetPalette(gxmTex, NULL);  // Clear the pointer to avoid use-after-free
         }
 
         void* paletteData = gpu_alloc_palette((uint32_t*)palette, 256, 4);
@@ -158,43 +159,17 @@ void D3DDevice_TextureStageState_SetToGL(D3DDevice_TextureStageState* this, uint
     SO_CONTINUE(void*, D3DDevice_TextureStageState_SetToGL_hook, this, textureStageIndex, samplerType);
 }
 
-// Add this hook before the existing glDeleteTextures call
-so_hook D3DBaseTexture_Unregister_hook;
-void D3DBaseTexture_Unregister(D3DBaseTexture *this, int param_1) {
-    RegisteredTextureData *textureData = this->registeredTextureData;
-
-    if (textureData && textureData->glTextureId != 0) {
-        // Free the palette if this is a paletted texture
-        GLint oldTexture;
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &oldTexture);
-        glBindTexture(GL_TEXTURE_2D, textureData->glTextureId);
-
-        SceGxmTexture* gxmTex = vglGetGxmTexture(GL_TEXTURE_2D);
-        if (gxmTex) {
-            void* paletteData = sceGxmTextureGetPalette(gxmTex);
-            if (paletteData) {
-                //logv_error("Freeing palette at: %p", paletteData);
-                gpu_free_palette(paletteData);
-            }
-            else {
-                logv_error("Failed to get palette for tex: %p", gxmTex);
-            }
-        }
-        else {
-            log_error("Texture has no gxmTex");
-        }
-
-        glBindTexture(GL_TEXTURE_2D, oldTexture);
-    }
-    else {
-        log_error("textureData is null or glTextureId is 0");
-    }
-
-    SO_CONTINUE(void*, D3DBaseTexture_Unregister_hook, this, param_1);
-}
+// D3DBaseTexture::Unregister - DON'T hook this, it may be called from wrong thread
+// Let the "Command" version handle palette cleanup on the rendering thread
+// so_hook D3DBaseTexture_Unregister_hook;
+// void D3DBaseTexture_Unregister(D3DBaseTexture *this, int param_1) {
+//     SO_CONTINUE(void*, D3DBaseTexture_Unregister_hook, this, param_1);
+// }
 
 so_hook D3DDevice_UnregisterTextureCommand_hook;
 void D3DDevice_UnregisterTextureCommand(void *this, RegisteredBaseTextureData *textureData, int *param_2) {
+    //logv_error("[UnregisterTextureCommand] textureData=%p, glTexId=%u", textureData, textureData ? textureData->glTextureId : 0);
+
     if (textureData && textureData->glTextureId != 0) {
         // Free the palette if this is a paletted texture
         GLint oldTexture;
@@ -205,59 +180,23 @@ void D3DDevice_UnregisterTextureCommand(void *this, RegisteredBaseTextureData *t
         if (gxmTex) {
             void* paletteData = sceGxmTextureGetPalette(gxmTex);
             if (paletteData) {
-                //logv_error("Freeing palette at: %p", paletteData);
+                //logv_error("[UnregisterTextureCommand] Freeing palette: %p", paletteData);
                 gpu_free_palette(paletteData);
             }
-            else {
-                logv_error("Failed to get palette for tex: %p", gxmTex);
-            }
-        }
-        else {
-            log_error("Texture has no gxmTex");
         }
 
         glBindTexture(GL_TEXTURE_2D, oldTexture);
-    }
-    else {
-        log_error("textureData is null or glTextureId is 0");
     }
 
     SO_CONTINUE(void *, D3DDevice_UnregisterTextureCommand_hook, this, textureData, param_2);
 }
 
-so_hook D3DBaseTexture_UnbufferToOGL_hook;
-void D3DBaseTexture_UnbufferToOGL(D3DBaseTexture *this)
-{
-    RegisteredTextureData *textureData = this->registeredTextureData;
-
-    if (textureData && textureData->glTextureId != 0) {
-        // Free the palette if this is a paletted texture
-        GLint oldTexture;
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &oldTexture);
-        glBindTexture(GL_TEXTURE_2D, textureData->glTextureId);
-
-        SceGxmTexture* gxmTex = vglGetGxmTexture(GL_TEXTURE_2D);
-        if (gxmTex) {
-            void* paletteData = sceGxmTextureGetPalette(gxmTex);
-            if (paletteData) {
-                //logv_error("Freeing palette at: %p", paletteData);
-                gpu_free_palette(paletteData);
-            }
-            else {
-                logv_error("Failed to get palette for tex: %p", gxmTex);
-            }
-        }
-        else {
-            log_error("Texture has no gxmTex");
-        }
-
-        glBindTexture(GL_TEXTURE_2D, oldTexture);
-    }
-    else {
-        log_error("textureData is null or glTextureId is 0");
-    }
-
-    SO_CONTINUE(void*, D3DBaseTexture_UnbufferToOGL_hook, this);
-}
+// D3DBaseTexture::UnbufferToOGL - DON'T hook this, it may be called from wrong thread
+// Let the "Command" version handle palette cleanup on the rendering thread
+// so_hook D3DBaseTexture_UnbufferToOGL_hook;
+// void D3DBaseTexture_UnbufferToOGL(D3DBaseTexture *this)
+// {
+//     SO_CONTINUE(void*, D3DBaseTexture_UnbufferToOGL_hook, this);
+// }
 
 #endif

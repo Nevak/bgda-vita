@@ -469,33 +469,33 @@ void glBindTexture_fake(GLenum target, GLuint texture) {
 	// No longer need shader uniform management - GXM handles palettes natively
 }
 
-void glShaderSource_fake(GLuint shader, GLsizei count, const GLchar * const *string, const GLint *length) {
-	uint32_t threadId = sceKernelGetThreadId();
-	logv_error("----------[T%u] glShaderSource: shader=%u, count=%d", threadId, shader, count);
+// void glShaderSource_fake(GLuint shader, GLsizei count, const GLchar * const *string, const GLint *length) {
+// 	uint32_t threadId = sceKernelGetThreadId();
+// 	logv_error("----------[T%u] glShaderSource: shader=%u, count=%d", threadId, shader, count);
 
-	// Write shader to file
-	char filename[256];
-	snprintf(filename, sizeof(filename), "ux0:data/dump_shaders/shader_%u.glsl", shader);
+// 	// Write shader to file
+// 	char filename[256];
+// 	snprintf(filename, sizeof(filename), "ux0:data/dump_shaders/shader_%u.glsl", shader);
 
-	FILE* file = fopen(filename, "w");
-	if (file) {
-		fprintf(file, "// Shader ID: %u, Thread: %u, Count: %d\n", shader, threadId, count);
+// 	FILE* file = fopen(filename, "w");
+// 	if (file) {
+// 		fprintf(file, "// Shader ID: %u, Thread: %u, Count: %d\n", shader, threadId, count);
 
-		// Write each string in the array
-		for (GLsizei i = 0; i < count; i++) {
-			if (string[i]) {
-				int len = length ? length[i] : strlen(string[i]);
-				fprintf(file, "%.*s", len, string[i]);
-			}
-		}
-		fclose(file);
-		logv_error("[T%u] Shader %u written to %s", threadId, shader, filename);
-	} else {
-		logv_error("[T%u] Failed to write shader %u to file", threadId, shader);
-	}
+// 		// Write each string in the array
+// 		for (GLsizei i = 0; i < count; i++) {
+// 			if (string[i]) {
+// 				int len = length ? length[i] : strlen(string[i]);
+// 				fprintf(file, "%.*s", len, string[i]);
+// 			}
+// 		}
+// 		fclose(file);
+// 		logv_error("[T%u] Shader %u written to %s", threadId, shader, filename);
+// 	} else {
+// 		logv_error("[T%u] Failed to write shader %u to file", threadId, shader);
+// 	}
 
-	glShaderSource(shader, count, string, length);
-}
+// 	glShaderSource(shader, count, string, length);
+// }
 
 void glAttachShader_fake(GLuint program, GLuint shader) {
 	uint32_t threadId = sceKernelGetThreadId();

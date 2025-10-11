@@ -175,8 +175,8 @@ PTHR_INLINE int _cond_t_static_init(pthread_cond_t_bionic * cond, const pthread_
 int pthread_create_soloader(pthread_t *thread, const pthread_attr_t_bionic *attr, void *(*start)(void *), void *param) {
     int ret;
     int caller_addr = (int) __builtin_return_address(0);
-    sceClibPrintf("pthread_create_soloader: thread: %p, attr: %p, start: %p, param: %p, caller: 0x%x\n",
-                  thread, attr, start, param, caller_addr);
+    // sceClibPrintf("pthread_create_soloader: thread: %p, attr: %p, start: %p, param: %p, caller: 0x%x\n",
+    //               thread, attr, start, param, caller_addr);
 
     if (!attr) {
         pthread_attr_t a;
@@ -189,7 +189,8 @@ int pthread_create_soloader(pthread_t *thread, const pthread_attr_t_bionic *attr
         pthread_attr_setstacksize(attr->real_ptr, 512 * 1024);
         ret = pthread_create(thread, attr->real_ptr, start, param);
     }
-
+    sceClibPrintf("pthread_create_soloader: thread: %p, attr: %p, start: %p, param: %p, caller: 0x%x ret:0x%X\n",
+                  thread, attr, start, param, caller_addr, ret);
     return ret;
 }
 

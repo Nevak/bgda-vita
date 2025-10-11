@@ -59,11 +59,11 @@ __attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_memset (void *ptr, int value, size_t num) { return sceClibMemset(ptr, value, num); };
 
 
-int _newlib_heap_size_user = 128 * 1024 * 1024;
+int _newlib_heap_size_user = 192 * 1024 * 1024;
 
 #ifdef USE_SCELIBC_IO
-int sceLibcHeapSize = 32 * 1024 * 1024;
-#endif
+int sceLibcHeapSize = 1 * 1024 * 1024;
+#endif 
 
 so_module so_mod;
 so_module so_mod_libcpufeatues;

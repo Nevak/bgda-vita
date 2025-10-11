@@ -192,6 +192,7 @@ void ReadCommandCustom(struct d3dDeviceFake *thisPtr) {
 
 void D3DDevice_AsyncRenderCB(void *device_ptr) {
 	uint32_t threadId = sceKernelGetThreadId();
+	logv_error("[0x%X] ===============D3DDevice_AsyncRenderCB================\n", threadId);
 	sceKernelChangeThreadPriority(threadId, 100);
 	sceKernelChangeThreadCpuAffinityMask(threadId, SCE_KERNEL_CPU_MASK_USER_0);
 	pthread_setname_np_soloader(threadId, "D3DDevice_AsyncRenderCB");
@@ -333,8 +334,36 @@ void DoNothing()
 {
 }
 
+so_hook memAlloc_hook;
+void* memAlloc(int size, const char* name) {
+	if (name && name[0] != '\0') {
+		logv_error("memAlloc(%d, \"%s\")", size, name);
+	}
+	void* ret = SO_CONTINUE(void*, memAlloc_hook, size, name);
+	if (name && name[0] != '\0') {
+		logv_error("ret=%p", ret);
+	}
+	return ret;
+}
+
+so_hook cdStartStream_hook;
+void cdStartStream(char *filename, int param_2) {
+	logv_error("cdStartStream(\"%s\", %d)", filename ? filename : "NULL", param_2);
+	SO_CONTINUE(void*, cdStartStream_hook, filename, param_2);
+	log_error("cdStartStream completed");
+}
+
+so_hook cdStreamLoad_hook;
+void cdStreamLoad(char *filename, int param_2) {
+	logv_error("cdStreamLoad(%d)", param_2);
+	SO_CONTINUE(void*, cdStreamLoad_hook, filename, param_2);
+	log_error("cdStreamLoad completed");
+}
+
 so_hook gameLoadWorld_hook;
 void gameLoadWorld(char *worldName) {
+
+	logv_error("[0x%X] Entered gameLoadWorld: %s", sceKernelGetThreadId(), worldName);
 	// Reset accumulators
 	g_cdProcessTotalMs = 0.0f;
 	g_MC_LoadLevelEntitiesMs = 0.0f;
@@ -355,8 +384,9 @@ void gameLoadWorld(char *worldName) {
 	g_machHostCloseMs = 0.0f;
 
 	uint64_t timeStart = sceKernelGetProcessTimeWide();
-
 	SO_CONTINUE(void *, gameLoadWorld_hook, worldName);
+
+	logv_error("Ended gameLoadWorld: %s", worldName);
 
 	uint64_t timeEnd = sceKernelGetProcessTimeWide();
 	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
@@ -414,22 +444,18 @@ int lumpLoad(char *lumpName) {
 }
 
 so_hook lumpLoadGlob_hook;
-int lumpLoadGlob(char *lumpName) {
+void lumpLoadGlob(char *lumpName) {
+	logv_error("lumpLoadGlob called (%s)", lumpName);
 	uint64_t timeStart = sceKernelGetProcessTimeWide();
 
-	int result = SO_CONTINUE(int, lumpLoadGlob_hook, lumpName);
+	SO_CONTINUE(void*, lumpLoadGlob_hook, lumpName);
 
 	uint64_t timeEnd = sceKernelGetProcessTimeWide();
 	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
 
 	g_lumpLoadGlobTotalMs += elapsedMs;
 
-	if (elapsedMs > 100)
-	{
-		logv_error("lumpLoadGlob('%s') took %.2f ms (%.2f seconds)\n", lumpName, elapsedMs, elapsedMs / 1000.0f);
-	}
-
-	return result;
+	logv_error("lumpLoadGlob('%s') took %.2f ms (%.2f seconds)\n", lumpName, elapsedMs, elapsedMs / 1000.0f);
 }
 
 so_hook MC_LoadLevelEntities_hook;
@@ -637,6 +663,9 @@ uintptr_t D3DTexture_UnlockRect_addr;
 
 void so_patch(void) {
 	//sceSysmoduleLoadModule(SCE_SYSMODULE_PERF);
+	memAlloc_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8memAllociPKc"), (uintptr_t)&memAlloc);
+	cdStartStream_hook = hook_addr(LOC(0x000cd4b8), (uintptr_t)&cdStartStream);
+	cdStreamLoad_hook = hook_addr(LOC(0x000cd75c), (uintptr_t)&cdStreamLoad);
   	gameLoadWorld_hook = hook_addr(LOC(0x0013f154), (uintptr_t)&gameLoadWorld);
 	cdProcess_hook = hook_addr(LOC(0x000cd80c), (uintptr_t)&cdProcess);
 	MC_LoadLevelEntities_hook = hook_addr(LOC(0x000e133c), (uintptr_t)&MC_LoadLevelEntities);
@@ -658,18 +687,18 @@ void so_patch(void) {
 	D3DTexture_UnlockRect_addr = LOC(0x00215380);
 
 	worldAllocateSegments_hook = hook_addr(LOC(0x00131aec), (uintptr_t)&worldAllocateSegments);
-	worldReset_hook = hook_addr(LOC(0x0013a0bc), (uintptr_t)&worldReset);
-	gameClear_hook = hook_addr(LOC(0x0013ef90), (uintptr_t)&gameClear);
-	SND_StartStream_hook = hook_addr(LOC(0x0010a690), (uintptr_t)&SND_StartStream);
+	//worldReset_hook = hook_addr(LOC(0x0013a0bc), (uintptr_t)&worldReset);
+	//gameClear_hook = hook_addr(LOC(0x0013ef90), (uintptr_t)&gameClear);
+	//SND_StartStream_hook = hook_addr(LOC(0x0010a690), (uintptr_t)&SND_StartStream);
 	//D3DDevice_CreateTexture2_hook = hook_addr(LOC(0x00215bb0), (uintptr_t)&D3DDevice_CreateTexture2);
-	D3DDevice_CreatePalette2_hook = hook_addr(LOC(0x0020a2b0), (uintptr_t)&D3DDevice_CreatePalette2);
-	D3DPalette_Lock2_hook = hook_addr(LOC(0x0020a314), (uintptr_t)&D3DPalette_Lock2);
+	//D3DDevice_CreatePalette2_hook = hook_addr(LOC(0x0020a2b0), (uintptr_t)&D3DDevice_CreatePalette2);
+	//D3DPalette_Lock2_hook = hook_addr(LOC(0x0020a314), (uintptr_t)&D3DPalette_Lock2);
 	//D3DTexture_LockRect_hook = hook_addr(LOC(0x00215260), (uintptr_t)&D3DTexture_LockRect);
-	D3DTexture_UnlockRect_hook = hook_addr(LOC(0x00215380), (uintptr_t)&D3DTexture_UnlockRect);
-	machHostOpen_hook = hook_addr(LOC(0x00180520), (uintptr_t)&machHostOpen);
-	machHostRead_hook = hook_addr(LOC(0x001805cc), (uintptr_t)&machHostRead);
-	machHostSeek_hook = hook_addr(LOC(0x001806a4), (uintptr_t)&machHostSeek);
-	machHostClose_hook = hook_addr(LOC(0x00180674), (uintptr_t)&machHostClose);
+	// D3DTexture_UnlockRect_hook = hook_addr(LOC(0x00215380), (uintptr_t)&D3DTexture_UnlockRect);
+	// machHostOpen_hook = hook_addr(LOC(0x00180520), (uintptr_t)&machHostOpen);
+	// machHostRead_hook = hook_addr(LOC(0x001805cc), (uintptr_t)&machHostRead);
+	// machHostSeek_hook = hook_addr(LOC(0x001806a4), (uintptr_t)&machHostSeek);
+	// machHostClose_hook = hook_addr(LOC(0x00180674), (uintptr_t)&machHostClose);
 	// _Z8usprintfPtPKtfffffff
 	uintptr_t usprintf_addr = (uintptr_t)so_symbol(&so_mod, "_Z8usprintfPtPKtfffffff");
 	if (usprintf_addr == 0) {
@@ -737,8 +766,9 @@ void so_patch(void) {
 
 	//D3DDevice_TextureStageState_SetToGL_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice17TextureStageState7SetToGLEmN13XGSamplerType4EnumE"), (uintptr_t)&D3DDevice_TextureStageState_SetToGL);
 	D3DDevice_UnregisterTextureCommand_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN3JBE9D3DDevice24UnregisterTextureCommandEP25RegisteredBaseTextureDataRi"), (uintptr_t)&D3DDevice_UnregisterTextureCommand);
-	D3DBaseTexture_UnbufferToOGL_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture13UnbufferToOGLEv"), (uintptr_t)&D3DBaseTexture_UnbufferToOGL);
-	D3DBaseTexture_Unregister_hook =  hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture10UnregisterEi"), (uintptr_t)&D3DBaseTexture_Unregister);
+	// Don't hook these - they may be called from wrong thread (not rendering thread)
+	//D3DBaseTexture_UnbufferToOGL_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture13UnbufferToOGLEv"), (uintptr_t)&D3DBaseTexture_UnbufferToOGL);
+	//D3DBaseTexture_Unregister_hook =  hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14D3DBaseTexture10UnregisterEi"), (uintptr_t)&D3DBaseTexture_Unregister);
 
 
 	hook_addr(so_symbol(&so_mod, "_Z9SND_Framev"), (uintptr_t)&DoNothing);

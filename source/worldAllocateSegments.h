@@ -315,7 +315,7 @@ typedef struct {
  * Main function to allocate and decode all world textures
  */
 void worldAllocateSegments(_worldHeader *worldHeader) {
-    log_error("=== worldAllocateSegments START ===\n");
+	logv_error("[0x%X] === worldAllocateSegments START ===", sceKernelGetThreadId());
 
 #ifdef PROFILE_TEX_DECOMP
     uint64_t time_file_io = 0;
@@ -378,35 +378,99 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
     int tex_end = worldHeader->tex_end;    // 5050
     TexChunkInfo *chunks = (TexChunkInfo*)worldHeader->chunks;
 
-    // Load .tex file
+    // Open .tex file for streaming (read chunks one at a time)
 #ifdef PROFILE_TEX_DECOMP
     time_start = sceKernelGetProcessTimeWide();
 #endif
     char tex_path[80];
-
     sprintf(tex_path, "res\\%s.tex", world_name);
 
+    // Open file and get size
     int file = ((int (*)(char*, char*))machHostOpen_addr)(tex_path, "rb");
     int file_size = ((int (*)(int, int, int))machHostSeek_addr)(file, 0, 2);
 
-    void *tex_data = malloc(file_size);
-
-    ((int (*)(int, int, int))machHostSeek_addr)(file, 0, 0);
-    ((int (*)(int, void*, int))machHostRead_addr)(file, tex_data, file_size);
-    ((int (*)(int))machHostClose_addr)(file);
-    
 #ifdef PROFILE_TEX_DECOMP
     time_end = sceKernelGetProcessTimeWide();
     time_file_io += (time_end - time_start);
 #endif
 
     if (tex_end < tex_start) {
-        free(tex_data);
+        ((int (*)(int))machHostClose_addr)(file);
+        return;
+    }
+
+    // Save original chunk file offsets AND pre-calculate sizes
+    int num_chunks = tex_end - tex_start + 1;
+    uint32_t *chunk_offsets = (uint32_t*)malloc(num_chunks * sizeof(uint32_t));
+    uint32_t *chunk_sizes = (uint32_t*)malloc(num_chunks * sizeof(uint32_t));
+
+    for (int i = 0; i < num_chunks; i++) {
+        chunk_offsets[i] = chunks[i].tex_data_offset;
+    }
+
+    // Pre-calculate all chunk sizes (do this once, not per-chunk!)
+    uint32_t max_chunk_size = 0;
+    for (int i = 0; i < num_chunks; i++) {
+        uint32_t chunk_offset = chunk_offsets[i];
+        if (chunk_offset == 0) {
+            chunk_sizes[i] = 0;
+            continue;
+        }
+
+        // Find next chunk boundary
+        uint32_t next_offset = file_size;
+        for (int j = 0; j < num_chunks; j++) {
+            uint32_t scan_offset = chunk_offsets[j];
+            if (scan_offset > chunk_offset && scan_offset < next_offset) {
+                next_offset = scan_offset;
+            }
+        }
+
+        uint32_t chunk_size = next_offset - chunk_offset;
+        chunk_sizes[i] = chunk_size;
+        if (chunk_size > max_chunk_size) {
+            max_chunk_size = chunk_size;
+        }
+    }
+
+    // Check if there are any chunks to process
+    if (max_chunk_size == 0) {
+        log_error("No chunks to process (max_chunk_size = 0)\n");
+        free(chunk_offsets);
+        free(chunk_sizes);
+        ((int (*)(int))machHostClose_addr)(file);
+        return;
+    }
+
+    // Allocate fixed-size buffer (prevents fragmentation)
+    logv_error("Max chunk size: %u bytes (%.2f MB)\n", max_chunk_size, max_chunk_size / (1024.0 * 1024.0));
+    void *tex_data = malloc(max_chunk_size);
+    if (!tex_data) {
+        logv_error("FATAL: Failed to allocate %u bytes for streaming buffer\n", max_chunk_size);
+        free(chunk_offsets);
+        free(chunk_sizes);
+        ((int (*)(int))machHostClose_addr)(file);
         return;
     }
 
     // Process each texture chunk
-    uint8_t *temp_buffer = NULL;
+    // Allocate fixed-size temp buffer once (max texture size: 256x256)
+    int max_tex_size = 512 * 512;  // 65536 pixels
+    uint8_t *temp_buffer = (uint8_t*)malloc(max_tex_size + 0x19000);
+    if (!temp_buffer) {
+        log_error("FATAL: Failed to allocate temp_buffer\n");
+        free(chunk_offsets);
+        free(chunk_sizes);
+        free(tex_data);
+        ((int (*)(int))machHostClose_addr)(file);
+        return;
+    }
+
+    // Track maximum texture dimensions encountered
+    int max_width_seen = 0;
+    int max_height_seen = 0;
+    uint64_t total_gpu_memory = 0;  // Track total GPU memory allocated
+
     int16_t huff_table[512];  // Reusable Huffman table buffer - flat array like original! [val, numBits, val, numBits, ...]
     uint8_t block_buffer[256];  // Reusable decode buffer (like original's rectPtr/decompressBlock)
 
@@ -440,19 +504,51 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
     for (int chunk_idx = 0; chunk_idx <= (tex_end - tex_start); chunk_idx++) {
         TexChunkInfo *chunk = &chunks[chunk_idx];
 
-        if (chunk->flags == 0 || chunk->tex_data_offset == 0) {
+        // Use saved offset, not chunk->tex_data_offset (which may be overwritten!)
+        uint32_t chunk_file_offset = chunk_offsets[chunk_idx];
+
+        if (chunk->flags == 0 || chunk_file_offset == 0) {
             continue;
         }
 
-        // IMPORTANT: Save the original chunk offset before we overwrite it!
-        uint32_t chunk_file_offset = chunk->tex_data_offset;
+        // Use pre-calculated chunk size
+        uint32_t chunk_size = chunk_sizes[chunk_idx];
 
-        // Read chunk header
-        uint8_t *chunk_data = (uint8_t*)tex_data + chunk_file_offset;
+        // Safety check: never read more than allocated buffer
+        if (chunk_size > max_chunk_size) {
+            logv_error("FATAL: Chunk %d size (%u) exceeds max (%u)!\n", chunk_idx, chunk_size, max_chunk_size);
+            continue;
+        }
+
+        // Read chunk data into fixed-size streaming buffer
+#ifdef PROFILE_TEX_DECOMP
+        time_start = sceKernelGetProcessTimeWide();
+#endif
+        logv_error("Chunk %d: offset=0x%x, size=%u bytes\n", chunk_idx, chunk_file_offset, chunk_size);
+
+        ((int (*)(int, int, int))machHostSeek_addr)(file, chunk_file_offset, 0);
+        ((void (*)(int, void*, int))machHostRead_addr)(file, tex_data, chunk_size);
+#ifdef PROFILE_TEX_DECOMP
+        time_end = sceKernelGetProcessTimeWide();
+        time_file_io += (time_end - time_start);
+#endif
+
+        // Process chunk (adjust all offsets to be relative to buffer start)
+        uint8_t *chunk_data = (uint8_t*)tex_data;
         int num_textures = *(int32_t*)chunk_data;
+        logv_error("  num_textures = %d\n", num_textures);
 
         // Skip if no textures in this chunk
         if (num_textures <= 0) {
+            chunk->tex_data_offset = 0;
+            // DON'T modify chunk_offsets - we need original values for size calculations!
+            log_error("  Skipping chunk (no textures)\n");
+            continue;
+        }
+
+        // Sanity check
+        if (num_textures < 0 || num_textures > 1000) {
+            logv_error("  FATAL: Invalid num_textures (%d) - chunk data corrupted?\n", num_textures);
             chunk->tex_data_offset = 0;
             continue;
         }
@@ -495,20 +591,20 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
             WorldTexEntry *file_entry = (WorldTexEntry*)(chunk_data + 0x40 + tex_idx * 0x38);
 
             // IMPORTANT: Read ALL offsets from file_entry, not entry! Entry 0 has count overlapping fields.
-            // Compressed data offset is relative to entry position
+            // Compressed data offset is relative to entry position (convert to chunk-relative)
             int data_offset = file_entry->data_offset + entry_file_offset;
-            uint8_t *comp_data = (uint8_t*)tex_data + data_offset;
+            uint8_t *comp_data = (uint8_t*)tex_data + (data_offset - chunk_file_offset);
 
-            // Palette offset (stored in comp_data) is also relative to entry position
+            // Palette offset (stored in comp_data) is also relative to entry position (convert to chunk-relative)
             int pal_offset = *(int32_t*)comp_data + entry_file_offset;
-            uint8_t *pal_data = (uint8_t*)tex_data + pal_offset;
+            uint8_t *pal_data = (uint8_t*)tex_data + (pal_offset - chunk_file_offset);
 
             // Build Huffman lookup table INLINE (like original - no function call!)
 #ifdef PROFILE_TEX_DECOMP
             time_start = sceKernelGetProcessTimeWide();
 #endif
             int huff_table_offset = pal_offset + 0xc00;
-            int ht_table1_len_val = *(int32_t*)((uint8_t*)tex_data + huff_table_offset);
+            int ht_table1_len_val = *(int32_t*)((uint8_t*)tex_data + (huff_table_offset - chunk_file_offset));
             int ht_table1_len = ht_table1_len_val * 2;
             int ht_table1_start = huff_table_offset + 4;
             int ht_table2_start = ht_table1_start + ht_table1_len;
@@ -517,18 +613,18 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
             for (int i = 0; i < 256; i++) {
                 int bit = 1;
                 uint32_t a = (uint32_t)i >> (8 - bit);
-                int v = *(int32_t*)((uint8_t*)tex_data + ht_table3_start + (bit * 4));
+                int v = *(int32_t*)((uint8_t*)tex_data + (ht_table3_start + (bit * 4) - chunk_file_offset));
 
                 while (v < (int)a && bit <= 8) {
                     bit++;
                     a = (uint32_t)i >> (8 - bit);
-                    v = *(int32_t*)((uint8_t*)tex_data + ht_table3_start + (bit * 4));
+                    v = *(int32_t*)((uint8_t*)tex_data + (ht_table3_start + (bit * 4) - chunk_file_offset));
                 }
 
                 if (bit <= 8) {
-                    int val = *(int32_t*)((uint8_t*)tex_data + ht_table2_start + (bit * 4));
+                    int val = *(int32_t*)((uint8_t*)tex_data + (ht_table2_start + (bit * 4) - chunk_file_offset));
                     int table1_index = (int)a + val;
-                    huff_table[i * 2] = *(int16_t*)((uint8_t*)tex_data + ht_table1_start + (table1_index * 2));
+                    huff_table[i * 2] = *(int16_t*)((uint8_t*)tex_data + (ht_table1_start + (table1_index * 2) - chunk_file_offset));
                     huff_table[i * 2 + 1] = (int16_t)bit;
                 } else {
                     huff_table[i * 2] = 0;
@@ -543,7 +639,7 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
             // Pre-calculate Huffman table offsets ONCE per texture - store in globals like original
             g_table0_start = pal_offset + 0x400;
             int table_offset = g_table0_start + 0x800;
-            int table1_len_val = *(int32_t*)((uint8_t*)tex_data + table_offset);
+            int table1_len_val = *(int32_t*)((uint8_t*)tex_data + (table_offset - chunk_file_offset));
             int table1_len = table1_len_val * 2;
             g_table1_start = table_offset + 4;
             g_table2_start = g_table1_start + table1_len;
@@ -555,12 +651,14 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
             if (width < 0x40) width = 0x40;
             int height = ((int (*)(int))lowestPowerof2NotLessThan_addr)(file_entry->height);
 
+            // Track maximum dimensions
+            if (width > max_width_seen) max_width_seen = width;
+            if (height > max_height_seen) max_height_seen = height;
+
             int total_pixels = width * height;
 
-            // Allocate NEW buffer for each texture like original (don't reuse!)
-            if (temp_buffer) free(temp_buffer);
-            temp_buffer = (uint8_t*)malloc(total_pixels + 0x19000);  // Extra space like original
-            memset(temp_buffer, 0, total_pixels);  // Clear like original
+            // Reuse temp_buffer - just clear it
+            memset(temp_buffer, 0, total_pixels);
 
             // Decode texture blocks - INLINED like original (no function calls!)
 #ifdef PROFILE_TEX_DECOMP
@@ -599,11 +697,11 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
                             uint64_t time_huff_start = sceKernelGetProcessTimeWide();
 #endif
                             // Pre-calculate ALL base pointers outside loop (once per block!)
-                            // Use restrict to help compiler aliasing analysis
-                            uint16_t *__restrict block_data_ptr = (uint16_t*)(file_data + block_data_start);
-                            int32_t *__restrict table3_ptr = (int32_t*)(file_data + g_table3_start);
-                            int32_t *__restrict table2_ptr = (int32_t*)(file_data + g_table2_start);
-                            int16_t *__restrict table1_ptr = (int16_t*)(file_data + g_table1_start);
+                            // Use restrict to help compiler aliasing analysis (adjust to chunk-relative offsets)
+                            uint16_t *__restrict block_data_ptr = (uint16_t*)(file_data + (block_data_start - chunk_file_offset));
+                            int32_t *__restrict table3_ptr = (int32_t*)(file_data + (g_table3_start - chunk_file_offset));
+                            int32_t *__restrict table2_ptr = (int32_t*)(file_data + (g_table2_start - chunk_file_offset));
+                            int16_t *__restrict table1_ptr = (int16_t*)(file_data + (g_table1_start - chunk_file_offset));
 
                             int i = 0;
                             do {
@@ -642,7 +740,7 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
                                     prev_pixel = block_buffer[cur_pix8 + BACK_JUMP_TABLE[pix_cmd - 0x100]];
                                     block_buffer[cur_pix8] = prev_pixel;
                                 } else {
-                                    prev_pixel = file_data[g_table0_start + (pix_cmd - 0x105) + (prev_pixel << 3)];
+                                    prev_pixel = file_data[(g_table0_start - chunk_file_offset) + (pix_cmd - 0x105) + (prev_pixel << 3)];
                                     block_buffer[cur_pix8] = prev_pixel;
                                 }
 
@@ -722,7 +820,10 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
 
             entry->texture_ptr = (uint32_t)d3d_texture;  // +0x10
             // Initialize to high value to prevent discard (game discards after 30 frames of non-use)
-            entry->last_used_frame = 0x7FFFFFFF;  // +0x18: Max int to never discard
+            entry->last_used_frame = 0;
+
+            // Track GPU memory: texture data + header (0x14) + palette (1024 bytes)
+            total_gpu_memory += (total_pixels + 0x14 + 1024);
 
             //logv_error("    Stored: entry=0x%08X, tex=0x%08X @ +0x10, pal=0x%08X @ +0x14, frame=0x%08X @ +0x18\n",(uint32_t)entry, entry->texture_ptr, entry->palette_ptr, entry->last_used_frame);
 
@@ -807,17 +908,27 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
 #endif
 
     // Cleanup
-    log_error("Before free(temp_buffer)\n");
     if (temp_buffer) free(temp_buffer);
-    log_error("After free(temp_buffer)\n");
+    if (tex_data) free(tex_data);
+    free(chunk_offsets);
+    free(chunk_sizes);
+    log_error("Closing file\n");
+    ((int (*)(int))machHostClose_addr)(file);
+    log_error("File closed\n");
 
-    log_error("Before free(tex_data)\n");
-    free(tex_data);
-    log_error("After free(tex_data)\n");
+    // Always log texture memory statistics
+    logv_error("Max texture dimensions encountered: %dx%d (%d pixels)\n",
+               max_width_seen, max_height_seen, max_width_seen * max_height_seen);
+    logv_error("Total GPU memory allocated: %llu bytes (%.2f MB)\n",
+               total_gpu_memory, total_gpu_memory / (1024.0 * 1024.0));
 
 #ifdef PROFILE_TEX_DECOMP
     log_error("=== PROFILER RESULTS ===\n");
     logv_error("Textures:        %d\n", total_textures);
+    logv_error("Max dimensions:  %dx%d (%d pixels)\n", max_width_seen, max_height_seen, max_width_seen * max_height_seen);
+    logv_error("GPU memory:      %llu bytes (%.2f MB, avg %.1f KB per texture)\n",
+               total_gpu_memory, total_gpu_memory / (1024.0 * 1024.0),
+               total_textures > 0 ? total_gpu_memory / (1024.0 * total_textures) : 0.0f);
     logv_error("Blocks decoded:  %d (avg %.1f per texture)\n", total_blocks_decoded, total_textures > 0 ? (float)total_blocks_decoded / total_textures : 0.0f);
     logv_error("File I/O:        %llu us\n", time_file_io);
     logv_error("Huff Table:      %llu us\n", time_huff_table);

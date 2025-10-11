@@ -29,15 +29,15 @@ void *MEMAllocFromExpHeapEx(void *heap, int size, int flags) {
 	return res;
 }
 
-so_hook memAlloc_hook;
-void *memAlloc(int size, const char *name) {
-	//logv_error("memAlloc(size: %d, name: %s)\n", size, name);
-	void *res = SO_CONTINUE(void *, memAlloc_hook, size, name);
-	if (res == NULL) {
-		logv_error("memAlloc returned NULL for size %d, name %s\n", size, name);
-	}
-	//logv_error("memAlloc returned: %p\n", res);
-	return res;
-}
+// so_hook memAlloc_hook;
+// void *memAlloc(int size, const char *name) {
+// 	//logv_error("memAlloc(size: %d, name: %s)\n", size, name);
+// 	void *res = SO_CONTINUE(void *, memAlloc_hook, size, name);
+// 	if (res == NULL) {
+// 		logv_error("memAlloc returned NULL for size %d, name %s\n", size, name);
+// 	}
+// 	//logv_error("memAlloc returned: %p\n", res);
+// 	return res;
+// }
 
 #endif

@@ -21,6 +21,7 @@ void so_patch();
 void __aeabi_memcpy_patched(void *dst, const void *src, int n);
 void __aeabi_memclr_patched(void *dst, int n);
 
+#ifdef PROFILER_ENABLED
 static const char *gCmdLabels[256] = {
     [0x00] = "0x00 SetRenderTarget",
     [0x01] = "0x01 RegisterTexture",
@@ -87,7 +88,7 @@ static const char *gCmdLabels[256] = {
     [0x3E] = "0x3E ResetRenderFlag",
     [0xFF] = "0xFF SpecialCommandOffset"
 };
-
+#endif
 
 #ifdef __cplusplus
 };
