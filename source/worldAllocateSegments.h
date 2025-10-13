@@ -404,6 +404,14 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
     uint32_t *chunk_offsets = (uint32_t*)malloc(num_chunks * sizeof(uint32_t));
     uint32_t *chunk_sizes = (uint32_t*)malloc(num_chunks * sizeof(uint32_t));
 
+    if (!chunk_offsets || !chunk_sizes) {
+        logv_error("FATAL: Failed to allocate chunk tracking arrays (%d chunks)\n", num_chunks);
+        if (chunk_offsets) free(chunk_offsets);
+        if (chunk_sizes) free(chunk_sizes);
+        ((int (*)(int))machHostClose_addr)(file);
+        return;
+    }
+
     for (int i = 0; i < num_chunks; i++) {
         chunk_offsets[i] = chunks[i].tex_data_offset;
     }
@@ -455,7 +463,7 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
 
     // Process each texture chunk
     // Allocate fixed-size temp buffer once (max texture size: 256x256)
-    int max_tex_size = 512 * 512;  // 65536 pixels
+    int max_tex_size = 1024 * 1024;  // 65536 pixels
     uint8_t *temp_buffer = (uint8_t*)malloc(max_tex_size + 0x19000);
     if (!temp_buffer) {
         log_error("FATAL: Failed to allocate temp_buffer\n");
@@ -569,6 +577,12 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
         // Allocate texture entry array
         // Layout: count at +0x00 (4 bytes), Entry0 at +0x04, Entry1 at +0x3C, ...
         uint8_t *entries_mem = (uint8_t*)malloc(num_textures * 0x38 + 4);
+        if (!entries_mem) {
+            logv_error("FATAL: Failed to allocate entries_mem for chunk %d (%d textures, %u bytes)\n",
+                      chunk_idx, num_textures, num_textures * 0x38 + 4);
+            chunk->tex_data_offset = 0;
+            continue;  // Skip this chunk
+        }
         chunk->tex_data_offset = (uint32_t)entries_mem;  // Store pointer
 
         // Store count at offset 0
@@ -796,6 +810,43 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
             total_textures++;
 #endif
 
+            // Downsample textures larger than 256x256 to save GPU memory (preserving aspect ratio)
+            #define MAX_TEXTURE_DIM 256
+            if (width > MAX_TEXTURE_DIM || height > MAX_TEXTURE_DIM) {
+                // Calculate uniform scale factor based on larger dimension
+                int max_dim = (width > height) ? width : height;
+                float scale = (float)max_dim / MAX_TEXTURE_DIM;
+
+                int new_width = (int)(width / scale);
+                int new_height = (int)(height / scale);
+                int new_total_pixels = new_width * new_height;
+
+                logv_error("    Downsampling %dx%d -> %dx%d (scale %.2fx, saving %d bytes)\n",
+                           width, height, new_width, new_height, scale, total_pixels - new_total_pixels);
+
+                // Allocate temporary buffer for downsampled texture
+                uint8_t *downsampled = (uint8_t*)malloc(new_total_pixels);
+
+                // Downsample using coordinate mapping (works for any scale factor, including NPOT)
+                for (int y = 0; y < new_height; y++) {
+                    for (int x = 0; x < new_width; x++) {
+                        // Map destination coordinate to source coordinate (nearest neighbor)
+                        int src_x = (x * width) / new_width;
+                        int src_y = (y * height) / new_height;
+                        downsampled[y * new_width + x] = temp_buffer[src_y * width + src_x];
+                    }
+                }
+
+                // Copy downsampled data back to temp_buffer
+                memcpy(temp_buffer, downsampled, new_total_pixels);
+                free(downsampled);
+
+                // Update dimensions for GPU upload
+                width = new_width;
+                height = new_height;
+                total_pixels = new_total_pixels;
+            }
+
             // Upload to GPU
 #ifdef PROFILE_TEX_DECOMP
             time_start = sceKernelGetProcessTimeWide();
@@ -907,11 +958,19 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
     }
 #endif
 
+    logv_error("will clear temp_buffer: %p", temp_buffer);
     // Cleanup
     if (temp_buffer) free(temp_buffer);
+
+    log_error("will clear tex_data");
     if (tex_data) free(tex_data);
+
+    log_error("will clear chunk_offsets");
     free(chunk_offsets);
+
+    log_error("will clear chunk_size");
     free(chunk_sizes);
+
     log_error("Closing file\n");
     ((int (*)(int))machHostClose_addr)(file);
     log_error("File closed\n");
