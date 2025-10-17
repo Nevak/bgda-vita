@@ -172,8 +172,8 @@ void D3DDevice_UnregisterTextureCommand(void *this, RegisteredBaseTextureData *t
 
     if (textureData && textureData->glTextureId != 0) {
         // Free the palette if this is a paletted texture
-        GLint oldTexture;
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &oldTexture);
+        // NOTE: We bind the texture but DON'T restore the old binding
+        // TextureDeleted() will handle unbinding properly
         glBindTexture(GL_TEXTURE_2D, textureData->glTextureId);
 
         SceGxmTexture* gxmTex = vglGetGxmTexture(GL_TEXTURE_2D);
@@ -182,10 +182,9 @@ void D3DDevice_UnregisterTextureCommand(void *this, RegisteredBaseTextureData *t
             if (paletteData) {
                 //logv_error("[UnregisterTextureCommand] Freeing palette: %p", paletteData);
                 gpu_free_palette(paletteData);
+                sceGxmTextureSetPalette(gxmTex, NULL);  // Clear palette pointer to prevent vitaGL from accessing freed memory
             }
         }
-
-        glBindTexture(GL_TEXTURE_2D, oldTexture);
     }
 
     SO_CONTINUE(void *, D3DDevice_UnregisterTextureCommand_hook, this, textureData, param_2);
