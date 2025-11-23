@@ -687,11 +687,11 @@ int coreAddTask(void *fn, int prio, char *name) {
 		return 0;
 	}
 
-	if (name && strcmp(name, "RenderDelayedShadows") == 0) {
-	//    	log_error("Ignoring renderDelayedShadows task\n");
-	//    	return 0;
-		return SO_CONTINUE(int, coreAddTask_hook, fn, 5, name);	
-	}
+	// if (name && strcmp(name, "RenderDelayedShadows") == 0) {
+	// //    	log_error("Ignoring renderDelayedShadows task\n");
+	// //    	return 0;
+	// 	return SO_CONTINUE(int, coreAddTask_hook, fn, 5, name);	
+	// }
 
     return SO_CONTINUE(int, coreAddTask_hook, fn, prio, name);
 }

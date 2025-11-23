@@ -462,7 +462,7 @@ void glBufferSubData_profiled(GLenum target, GLintptr offset, GLsizeiptr size, c
 }
 
 static GLfloat g_shadowDepthBiasFactor = 0.0f;  // Try: -1, 0, 1
-static GLfloat g_shadowDepthBiasUnits = -14.0f;  // Try: -14, -8, -4, -2, 2, 4, 8, 14
+static GLfloat g_shadowDepthBiasUnits = -4.0f;  // Try: -14, -8, -4, -2, 2, 4, 8, 14
 
 void glPolygonOffset_logged(GLfloat factor, GLfloat units) {
 	GLfloat originalFactor = factor;
