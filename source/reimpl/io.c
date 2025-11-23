@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <psp2/kernel/threadmgr.h>
-
+#include <so_util/so_util.h>
 //#ifdef USE_SCELIBC_IO
 #include <libc_bridge/libc_bridge.h>
 //#endif
@@ -665,6 +665,7 @@ int existing_files_len = sizeof(existing_files)/sizeof(existing_files[0]);
 int compare_strings(const void *a, const void *b) {
     return strcmp(*(const char **)a, *(const char **)b);
 }
+extern so_module so_mod;
 
 int retOpen = 0;
 int open_soloader(char *_fname, int flags, ...) {
@@ -679,14 +680,30 @@ int open_soloader(char *_fname, int flags, ...) {
     } else if (strcmp(_fname, "/sys/devices/system/cpu/possible") == 0) {
         return open_soloader("app0:/possible", flags);
     }
+    else if (strncmp(_fname, "ux0:data/bgda/res/", 18) == 0) {
+        logv_debug("[io] tried to open(%s, %x): %i", _fname, flags, -1);
+        return -1;
+    }
 
     SceFiosFH handle = 0;
     char real_fname[256];
-    if (psarc_exists && !strncmp(_fname, "ux0:data/bgda/assets//res/", 26)) {
+    mode_t mode = 0666;
+
+    if (psarc_exists && !strncmp(_fname, "ux0:data/bgda/assets//res/", 26) || !strncmp(_fname, "ux0:data/bgda/assets/res/", 25)) {
         // real name is whatever is after the prefix "ux0:data/bgda/assets//res/", so strip that
         // for example ux0:data/bgda/assets/res/add_texture.lmp should be /res/add_texture.lmp
-        strcpy(real_fname, _fname + 21);
+        int offset = 21;
+        if (!strncmp(_fname, "ux0:data/bgda/assets/res/", 25)){
+            offset = 20;
+        }
 
+        strcpy(real_fname, _fname + offset);
+
+        // if (strcmp(real_fname, "/res/cellar1.vat") == 0)
+        // {
+        //     logv_error("Normal mode for %s", _fname);
+        //     goto normal_mode;
+        // }
 
         // This weird optimization had to be done because Baba Is You on every
         // level/world calls fopen() for an unimaginable amount of non-existing
@@ -701,23 +718,26 @@ int open_soloader(char *_fname, int flags, ...) {
         //logv_error("res file: %s", real_fname);
         // this returns stuff like 0x1800a
         int res = sceFiosFHOpenSync(NULL, &handle, real_fname, NULL);
+        logv_error("sceFiosFHOpenSync(%s), ret=0x%X, Handle=(0x%X)\n", real_fname, res, handle);
         if (res != 0)
         {
             logv_error("res not found inside the PSARC!!! %s\n", real_fname);
             return -1;
         }
-        
+
         // this returns stuff like 0x7fff8000
-        int result = sceFiosFilenoToFH(handle);
+       // int result = sceFiosFilenoToFH(handle);
+       // logv_error("sceFiosFilenoToFH(0x%X), ret=0x%X\n", handle, result);
+
         //int result = handle;
-        logv_error("res file: %s, handle: 0x%x, result: 0x%x", real_fname, handle, result);
+        //logv_error("res file: %s, handle: 0x%x, result: 0x%x", real_fname, handle, result);
 
         // int size = sceFiosFHGetSize(handle);
         // logv_error("size: %i", size);
 
         // int fseekRes = sceFiosFHSeek(handle, 0, 2);
         // logv_error("fseekRes: %i", fseekRes);
-        return result;
+        return handle;
 
         // if (res < 0) {
         //     logv_error("res not found inside the PSARC!!! %s\n", real_fname);
@@ -730,8 +750,8 @@ int open_soloader(char *_fname, int flags, ...) {
         //     }
         // }
     }
-
-    mode_t mode = 0666;
+    
+//normal_mode:
     if (((flags & BIONIC_O_CREAT) == BIONIC_O_CREAT) ||
         ((flags & BIONIC_O_TMPFILE) == BIONIC_O_TMPFILE)) {
         va_list args;
@@ -747,7 +767,7 @@ int open_soloader(char *_fname, int flags, ...) {
     //     logv_debug("[io] open(%s, %x): %i", _fname, flags, ret);
     //     retOpen = ret;
     // }
-    //logv_debug("[io] open(%s, %x): %i", _fname, flags, ret);
+    //logv_error("[io] open(%s, %x): %i", _fname, flags, ret);
     return ret;
 }
 
@@ -757,7 +777,7 @@ int fstat_soloader(int fd, void *statbuf) {
     if (res == 0)
         stat_newlib_to_bionic(&st, statbuf);
 
-    logv_debug("[io] fstat(fd#%i): %i", fd, res);
+    //logv_debug("[io] fstat(fd#%i): %i", fd, res);
     return res;
 }
 
@@ -775,23 +795,25 @@ int stat_soloader(char *_pathname, stat64_bionic *statbuf) {
 int fclose_soloader(FILE * f) {
     int ret = sceLibcBridge_fclose(f);
 
-    logv_debug("[io] fclose(0x%x): %i", f, ret);
+    //logv_debug("[io] fclose(0x%x): %i", f, ret);
     return ret;
 }
 
 int close_soloader(int fd) {
-    uint32_t fiosH = sceFiosFHToFileno(fd);
-	if (fiosH == 0xffffffff)
+    //logv_error("close_soloader(%d)", fd);
+    //uint32_t fiosH = sceFiosFHToFileno(fd);
+	//if (fiosH == 0xffffffff)
+    if (fd < 0x18000)
 	{
         int ret = close(fd);
-       // logv_debug("[io]non-fios close(fd#%i): %i", fd, ret);
+        //logv_error("[io]non-fios close(fd#%i): %i", fd, ret);
         return ret;
     }
     else
     {
-        logv_debug("[io] close(fd#0x%x), fiosH=0x%x", fd, fiosH);
-        int ret = sceFiosFHCloseSync(NULL, fiosH);
-        logv_debug("[io] return close(fd#0x%x): %i", fd, ret);
+        //logv_error("[io] sceFiosFHCloseSync(fd#0x%x), fiosH=0x%x", fd, 0);
+        int ret = sceFiosFHCloseSync(NULL, fd);
+        //logv_error("[io] return sceFiosFHCloseSync(fd#0x%x): %i", fd, ret);
         return ret;
     }
 }
@@ -838,23 +860,23 @@ int readdir_r_soloader(DIR *dirp, dirent64_bionic *entry, dirent64_bionic **resu
 
 int closedir_soloader(DIR* dir) {
     int ret = closedir(dir);
-    logv_debug("[io] closedir(0x%x): %i", dir, ret);
+    logv_error("[io] closedir(0x%x): %i", dir, ret);
     return ret;
 }
 
 int fcntl_soloader(int fd, int cmd, ...) {
-    logv_debug("[io] fcntl(fd#%i, cmd#%i)", fd, cmd);
+    logv_error("[io] fcntl(fd#%i, cmd#%i)", fd, cmd);
     return 0;
 }
 
 int fsync_soloader(int fd) {
     int ret = fsync(fd);
-    logv_debug("[io] fsync(%i): %i", fd, ret);
+    logv_error("[io] fsync(%i): %i", fd, ret);
     return ret;
 }
 
 size_t fread_soloader(void *p, size_t size, size_t num, FILE *f) {
-    logv_debug("[io] fread(%p, %i, %i, 0x%x)", p, size, num, f);
+    //logv_error("[io] fread(%p, %i, %i, 0x%x)", p, size, num, f);
 	return sceLibcBridge_fread(p, size, num, f);
 }
 
@@ -867,11 +889,11 @@ int fstat_hook(int fd, void *statbuf) {
 }
 
 int fseek_soloader(FILE *f, int dist, int off) {
-    logv_debug("[io] fseek(0x%x, %i, %i)", f, dist, off);
+    logv_error("[io] fseek(0x%x, %i, %i)", f, dist, off);
 	return sceLibcBridge_fseek(f, dist, off);
 }
 
 long ftell_soloader(FILE *f) {
-    logv_debug("[io] ftell(0x%x)", f);
+    logv_error("[io] ftell(0x%x)", f);
 	return sceLibcBridge_ftell(f);
 }

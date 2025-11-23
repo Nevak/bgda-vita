@@ -19,6 +19,7 @@
 
 //#include <kernel/types.h>
 
+
 #if defined(_LANGUAGE_C_PLUS_PLUS)||defined(__cplusplus)||defined(c_plusplus)
 extern "C" {
 #endif	/* defined(_LANGUAGE_C_PLUS_PLUS)||defined(__cplusplus)||defined(c_plusplus) */
@@ -144,15 +145,16 @@ SceUInt32 scePerfGetTimebaseFrequency(void);
 /**
  * C Preprocessor macros for Own thread access
  */
-#define SCE_PERF_ARM_PMON_START_ALL() { \
-	SceUInt32 __sce_temp = 0x8000003FU; \
-    __builtin_mcr(15, 0, 9, 12, 1, __sce_temp); \
-}
+#define SCE_PERF_ARM_PMON_START_ALL() do { \
+    SceUInt32 __sce_temp = 0x8000003FU; \
+    __asm__ volatile("mcr p15, 0, %0, c9, c12, 1" : : "r"(__sce_temp)); \
+} while(0)
 
-#define SCE_PERF_ARM_PMON_STOP_ALL() { \
-	SceUInt32 __sce_temp = 0x8000003FU; \
-    __builtin_mcr(15, 0, 9, 12, 2, __sce_temp); \
-}
+#define SCE_PERF_ARM_PMON_STOP_ALL() do { \
+    SceUInt32 __sce_temp = 0x8000003FU; \
+    __asm__ volatile("mcr p15, 0, %0, c9, c12, 2" : : "r"(__sce_temp)); \
+} while(0)
+
 
 #define SCE_PERF_ARM_PMON_SELECT_EVENT_COUNTER(arg) __builtin_mcr(15, 0, 9, 12, 5, arg)
 #define SCE_PERF_ARM_PMON_GET_EVENT_COUNTER()       __builtin_mrc(15, 0, 9, 13, 2)

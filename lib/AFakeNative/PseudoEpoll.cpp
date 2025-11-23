@@ -127,7 +127,7 @@ int pseudo_epoll_ctl(int epfd, int op, int fd, struct pseudo_epoll_event *event)
         return -1;
     }
 
-    if (op == PSEUDO_EPOLL_CTL_ADD && epoll->interest->contains(fd)) {
+    if (op == PSEUDO_EPOLL_CTL_ADD && epoll->interest->contains(fd)) { 
 #ifdef DEBUG_EPOLL
         ALOGD("pseudo_epoll_ctl(epfd:%i, op:%s, fd:%i): EEXIST: op was EPOLL_CTL_ADD, and the supplied file descriptor fd is already registered with this epoll instance.", epfd, __op_to_str(op), fd);
 #endif

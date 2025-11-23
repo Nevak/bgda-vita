@@ -17,7 +17,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define SCREEN_W 960  
+#define SCREEN_W 960
 #define SCREEN_H 544
 #define MEMORY_VITAGL_THRESHOLD_MB 16
 

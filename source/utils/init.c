@@ -122,7 +122,7 @@ void soloader_init_all() {
 
     so_patch();
     //patch_ogg();
-    //patch_vorbis();
+    patch_vorbis();
     //patch_ffmpeg();
     log_info("so_patch() passed.");
 

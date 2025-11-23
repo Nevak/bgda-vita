@@ -365,8 +365,9 @@ void app_dummy(void)
 }
 
 ssize_t read_delegate(int fd, void *buf, size_t count) {
-	SceFiosFH fiosH = sceFiosFHToFileno(fd);
-	if (fiosH == 0xffffffff)
+	//SceFiosFH fiosH = sceFiosFHToFileno(fd);
+	//if (fiosH == 0xffffffff)
+	if (fd < 0x18000)
 	{
 		//logv_error("non-fios read(fd=0x%x, 0x%p, %zu) delegate called", fd, buf, count);
 		return read(fd, buf, count);
@@ -375,7 +376,8 @@ ssize_t read_delegate(int fd, void *buf, size_t count) {
 	{
 		//logv_error("read(fd=0x%x, 0x%p, %zu) delegate called .fiosH=0x%x", fd, buf, count, fiosH);
 		//uint32_t read = 0;
-		int res = sceFiosFHReadSync(NULL, fiosH, buf, count);
+		//int res = sceFiosFHReadSync(NULL, fiosH, buf, count);
+		int res = sceFiosFHReadSync(NULL, fd, buf, count);
 		//logv_error("read(fd=0x%x, 0x%p, %zu) delegate called .fiosH=0x%x, read=0x%x, res=%i", fd, buf, count, fiosH, read, res);
 		return res;
 	}
@@ -384,9 +386,11 @@ ssize_t read_delegate(int fd, void *buf, size_t count) {
 extern int retOpen;
 //lseek_delegate
 off_t lseek_delegate(int fd, off_t offset, int whence) {
-	//logv_error("lseek(0x%i, %i, %i) delegate called", fd, offset, whence);
-	SceFiosFH fiosH = sceFiosFHToFileno(fd);
-	if (fiosH == 0xffffffff)
+	//logv_error("lseek(0x%X, %i, %i) delegate called", fd, offset, whence);
+	//SceFiosFH fiosH = sceFiosFHToFileno(fd);
+	//logv_error("lseek(0x%X, %i, %i) delegate called sceFiosFHToFileno ret: 0x%X", fd, offset, whence, fiosH);
+	//if (fiosH == 0xffffffff)
+	if (fd < 0x18000)
 	{
 		//logv_error("non-fios lseek(fd=0x%x, 0x%x, %i) delegate called", fd, offset, whence);
 		int res = lseek(fd, offset, whence);
@@ -399,9 +403,10 @@ off_t lseek_delegate(int fd, off_t offset, int whence) {
 	}
 	else
 	{
-		//logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. fiosH=0x%x", fd, offset, whence, fiosH);
+		//logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. fiosH=0x%x", fd, offset, whence, 0);
 		//uint32_t pos = 0;
-		int res = sceFiosFHSeek(fiosH, offset, whence);
+		//int res = sceFiosFHSeek(fiosH, offset, whence);
+		int res = sceFiosFHSeek(fd, offset, whence);
 		//logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. fiosH=0x%x, pos=0x%x, res=0x%i", fd, offset, whence, fiosH, pos, res);
 		return res;
 	}
@@ -454,6 +459,25 @@ void glBufferSubData_profiled(GLenum target, GLintptr offset, GLsizeiptr size, c
 	//Profiler_BeginSample("glBufferSubData");
 	glBufferSubData(target, offset, size, data);
 	//Profiler_EndSample();
+}
+
+static GLfloat g_shadowDepthBiasFactor = 0.0f;  // Try: -1, 0, 1
+static GLfloat g_shadowDepthBiasUnits = -14.0f;  // Try: -14, -8, -4, -2, 2, 4, 8, 14
+
+void glPolygonOffset_logged(GLfloat factor, GLfloat units) {
+	GLfloat originalFactor = factor;
+	GLfloat originalUnits = units;
+
+	if (units <= -3900.0f) {
+		// Shadow rendering (originally -4000.0) - needs special handling
+		factor = g_shadowDepthBiasFactor;
+		units = g_shadowDepthBiasUnits;
+	} if (units <= -255.0f) {
+		factor = 0.0f;
+		units = -5.0f;
+	}
+
+	glPolygonOffset(factor, units);
 }
 
 //glGetUniformLocation_fake
@@ -532,9 +556,9 @@ so_default_dynlib default_dynlib[] = {
 		{ "__aeabi_l2d", (uintptr_t)&__aeabi_l2d },
 		{ "__aeabi_l2f", (uintptr_t)&__aeabi_l2f },
 		{ "__aeabi_ldivmod", (uintptr_t)&__aeabi_ldivmod },
-		{ "__aeabi_memclr", (uintptr_t)&__aeabi_memclr_patched },
-		{ "__aeabi_memclr4", (uintptr_t)&__aeabi_memclr_patched },
-		{ "__aeabi_memclr8", (uintptr_t)&__aeabi_memclr_patched },
+		{ "__aeabi_memclr", (uintptr_t)&__aeabi_memclr },
+		{ "__aeabi_memclr4", (uintptr_t)&__aeabi_memclr },
+		{ "__aeabi_memclr8", (uintptr_t)&__aeabi_memclr },
 		{ "__aeabi_memcpy", (uintptr_t)&__aeabi_memcpy },
 		{ "__aeabi_memcpy4", (uintptr_t)&__aeabi_memcpy },
 		{ "__aeabi_memcpy8", (uintptr_t)&__aeabi_memcpy },
@@ -786,7 +810,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "rewinddir", (uintptr_t)&rewinddir },
 
 
-		//#ifdef USE_SCELIBC_IO
+		#ifdef USE_SCELIBC_IO
 			{ "fdopen", (uintptr_t)&sceLibcBridge_fdopen },
 			{ "feof", (uintptr_t)&sceLibcBridge_feof },
 			{ "ferror", (uintptr_t)&sceLibcBridge_ferror },
@@ -811,32 +835,32 @@ so_default_dynlib default_dynlib[] = {
 			{ "setvbuf", (uintptr_t)&sceLibcBridge_setvbuf },
 			{ "ungetc", (uintptr_t)&sceLibcBridge_ungetc },
 			{ "ungetwc", (uintptr_t)&sceLibcBridge_ungetwc },
-		//#else
-			// { "fdopen", (uintptr_t)&fdopen },
-			// { "feof", (uintptr_t)&feof },
-			// { "ferror", (uintptr_t)&ferror },
-			// { "fflush", (uintptr_t)&fflush },
-			// { "fgetc", (uintptr_t)&fgetc },
-			// { "fgetpos", (uintptr_t)&fgetpos },
-			// { "fgets", (uintptr_t)&fgets },
-			// { "fputc", (uintptr_t)&fputc },
-			// { "fputs", (uintptr_t)&fputs },
-			// { "fread", (uintptr_t)&fread },
-			// { "freopen", (uintptr_t)&freopen },
-			// { "fseek", (uintptr_t)&fseek },
-			// { "fsetpos", (uintptr_t)&fsetpos },
-			// { "ftell", (uintptr_t)&ftell },
-			// { "fwrite", (uintptr_t)&fwrite },
-			// { "getc", (uintptr_t)&getc },
-			// { "getwc", (uintptr_t)&getwc },
-			// { "putc", (uintptr_t)&putc },
-			// { "putchar", (uintptr_t)&putchar },
-			// { "puts", (uintptr_t)&puts },
-			// { "putwc", (uintptr_t)&putwc },
-			// { "setvbuf", (uintptr_t)&setvbuf },
-			// { "ungetc", (uintptr_t)&ungetc },
-			// { "ungetwc", (uintptr_t)&ungetwc },
-		//#endif
+		#else
+			{ "fdopen", (uintptr_t)&fdopen },
+			{ "feof", (uintptr_t)&feof },
+			{ "ferror", (uintptr_t)&ferror },
+			{ "fflush", (uintptr_t)&fflush },
+			{ "fgetc", (uintptr_t)&fgetc },
+			{ "fgetpos", (uintptr_t)&fgetpos },
+			{ "fgets", (uintptr_t)&fgets },
+			{ "fputc", (uintptr_t)&fputc },
+			{ "fputs", (uintptr_t)&fputs },
+			{ "fread", (uintptr_t)&fread },
+			{ "freopen", (uintptr_t)&freopen },
+			{ "fseek", (uintptr_t)&fseek },
+			{ "fsetpos", (uintptr_t)&fsetpos },
+			{ "ftell", (uintptr_t)&ftell },
+			{ "fwrite", (uintptr_t)&fwrite },
+			{ "getc", (uintptr_t)&getc },
+			{ "getwc", (uintptr_t)&getwc },
+			{ "putc", (uintptr_t)&putc },
+			{ "putchar", (uintptr_t)&putchar },
+			{ "puts", (uintptr_t)&puts },
+			{ "putwc", (uintptr_t)&putwc },
+			{ "setvbuf", (uintptr_t)&setvbuf },
+			{ "ungetc", (uintptr_t)&ungetc },
+			{ "ungetwc", (uintptr_t)&ungetwc },
+		#endif
 
 		{ "access", (uintptr_t)&access },
 		{ "chdir", (uintptr_t)&chdir },
@@ -871,12 +895,20 @@ so_default_dynlib default_dynlib[] = {
 		{ "vsprintf", (uintptr_t)&vsprintf },
 		{ "vsscanf", (uintptr_t)&vsscanf },
 		{ "vswprintf", (uintptr_t)&vswprintf },
+		#ifdef USE_SCELIBC_IO
 		{ "printf", (uintptr_t)&sceClibPrintf },
-		
 		{ "fprintf", (uintptr_t)&sceLibcBridge_fprintf },
 		{ "fscanf", (uintptr_t)&sceLibcBridge_fscanf },
 		{ "sscanf", (uintptr_t)&sceLibcBridge_sscanf },
 		{ "vfprintf", (uintptr_t)&sceLibcBridge_vfprintf },
+		#else
+		{ "printf", (uintptr_t)&printf },
+		{ "fprintf", (uintptr_t)&fprintf },
+		{ "fscanf", (uintptr_t)&fscanf },
+		{ "sscanf", (uintptr_t)&sscanf },
+		{ "vfprintf", (uintptr_t)&vfprintf },
+		#endif
+
 
 		// OpenGL
 		{ "glActiveTexture", (uintptr_t)&glActiveTexture },
@@ -963,7 +995,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glMatrixMode", (uintptr_t)&glMatrixMode },
 		{ "glNormalPointer", (uintptr_t)&glNormalPointer },
 		{ "glPixelStorei", (uintptr_t)&ret0 },
-		{ "glPolygonOffset", (uintptr_t)&glPolygonOffset },
+		{ "glPolygonOffset", (uintptr_t)&glPolygonOffset_logged },
 		{ "glPopMatrix", (uintptr_t)&glPopMatrix },
 		{ "glPushMatrix", (uintptr_t)&glPushMatrix },
 		{ "glReadPixels", (uintptr_t)&glReadPixels },

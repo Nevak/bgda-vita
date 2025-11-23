@@ -74,6 +74,7 @@ extern void* calloc(size_t num, size_t size);
 extern void* memcpy(void* dst, const void* src, size_t n);
 extern void* memset(void* dst, int val, size_t n);
 extern int sprintf(char* str, const char* format, ...);
+extern void glFinish(void);  // OpenGL sync - wait for GPU to complete all operations
 
 #ifdef PROFILE_TEX_DECOMP
 extern uint64_t sceKernelGetProcessTimeWide(void);
@@ -311,6 +312,14 @@ typedef struct {
     uint32_t flags;           // Non-zero if chunk is valid
 } TexChunkInfo;
 
+int alignDimension(int dimension) {
+    int alignment = 32;
+    int aligned = (dimension + (alignment - 1)) & ~(alignment - 1);
+    if (aligned < alignment) 
+		aligned = alignment;
+    return aligned;
+}
+
 /**
  * Main function to allocate and decode all world textures
  */
@@ -334,6 +343,14 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
         //log_error("worldAllocateSegments: already allocated, skipping\n");
         return;
     }
+
+    // CRITICAL: Wait for GPU to finish before allocating new textures
+    // This prevents use-after-free crashes when textureClear() frees old textures
+    // that the GPU is still rendering with
+    // log_error("Waiting for GPU to finish before allocating new level textures...");
+    // glFinish();
+    // log_error("GPU sync complete, proceeding with texture allocation");
+
     worldHeader->isAllocated = 1;
 
     // Get world name (needed for both cache and normal path)
@@ -451,7 +468,7 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
     }
 
     // Allocate fixed-size buffer (prevents fragmentation)
-    logv_error("Max chunk size: %u bytes (%.2f MB)\n", max_chunk_size, max_chunk_size / (1024.0 * 1024.0));
+    //logv_error("Max chunk size: %u bytes (%.2f MB)\n", max_chunk_size, max_chunk_size / (1024.0 * 1024.0));
     void *tex_data = malloc(max_chunk_size);
     if (!tex_data) {
         logv_error("FATAL: Failed to allocate %u bytes for streaming buffer\n", max_chunk_size);
@@ -532,7 +549,7 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
 #ifdef PROFILE_TEX_DECOMP
         time_start = sceKernelGetProcessTimeWide();
 #endif
-        logv_error("Chunk %d: offset=0x%x, size=%u bytes\n", chunk_idx, chunk_file_offset, chunk_size);
+        //logv_error("Chunk %d: offset=0x%x, size=%u bytes\n", chunk_idx, chunk_file_offset, chunk_size);
 
         ((int (*)(int, int, int))machHostSeek_addr)(file, chunk_file_offset, 0);
         ((void (*)(int, void*, int))machHostRead_addr)(file, tex_data, chunk_size);
@@ -544,13 +561,13 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
         // Process chunk (adjust all offsets to be relative to buffer start)
         uint8_t *chunk_data = (uint8_t*)tex_data;
         int num_textures = *(int32_t*)chunk_data;
-        logv_error("  num_textures = %d\n", num_textures);
+        //logv_error("  num_textures = %d\n", num_textures);
 
         // Skip if no textures in this chunk
         if (num_textures <= 0) {
             chunk->tex_data_offset = 0;
             // DON'T modify chunk_offsets - we need original values for size calculations!
-            log_error("  Skipping chunk (no textures)\n");
+            //log_error("  Skipping chunk (no textures)\n");
             continue;
         }
 
@@ -659,11 +676,12 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
             g_table2_start = g_table1_start + table1_len;
             g_table3_start = g_table2_start + 0x48;
 
-            // Calculate texture dimensions (power of 2, min 64)
+            // Use actual texture dimensions (NPOT textures supported by vitaGL)
+            // memcpy-based block copy handles any width without alignment issues
             // Use file_entry for width/height since entry 0 has count overlapping these fields
-            int width = ((int (*)(int))lowestPowerof2NotLessThan_addr)(file_entry->width);
-            if (width < 0x40) width = 0x40;
-            int height = ((int (*)(int))lowestPowerof2NotLessThan_addr)(file_entry->height);
+            int width = alignDimension(file_entry->width);
+            int height = alignDimension(file_entry->height);
+            
 
             // Track maximum dimensions
             if (width > max_width_seen) max_width_seen = width;
@@ -766,7 +784,8 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
                             time_huff_decode += (time_huff_end - time_huff_start);
 #endif
 
-                            // Bulk copy 16x16 block to output buffer (fully unrolled like original)
+                            // Bulk copy 16x16 block to output buffer
+                            // Use memcpy to handle any width (POT or NPOT) - handles unaligned access
 #ifdef PROFILE_TEX_DECOMP
                             uint64_t time_copy_start = sceKernelGetProcessTimeWide();
 #endif
@@ -775,23 +794,12 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
                             uint8_t *src = block_buffer;
                             uint8_t *dst = &temp_buffer[block_y * width + block_x];
 
-                            // Fully unrolled copy - compiler will use NEON
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8); dst += width; src += 16;
-                            *(uint64_t*)(dst) = *(uint64_t*)(src); *(uint64_t*)(dst + 8) = *(uint64_t*)(src + 8);
+                            // Copy 16 bytes per row, 16 rows - memcpy handles unaligned widths
+                            for (int row = 0; row < 16; row++) {
+                                memcpy(dst, src, 16);
+                                dst += width;
+                                src += 16;
+                            }
 #ifdef PROFILE_TEX_DECOMP
                             uint64_t time_copy_end = sceKernelGetProcessTimeWide();
                             time_block_copy += (time_copy_end - time_copy_start);
@@ -811,7 +819,7 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
 #endif
 
             // Downsample textures larger than 256x256 to save GPU memory (preserving aspect ratio)
-            #define MAX_TEXTURE_DIM 256
+            #define MAX_TEXTURE_DIM 1024
             if (width > MAX_TEXTURE_DIM || height > MAX_TEXTURE_DIM) {
                 // Calculate uniform scale factor based on larger dimension
                 int max_dim = (width > height) ? width : height;
@@ -857,8 +865,32 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
             void *d3d_palette = ((void* (*)(int))D3DDevice_CreatePalette2_addr)(0);
             uint32_t *pal_lock = (uint32_t*)((int (*)(void*, int))D3DPalette_Lock2_addr)(d3d_palette, 0);
 
-            // Ultra-fast: copy palette directly from file (GBRA format), let shader handle color swizzling
-            memcpy(pal_lock, pal_data, 1024);  // 256 entries * 4 bytes
+            // Apply saturation adjustment like original game (using constants from 0x00132030 and 0x00132034)
+            // These values control color saturation/brightness
+            float fVar2 = *(float*)LOC(0x00132030);  // Average factor (typically ~0.333 for 1/3)
+            float fVar3 = *(float*)LOC(0x00132034);  // Saturation factor (1.0 = normal, >1.0 = more saturated)
+
+            for (int i = 0; i < 256; i++) {
+                uint8_t b = pal_data[i * 4 + 0];
+                uint8_t g = pal_data[i * 4 + 1];
+                uint8_t r = pal_data[i * 4 + 2];
+                uint8_t a = pal_data[i * 4 + 3];
+
+                // Calculate average (grayscale)
+                float avg = (float)(r + g + b) * fVar2;
+
+                // Apply saturation adjustment: avg + (color - avg) * saturation
+                int colorR = (int)(avg + ((float)r - avg) * fVar3 + 0.5f);
+                int colorG = (int)(avg + ((float)g - avg) * fVar3 + 0.5f);
+                int colorB = (int)(avg + ((float)b - avg) * fVar3 + 0.5f);
+
+                // Saturate to 8-bit
+                uint8_t satR = UnsignedSaturate8(colorR);
+                uint8_t satG = UnsignedSaturate8(colorG);
+                uint8_t satB = UnsignedSaturate8(colorB);
+
+                pal_lock[i] = satR | (satG << 8) | (satB << 16) | (a << 24);  // Output as RGBA
+            }
 
             entry->palette_ptr = (uint32_t)d3d_palette;  // +0x14
 

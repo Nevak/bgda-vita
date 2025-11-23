@@ -41,23 +41,23 @@ typedef struct __attribute__((__packed__)) stat64_bionic {
     unsigned long st_ino;       // 12
     unsigned int st_mode;       // 16
     unsigned int st_nlink;      // 20
-    unsigned int st_uid;        // 24
+    unsigned int st_uid;        // 24 
     unsigned int st_gid;        // 28
     unsigned long long st_rdev; // 32
     unsigned int __pad2;        // 40
-    unsigned long __unused4;    // 80
-    unsigned long __unused5;    // 84    
-    unsigned long __unused6;    // 80
-    unsigned long __unused7;
-    long st_size;               // 44
-    long st_blksize;            // 48    
-    long st_blocks;             // 52   
-    unsigned long st_atime;     // 56
-    unsigned long st_atime_nsec;// 60 
-    unsigned long st_mtime;     // 64
-    unsigned long st_mtime_nsec;// 68
-    unsigned long st_ctime;     // 72
-    unsigned long st_ctime_nsec;// 76
+    unsigned long __unused4;    // 44
+    unsigned long __unused5;    // 48
+    unsigned long __unused6;    // 52
+    unsigned long __unused7;    // 56
+    long st_size;               // 60
+    long st_blksize;            // 64
+    long st_blocks;             // 68
+    unsigned long st_atime;     // 72
+    unsigned long st_atime_nsec;// 76
+    unsigned long st_mtime;     // 80
+    unsigned long st_mtime_nsec;// 84
+    unsigned long st_ctime;     // 88
+    unsigned long st_ctime_nsec;// 92
 } stat64_bionic;
 
 typedef struct __attribute__((__packed__)) dirent64_bionic {

@@ -5,6 +5,12 @@
 #include <so_util/so_util.h>
 #include <string.h>
 #include <psp2/kernel/processmgr.h>
+
+#ifdef PROFILER_ENABLED
+#include <utils/prof.h>
+#include <libperf.h>
+#endif
+
 #define GL_TEXTURE_MAX_LEVEL 0x813d
 
 // Forward declarations for vitaGL low-level access
@@ -23,6 +29,11 @@ void vglSetTexPalette(SceGxmTexture *texture, void *data);
 #endif
 #ifndef GL_COLOR_INDEX8_EXT
 #define GL_COLOR_INDEX8_EXT 0x80E5
+#endif
+
+// VitaGL YUV format constants (for hardware-accelerated video)
+#ifndef VGL_YUV420P_NV12_BT601
+#define VGL_YUV420P_NV12_BT601 0x18E70
 #endif
 
 /*
@@ -52,14 +63,68 @@ uint XGGetPixelBufferMaxAlpha(uint8_t (*param_1) [16], uint32_t param_2,int para
 
 // Native GXM palette implementation - no shader-based palette management needed
 
+/**
+ * Convert UYVY (packed 4:2:2 YUV) to RGBA8888
+ * Uses BT.601 color space (standard definition video)
+ *
+ * UYVY layout: U0 Y0 V0 Y1 | U2 Y2 V2 Y3 | ... (2 bytes per pixel, 4 bytes for 2 pixels)
+ *
+ * @param src Source UYVY data
+ * @param dst Destination RGBA buffer (must be width*height*4 bytes)
+ * @param width Image width in pixels
+ * @param height Image height in pixels
+ * @param pitch Source pitch in bytes (may include padding)
+ */
+static void convert_uyvy_to_rgba(const uint8_t *src, uint8_t *dst, int width, int height, int pitch) {
+    for (int y = 0; y < height; y++) {
+        const uint8_t *src_row = src + y * pitch;
+        uint8_t *dst_row = dst + y * width * 4;
+
+        // Process 2 pixels at a time (one UYVY macro-pixel)
+        for (int x = 0; x < width; x += 2) {
+            // Extract UYVY components
+            int u = src_row[x * 2 + 0] - 128;
+            int y0 = src_row[x * 2 + 1];
+            int v = src_row[x * 2 + 2] - 128;
+            int y1 = src_row[x * 2 + 3];
+
+            // YUV to RGB conversion (BT.601)
+            // R = Y + 1.402 * V
+            // G = Y - 0.344 * U - 0.714 * V
+            // B = Y + 1.772 * U
+
+            // First pixel
+            int r0 = y0 + ((359 * v) >> 8);
+            int g0 = y0 - ((88 * u + 183 * v) >> 8);
+            int b0 = y0 + ((454 * u) >> 8);
+
+            // Clamp to [0, 255] and store as ABGR (vitaGL native format)
+            dst_row[x * 4 + 0] = 255;  // Alpha
+            dst_row[x * 4 + 1] = b0 < 0 ? 0 : (b0 > 255 ? 255 : b0);
+            dst_row[x * 4 + 2] = g0 < 0 ? 0 : (g0 > 255 ? 255 : g0);
+            dst_row[x * 4 + 3] = r0 < 0 ? 0 : (r0 > 255 ? 255 : r0);
+
+            // Second pixel
+            int r1 = y1 + ((359 * v) >> 8);
+            int g1 = y1 - ((88 * u + 183 * v) >> 8);
+            int b1 = y1 + ((454 * u) >> 8);
+
+            dst_row[(x + 1) * 4 + 0] = 255;  // Alpha
+            dst_row[(x + 1) * 4 + 1] = b1 < 0 ? 0 : (b1 > 255 ? 255 : b1);
+            dst_row[(x + 1) * 4 + 2] = g1 < 0 ? 0 : (g1 > 255 ? 255 : g1);
+            dst_row[(x + 1) * 4 + 3] = r1 < 0 ? 0 : (r1 > 255 ? 255 : r1);
+        }
+    }
+}
+
 // External timing accumulator
 extern float g_ProcessAndUploadTextureMs;
 
 so_hook ProcessAndUploadTexture_hook;
 void ProcessAndUploadTexture
-              (int glTarget,uint8_t *sourceTextureData,uint formatToSwitchParam,int isSwizzled,
-               int isCompressed,uint width,uint height,uint level, uint sourcePitch, int paddingFlag,
-               uint8_t * palette,uint allocateNewTexture,int keepSwizzled,ushort *alphaRange)
+              (int glTarget, uint8_t *sourceTextureData, uint formatToSwitchParam, int isSwizzled,
+               int isCompressed, uint width, uint height, uint level, uint sourcePitch, int paddingFlag,
+               uint8_t *palette, uint allocateNewTexture, int keepSwizzled, ushort *alphaRange)
 {
 	uint64_t timeStart = sceKernelGetProcessTimeWide();
 
@@ -72,37 +137,25 @@ void ProcessAndUploadTexture
     if ((formatToSwitchParam & 0xffffff7f) == 0xb && palette)
 	{
         uint8_t* indexData;
-        indexData = sourceTextureData;
-        // if (width == sourcePitch) {
-        //     // Direct use of source data
-        //     indexData = sourceTextureData;
-        //     //logv_error("Using source data directly: %d bytes", width * height);
-        // } else if (width < 64) {
-        //     // Allocate and copy row by row
-        //     indexData = malloc(width * height);
-        //     if (!indexData) {
-        //         log_error("Failed to allocate texture index data");
-        //         goto regular_processing;
-        //     }
-        //     for (int y = 0; y < height; y++) {
-        //         memcpy(indexData + y * width,
-        //                sourceTextureData + y * sourcePitch,
-        //                width);
-        //     }
-        //     logv_error("Row-by-row copy: width=%d, height=%d, sourcePitch=%d", width, height, sourcePitch);
-        // } else {
-        //     // Allocate and direct copy
-        //     indexData = malloc(width * height);
-        //     if (!indexData) {
-        //         log_error("Failed to allocate texture index data");
-        //         goto regular_processing;
-        //     }
-        //     memcpy(indexData, sourceTextureData, width * height);
-        //     logv_error("Allocated and copied: %d bytes", width * height);
-        // }
-
-        // Upload the paletted texture
-        //logv_error("Calling glTexImage2D_fake with internalFormat=GL_COLOR_INDEX8_EXT (0x%X)", GL_COLOR_INDEX8_EXT);
+        if (width != sourcePitch && width < 64) {
+             // Allocate and copy row by row
+             indexData = malloc(width * height);
+             if (!indexData) {
+                 log_error("Failed to allocate texture index data");
+                 goto regular_processing;
+             }
+             for (int y = 0; y < height; y++) {
+                 memcpy(indexData + y * width,
+                        sourceTextureData + y * sourcePitch,
+                        width);
+             }
+             //logv_error("Row-by-row copy: width=%d, height=%d, sourcePitch=%d", width, height, sourcePitch);
+        }
+        else
+        {
+            indexData = sourceTextureData;
+        }
+        
         glTexImage2D(glTarget, 0, GL_COLOR_INDEX8_EXT, width, height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, indexData);
 
         // Clean up temporary buffer if we allocated one
@@ -131,15 +184,47 @@ void ProcessAndUploadTexture
         return;
 	}
 
+    // Check for format 0x12 (video texture - BGRA format on Android)
+    if (formatToSwitchParam == 0x12 && !palette) {
+        #ifdef PROFILER_ENABLED
+        sceRazorCpuPushMarkerWithHud("Upload as BGRA texture", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+        #endif 
+
+        // Upload as BGRA texture (vitaGL supports GL_BGRA natively)
+        glTexImage2D(glTarget, 0, GL_BGRA,
+                     width, height, 0,
+                     GL_BGRA, GL_UNSIGNED_BYTE, sourceTextureData);
+
+        uint64_t timeEnd = sceKernelGetProcessTimeWide();
+        float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+        g_ProcessAndUploadTextureMs += elapsedMs;
+        
+        #ifdef PROFILER_ENABLED
+        sceRazorCpuPopMarker();
+        #endif
+
+        return;
+    }
+
 regular_processing:
-    // For non-palette textures, use original processing
-	SO_CONTINUE(void *, ProcessAndUploadTexture_hook, glTarget, sourceTextureData, formatToSwitchParam,
+    #ifdef PROFILER_ENABLED
+    sceRazorCpuPushMarkerWithHud("regular_processing", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+    #endif 
+
+    logv_error("regular_processing: format=0x%X (w=%d, h=%d, pitch=%d, paddingFlag=0x%X)",
+               formatToSwitchParam, width, height, sourcePitch, paddingFlag);
+
+	SO_CONTINUE(void*, ProcessAndUploadTexture_hook, glTarget, sourceTextureData, formatToSwitchParam,
 		isSwizzled, isCompressed, width, height, level, sourcePitch, paddingFlag,
 		palette, allocateNewTexture, keepSwizzled, alphaRange);
+    
+    #ifdef PROFILER_ENABLED
+    sceRazorCpuPopMarker();
+    #endif
 
-	uint64_t timeEnd = sceKernelGetProcessTimeWide();
-	float elapsedMs = (timeEnd - timeStart) / 1000.0f;
-	g_ProcessAndUploadTextureMs += elapsedMs;
+	// uint64_t timeEnd = sceKernelGetProcessTimeWide();
+	// float elapsedMs = (timeEnd - startTime) / 1000.0f;
+	// g_ProcessAndUploadTextureMs += elapsedMs;
 }
 
 so_hook DoTheFinalGPUUpload_hook;
@@ -147,24 +232,78 @@ void DoTheFinalGPUUpload(uint32_t glTarget, uint32_t level, uint8_t (*pixelData)
                         uint32_t textureFormatToSwitch, uint width, uint height, uint32_t imageSize,
 						int shouldUploadToGPU)
 {
-	// logv_error("DoTheFinalGPUUpload(glTarget: 0x%x, level: %u, pixelData: %p, textureFormatToSwitch: 0x%x, width: %u, height: %u, imageSize: %u, shouldUploadToGPU: %d)\n",
-	// 	glTarget, level, pixelData, textureFormatToSwitch, width, height, imageSize, shouldUploadToGPU);
-	SO_CONTINUE(void *, DoTheFinalGPUUpload_hook, glTarget, level, pixelData,
-	textureFormatToSwitch, width, height, imageSize, shouldUploadToGPU);	
+    #ifdef PROFILER_ENABLED
+    sceRazorCpuPushMarkerWithHud("DoTheFinalGPUUpload", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+    #endif
+
+	SO_CONTINUE(void *, DoTheFinalGPUUpload_hook, glTarget, level, pixelData, textureFormatToSwitch, width, height, imageSize, shouldUploadToGPU);	
+
+    #ifdef PROFILER_ENABLED
+    sceRazorCpuPopMarker();
+    #endif
+}
+
+// so_hook D3DBaseTexture_GetInfo_hook;
+// void D3DBaseTexture_GetInfo(void *this, uint32_t *pFormat, int *isCompressed,int *isSwizzled, uint32_t *width, uint32_t *height)
+// {
+//     log_error("D3DBaseTexture_GetInfo called");
+
+//     SO_CONTINUE(void*, D3DBaseTexture_GetInfo_hook, this, pFormat, isCompressed, isSwizzled, width, height);
+// }
+
+typedef void (*D3DBaseTexture_GetInfo_t)(void*,uint32_t *, int *,int *, uint32_t *, uint32_t *);
+
+
+so_hook D3DTexture_LockRect_hook;
+void D3DTexture_LockRect(void *pThis, uint32_t Level, int *pLockedRect, int *pRect, int flags)
+{
+    // Call original
+    SO_CONTINUE(void*, D3DTexture_LockRect_hook, pThis, Level, pLockedRect, pRect, flags);
+
+    // Check if this is a video texture with the problematic 4096 pitch
+    // Video textures are 640 pixels wide with 4096 byte pitch (Xbox alignment)
+    if (pLockedRect[0] == 4096) {
+        // Get width from dimensionsAndFlags
+        //uint32_t width = (*(uint32_t*)((char*)pThis + 0x10)) & 0xFFFF;
+
+        uint32_t format;
+        int isCompressed;
+        int isSwizzled;
+        uint32_t width;
+        uint32_t height;
+        D3DBaseTexture_GetInfo_t D3DBaseTexture_GetInfo = (D3DBaseTexture_GetInfo_t)((uintptr_t)LOC(0x00209c1c));
+
+        D3DBaseTexture_GetInfo(pThis, &format, &isCompressed, &isSwizzled, &width, &height);
+
+
+       // Video textures are always 640 pixels wide, BGRA format (4 bytes per pixel)
+       //if (width == 640) {
+       {
+            uint32_t correct_pitch = width * 4;  // 2560 bytes
+
+           // logv_error("D3DTexture_LockRect: Video texture detected (width=%d), fixing pitch 4096 → %d",width,
+            //           correct_pitch);
+
+            pLockedRect[0] = correct_pitch;
+        }
+
+        //pLockedRect[0] = width*4;
+    }
 }
 
 so_hook D3DDevice_TextureStageState_SetToGL_hook;
 void D3DDevice_TextureStageState_SetToGL(D3DDevice_TextureStageState* this, uint32_t textureStageIndex, uint32_t samplerType)
 {
-    SO_CONTINUE(void*, D3DDevice_TextureStageState_SetToGL_hook, this, textureStageIndex, samplerType);
-}
+    #ifdef PROFILER_ENABLED
+    sceRazorCpuPushMarkerWithHud("D3DDevice_TextureStageState_SetToGL", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+    #endif
 
-// D3DBaseTexture::Unregister - DON'T hook this, it may be called from wrong thread
-// Let the "Command" version handle palette cleanup on the rendering thread
-// so_hook D3DBaseTexture_Unregister_hook;
-// void D3DBaseTexture_Unregister(D3DBaseTexture *this, int param_1) {
-//     SO_CONTINUE(void*, D3DBaseTexture_Unregister_hook, this, param_1);
-// }
+    SO_CONTINUE(void*, D3DDevice_TextureStageState_SetToGL_hook, this, textureStageIndex, samplerType);
+    
+    #ifdef PROFILER_ENABLED
+    sceRazorCpuPopMarker();
+    #endif
+}
 
 so_hook D3DDevice_UnregisterTextureCommand_hook;
 void D3DDevice_UnregisterTextureCommand(void *this, RegisteredBaseTextureData *textureData, int *param_2) {
@@ -190,12 +329,75 @@ void D3DDevice_UnregisterTextureCommand(void *this, RegisteredBaseTextureData *t
     SO_CONTINUE(void *, D3DDevice_UnregisterTextureCommand_hook, this, textureData, param_2);
 }
 
-// D3DBaseTexture::UnbufferToOGL - DON'T hook this, it may be called from wrong thread
-// Let the "Command" version handle palette cleanup on the rendering thread
-// so_hook D3DBaseTexture_UnbufferToOGL_hook;
-// void D3DBaseTexture_UnbufferToOGL(D3DBaseTexture *this)
-// {
-//     SO_CONTINUE(void*, D3DBaseTexture_UnbufferToOGL_hook, this);
-// }
+
+D3DBaseTexture *
+D3DDevice_CreateTexture2
+          (int width,int height,undefined4 depth,int levels,uint usage,uint format,
+          undefined4 resourceType)
+
+{
+  int bytesPerPixel;
+  uint allocationSize;
+  astruct_16 *pTextureHeader;
+  int needsRoundUp;
+  int log2_base;
+  astruct_16 *texturePtr;
+  uint pitch;
+  int scanIndex;
+  uint poolClass;
+  bool bVar1;
+  
+  bytesPerPixel = XGBytesPerPixelFromFormat(format);
+  if (levels == 0) {
+    levels = 1;
+  }
+  texturePtr = (astruct_16 *)0x0;
+  log2_base = 0;
+  needsRoundUp = 1;
+  if (width + 1U >> 1 != 0) {
+    pitch = width + 1U >> 1;
+    scanIndex = LZCOUNT(pitch) + -0x20;
+    log2_base = 0x20 - LZCOUNT(pitch);
+    needsRoundUp = 0;
+    do {
+      bVar1 = scanIndex != -1;
+      scanIndex = scanIndex + 1;
+      needsRoundUp = needsRoundUp + (pitch & 1);
+      pitch = pitch >> 1;
+    } while (bVar1);
+    needsRoundUp = needsRoundUp + -1;
+    if (needsRoundUp != 0) {
+      needsRoundUp = 1;
+    }
+  }
+  poolClass = 4;
+  pitch = bytesPerPixel << (needsRoundUp + log2_base & 0xffU);
+  if (bytesPerPixel == 0) {
+    pitch = (uint)(1 << (needsRoundUp + log2_base & 0xffU)) >> 1;
+  }
+  if (pitch < 0x41) {
+    pitch = 0x40;
+  }
+  allocationSize = 0x14;
+  if ((usage & 3) == 0) {
+    allocationSize = pitch * height + 0x14;
+  }
+  pTextureHeader = (astruct_16 *)JBE::Mem::Alloc(allocationSize,0,4,"unnamed_allocation");
+  XGSetTextureHeader(width,height,levels,usage,format,0,pTextureHeader,0,pitch);
+  D3DResource_AddRef(pTextureHeader);
+  if ((usage & 3) == 0) {
+    texturePtr = pTextureHeader + 1;
+  }
+  if ((int)usage < 0) {
+    poolClass = 9;
+  }
+  else if ((usage & 0x40000000) == 0) {
+    poolClass = usage >> 0x1c & 2;
+  }
+  D3DBaseTexture::Register
+            ((D3DBaseTexture *)pTextureHeader,texturePtr,0,(uint)(texturePtr == (astruct_16 *)0x0),0
+             ,poolClass);
+  return (D3DBaseTexture *)pTextureHeader;
+}
 
 #endif

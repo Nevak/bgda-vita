@@ -96,7 +96,7 @@ jint getStore(jmethodID id, va_list args) {
 }
 
 jint getAssetPackCount(jmethodID id, va_list args) {
-	return 1;
+	return 2;
 }
 
 jint getOrientation(jmethodID id, va_list args) {
@@ -175,7 +175,7 @@ jboolean isPhone(jmethodID id, va_list args) {
 }
 
 jboolean isAAB(jmethodID id, va_list args) {
-	return JNI_FALSE;
+	return JNI_TRUE;
 }
 
 jboolean isPVRTraceActive(jmethodID id, va_list args) {
@@ -247,7 +247,6 @@ jobject getISO3Language(jmethodID id, va_list args) {
 	sceAppUtilSystemParamGetInt(SCE_SYSTEM_PARAM_ID_LANG, &res);
 	
 	printf("getISO3Language(%d)\n", res);
-
 	switch (res) {
 		case SCE_SYSTEM_PARAM_LANG_JAPANESE:
 			strcpy(arr, "jpn");

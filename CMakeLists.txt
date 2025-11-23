@@ -59,7 +59,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # Option to enable profiler instrumentation
-option(RAZOR_PROFILER_ENABLED "Enable function instrumentation for profiling" OFF)
+option(RAZOR_PROFILER_ENABLED "Enable function instrumentation for profiling" ON)
 
 # Base compiler flags without instrumentation
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer -save-temps")
@@ -91,7 +91,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   source/reimpl/pthr.c
 			   source/reimpl/sys.c
 			   #source/utils/ogg_patch.c
-			   #source/utils/vorbis_patch.c
+			   source/utils/vorbis_patch.c
 			   #source/utils/ffmpeg_patch.c
 			   source/utils/prof.c
 			   source/utils/dialog.c
@@ -100,6 +100,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   source/utils/logger.c
 			   source/utils/settings.c
 			   source/utils/utils.c
+			   #source/remap_section.c
 			   #source/utils/trophies.c
 			   lib/falso_jni/FalsoJNI.c
 			   lib/falso_jni/FalsoJNI_ImplBridge.c
@@ -138,20 +139,14 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 target_link_libraries(${CMAKE_PROJECT_NAME}
 					  -Wl,--whole-archive pthread -Wl,--no-whole-archive
 					  stdc++
-					  #vitagprof
 					  SceLibKernel_stub
-					  OpenSLES
 					  sndfile
-					 # ogg
+                      vorbis
+                      vorbisfile
+					  ogg
 					  #FLAC
 					  #vorbisidec
 					  openal
-					#   avcodec
-					#   avfilter
-					#   avformat
-					#   avutil
-					#   swresample
-					#   swscale
 					  vitaGL
 					  vitashark
 					  SceShaccCgExt
@@ -164,7 +159,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  kubridge_stub
 					  SceHid_stub
 					  SceTouch_stub
-					  #SceMotion_stub
 					  SceAppMgr_stub
 					  SceAppUtil_stub
 					  SceAudio_stub
@@ -180,12 +174,16 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  ScePower_stub
 					  SceTouch_stub
 					  SceVshBridge_stub
-					  #profilerino
-					  #ScePerf_stub
-					  SceSysmodule_stub
-					  
-					  #SceRazorCapture_stub
 					  )
+
+if(RAZOR_PROFILER_ENABLED)
+target_link_libraries(${CMAKE_PROJECT_NAME}
+	profilerino
+	ScePerf_stub
+	SceRazorHud_stub
+	SceRazorCapture_stub
+)
+endif()
 
 vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR UNCOMPRESSED GEN_EXPORTS exports.txt)
 vita_create_vpk(${VITA_VPKNAME}.vpk ${VITA_TITLEID} eboot.bin
@@ -224,7 +222,12 @@ add_custom_target(send_kvdb
 
 add_custom_target(dump
 				  COMMAND ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump.sh ${PSVITAIP}
-				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 128
+				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 128
+				  )
+
+add_custom_target(dump_local
+				  COMMAND bash ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump_local.sh
+				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 128
 				  )
 
 add_custom_target(reboot
