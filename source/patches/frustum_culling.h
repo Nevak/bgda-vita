@@ -101,4 +101,37 @@ uint32_t worldClipCubeToFrustumOnce(float *cubeVertices, int clippedPlanes)
 	return x;
 }
 
+void patch_culling() {
+	uintptr_t worldClipCubeToFrustum_addr = (uintptr_t)so_symbol(&so_mod, "_Z22worldClipCubeToFrustumPA2_fi");
+	if (worldClipCubeToFrustum_addr == 0) {
+		log_error("worldClipCubeToFrustum not found\n");
+	} else {
+		logv_error("worldClipCubeToFrustum found at %p\n", worldClipCubeToFrustum_addr);
+		worldClipCubeToFrustum_hook = hook_addr(worldClipCubeToFrustum_addr, (uintptr_t)&worldClipCubeToFrustum);
+	}
+
+	uintptr_t worldClipCubeToClipFrustum_addr = (uintptr_t)so_symbol(&so_mod, "_Z26worldClipCubeToClipFrustumPA2_fi");
+	if (worldClipCubeToClipFrustum_addr == 0) {
+		log_error("worldClipCubeToClipFrustum not found\n");
+	}
+	else {
+		logv_error("worldClipCubeToClipFrustum found at %p\n", worldClipCubeToClipFrustum_addr);
+		worldClipCubeToClipFrustum_hook = hook_addr(worldClipCubeToClipFrustum_addr, (uintptr_t)&worldClipCubeToClipFrustum);
+	}
+
+	uintptr_t worldClipCubeToFrustumOnce_addr = (uintptr_t)so_symbol(&so_mod, "_Z26worldClipCubeToFrustumOncePA2_f");
+	if (worldClipCubeToFrustumOnce_addr == 0) {
+		log_error("worldClipCubeToFrustumOnce not found\n");
+	} else {
+		logv_error("worldClipCubeToFrustumOnce found at %p\n", worldClipCubeToFrustumOnce_addr);
+		worldClipCubeToFrustumOnce_hook = hook_addr(worldClipCubeToFrustumOnce_addr, (uintptr_t)&worldClipCubeToFrustumOnce);
+	}
+	
+	g_frustumVertexIndices = (FrustumIdx*)(LOC(0x003f7e26));
+	//logv_error("g_frustumVertexIndices is at %p\n", g_frustumVertexIndices);
+	g_worldFrustum = (float*)(LOC(0x003f7ccc));
+	//logv_error("g_worldFrustum is at %p\n", g_worldFrustum);
+}
+
+
 #endif

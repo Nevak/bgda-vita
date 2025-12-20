@@ -135,7 +135,6 @@ int input_thread_fn(SceSize args, void *argp) {
 
 
 int main() {
-	log_error("main()");
 	//gprof_stop("ux0:/data/gmon.out", 0);
 #ifdef PROFILER_ENABLED
 	log_error("profilerino_init!");

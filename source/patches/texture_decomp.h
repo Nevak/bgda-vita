@@ -91,13 +91,6 @@ void D3DDevice_SetTexture(uint32_t param_1, int param_2) {
 	SO_CONTINUE(void *, D3DDevice_SetTexture_hook, param_1, param_2);
 }
 
-// so_hook D3DDevice_CreateTexture2_hook;
-// extern float g_D3DDevice_CreateTexture2Ms;
-// void *D3DDevice_CreateTexture2(int width, int height, uint32_t depth, int levels, uint32_t usage, uint32_t format, uint32_t resourceType) {
-// 	void* result = SO_CONTINUE(void *, D3DDevice_CreateTexture2_hook, width, height, depth, levels, usage, format, resourceType);
-// 	return result;
-// }
-
 so_hook XGSetTextureHeader_hook;
 int XGSetTextureHeader(uint32_t width, uint32_t height, int levels, uint32_t usage, uint32_t format, uint32_t pool, uint32_t *pTexture, uint32_t data, uint32_t pitch) {
 	// For paletted textures (format 0xb), use width as pitch to avoid padding
@@ -110,27 +103,10 @@ int XGSetTextureHeader(uint32_t width, uint32_t height, int levels, uint32_t usa
 }
 
 so_hook RegisteredVertexData_GetPatchedData_hook;
-// void RegisteredVertexData_GetPatchedData(void *param_1,uint param_2,uint param_3, uint param_4)
-// {
-// 	sceRazorCpuPushMarkerWithHud("RegisteredVertexData_GetPatchedData", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
-// 	SO_CONTINUE(void*, RegisteredVertexData_GetPatchedData_hook, param_1, param_2, param_3, param_4);
-// 	sceRazorCpuPopMarker();
-// }
-
-#define SO_CONTINUE_VOID(h,...) do { \
-    kuKernelCpuUnrestrictedMemcpy((void *)h.addr, h.orig_instr, sizeof(h.orig_instr)); \
-    kuKernelFlushCaches((void *)h.addr, sizeof(h.orig_instr)); \
-    if (h.thumb_addr) ((void(*)())h.thumb_addr)(__VA_ARGS__); \
-    else ((void(*)())h.addr)(__VA_ARGS__); \
-    kuKernelCpuUnrestrictedMemcpy((void *)h.addr, h.patch_instr, sizeof(h.patch_instr)); \
-    kuKernelFlushCaches((void *)h.addr, sizeof(h.patch_instr)); \
-} while(0)
-
-void RegisteredVertexData_GetPatchedData(void* param_1, void* param_2, void* param_3, int offset, int size)
+void RegisteredVertexData_GetPatchedData(void* param_1, int offset, int size)
 {
 	//sceRazorCpuPushMarkerWithHud("RegisteredVertexData_GetPatchedData", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
-	//logv_error("GetPatchedData called: p1=%p p2=%08x p3=%08x p4=%08x, p5=%08x\n", param_1, param_2, param_3, offset, size);
-    SO_CONTINUE(void*, RegisteredVertexData_GetPatchedData_hook, param_1, param_2, param_3, offset, size);
+    SO_CONTINUE(void*, RegisteredVertexData_GetPatchedData_hook, param_1, offset, size);
 	//sceRazorCpuPopMarker();
 }
 

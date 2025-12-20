@@ -151,7 +151,7 @@ regular_processing:
     sceRazorCpuPushMarkerWithHud("regular_processing", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
     #endif 
 
-    logv_error("regular_processing: format=0x%X (w=%d, h=%d, pitch=%d, paddingFlag=0x%X)",
+    logv_debug("regular_processing: format=0x%X (w=%d, h=%d, pitch=%d, paddingFlag=0x%X)",
                formatToSwitchParam, width, height, sourcePitch, paddingFlag);
 
 	SO_CONTINUE(void*, ProcessAndUploadTexture_hook, glTarget, sourceTextureData, formatToSwitchParam,

@@ -127,7 +127,7 @@ int alignDimension(int dimension) {
  */
 void worldAllocateSegments(_worldHeader *worldHeader) {
 
-	logv_error("[0x%X] === worldAllocateSegments START ===", sceKernelGetThreadId());
+	logv_debug("[0x%X] === worldAllocateSegments START ===", sceKernelGetThreadId());
 
 #ifdef PROFILE_TEX_DECOMP
     uint64_t time_file_io = 0;
@@ -150,7 +150,7 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
 
     // Get world name (needed for both cache and normal path)
     char *world_name = (char*)LOC(0x0054cad8);
-    logv_error("worldAllocateSegments: world_name pointer=0x%08X", (uint32_t)world_name);
+    logv_debug("worldAllocateSegments: world_name pointer=0x%08X", (uint32_t)world_name);
 
     // Load world lumps if needed (ALWAYS run this, even when using cache)
     int element_count = worldHeader->element_count;

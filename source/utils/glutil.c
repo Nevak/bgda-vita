@@ -52,6 +52,8 @@
     vglUseTripleBuffering(GL_FALSE);
     //vglSetSemanticBindingMode(VGL_MODE_POSTPONED);
     //vglInitWithCustomThreshold(0, 960, 544, 18 * 1024 * 1024, 0, 20 * 1024 * 1024, 0, SCE_GXM_MULTISAMPLE_NONE);
+
+    
     vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_THRESHOLD_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);
     //eglSwapInterval(0, 2);
     vglWaitVblankStart(GL_FALSE);
