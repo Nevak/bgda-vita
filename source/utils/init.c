@@ -123,6 +123,7 @@ void soloader_init_all() {
     so_patch();
     //patch_ogg();
     patch_vorbis();
+    //patch_texture_decom();
     //patch_ffmpeg();
     log_info("so_patch() passed.");
 

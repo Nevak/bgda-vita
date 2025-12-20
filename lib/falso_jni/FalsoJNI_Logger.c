@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <malloc.h>
 #include <string.h>
+#include <stdatomic.h>
 
 #include "FalsoJNI_Logger.h"
 #include "FalsoJNI.h"
@@ -27,24 +28,40 @@
 #define COLOR_END     "\033[0m"
 
 static SceKernelLwMutexWork _fjni_log_mutex;
-static volatile short int _fjni_log_mutex_inited = 0;
+static atomic_int _fjni_log_mutex_inited = 0;
 
 static char _fjni_log_buffer_1[2048];
 static char _fjni_log_buffer_2[2048];
 
+// Thread-safe lazy initialization of the JNI log mutex
+static inline void fjni_log_mutex_init_once(void) {
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&_fjni_log_mutex_inited, &expected, 1)) {
+        // We won the race, initialize the mutex
+        int ret = sceKernelCreateLwMutex(&_fjni_log_mutex, "fjni_log_lock", 0, 0, NULL);
+        if (ret < 0) {
+            sceClibPrintf("[JNI] Error: failed to create log mutex: 0x%x\n", ret);
+            atomic_store(&_fjni_log_mutex_inited, 0); // Reset on failure
+            return;
+        }
+        atomic_store(&_fjni_log_mutex_inited, 2); // Mark as fully initialized
+    } else {
+        // Another thread is initializing, wait for it to complete
+        while (atomic_load(&_fjni_log_mutex_inited) == 1) {
+            sceKernelDelayThread(100); // Wait 0.1ms
+        }
+    }
+}
+
 #define LOG_LOCK \
-    if (!_fjni_log_mutex_inited) { \
-        int ret = sceKernelCreateLwMutex(&_fjni_log_mutex, "fjni_log_lock", 0, 0, NULL); \
-        if (ret < 0) { \
-            sceClibPrintf("[JNI] Error: failed to create log mutex: 0x%x\n", ret); \
-            return; \
-        } \
-        _fjni_log_mutex_inited = 1; \
+    fjni_log_mutex_init_once(); \
+    if (atomic_load(&_fjni_log_mutex_inited) != 2) { \
+        return; /* Skip logging if mutex not ready */ \
     } \
     sceKernelLockLwMutex(&_fjni_log_mutex, 1, NULL);
 
 #define LOG_UNLOCK \
-    if (_fjni_log_mutex_inited) { \
+    if (atomic_load(&_fjni_log_mutex_inited) == 2) { \
         sceKernelUnlockLwMutex(&_fjni_log_mutex, 1); \
     }
 

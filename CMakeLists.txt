@@ -20,8 +20,8 @@ set(VITA_VERSION "01.00")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
-#set(PSVITAIP "192.168.110.16" CACHE STRING "PSVita IP (for FTP access)") #China
-set(PSVITAIP "192.168.110.38" CACHE STRING "PSVita IP (for FTP access)") #China devkit
+set(PSVITAIP "192.168.1.57" CACHE STRING "PSVita IP (for FTP access)") #China
+#set(PSVITAIP "192.168.110.38" CACHE STRING "PSVita IP (for FTP access)") #China devkit
 set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
 # Game-specific definitions
@@ -35,11 +35,6 @@ set(SO_PATH_LIBCPUFEATURES "${DATA_PATH}lib/armeabi-v7a/libcpufeatures.so" CACHE
 option(USE_SCELIBC_IO "Use SceLibcBridge for IO and some other std functions" ON)
 if (USE_SCELIBC_IO)
   add_definitions(-DUSE_SCELIBC_IO)
-endif()
-
-option(USE_TEXCACHE "Enable texture caching for faster world loading" OFF)
-if (USE_TEXCACHE)
-  add_definitions(-DUSE_TEXCACHE)
 endif()
 
 add_definitions(-DDATA_PATH="${DATA_PATH}" 
@@ -59,10 +54,10 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # Option to enable profiler instrumentation
-option(RAZOR_PROFILER_ENABLED "Enable function instrumentation for profiling" ON)
+option(RAZOR_PROFILER_ENABLED "Enable function instrumentation for profiling" OFF)
 
 # Base compiler flags without instrumentation
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer -save-temps")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer -save-temps")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q,--wrap,memcpy,--wrap,memset,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -O3 -fno-omit-frame-pointer")
 
@@ -79,7 +74,6 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   #source/dll_psp2.c
 			   source/falso_jni_impl.c
 			   source/patch.c
-			   source/texcache.c
 			   source/reimpl/ctype_patch.c
 			   source/reimpl/egl.c
 			   source/reimpl/env.c
@@ -140,10 +134,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  -Wl,--whole-archive pthread -Wl,--no-whole-archive
 					  stdc++
 					  SceLibKernel_stub
-					  sndfile
-                      vorbis
-                      vorbisfile
-					  ogg
+					  #sndfile
+                      #vorbis
+                      #vorbisfile
+					  #ogg
 					  #FLAC
 					  #vorbisidec
 					  openal

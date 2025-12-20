@@ -31,10 +31,6 @@ void vglSetTexPalette(SceGxmTexture *texture, void *data);
 #define GL_COLOR_INDEX8_EXT 0x80E5
 #endif
 
-// VitaGL YUV format constants (for hardware-accelerated video)
-#ifndef VGL_YUV420P_NV12_BT601
-#define VGL_YUV420P_NV12_BT601 0x18E70
-#endif
 
 /*
     Call chain：
@@ -61,63 +57,7 @@ uint XGGetPixelBufferMaxAlpha(uint8_t (*param_1) [16], uint32_t param_2,int para
 	//return SO_CONTINUE(uint, XGGetPixelBufferMaxAlpha_hook, param_1, param_2, param_3, param_4);
 }
 
-// Native GXM palette implementation - no shader-based palette management needed
 
-/**
- * Convert UYVY (packed 4:2:2 YUV) to RGBA8888
- * Uses BT.601 color space (standard definition video)
- *
- * UYVY layout: U0 Y0 V0 Y1 | U2 Y2 V2 Y3 | ... (2 bytes per pixel, 4 bytes for 2 pixels)
- *
- * @param src Source UYVY data
- * @param dst Destination RGBA buffer (must be width*height*4 bytes)
- * @param width Image width in pixels
- * @param height Image height in pixels
- * @param pitch Source pitch in bytes (may include padding)
- */
-static void convert_uyvy_to_rgba(const uint8_t *src, uint8_t *dst, int width, int height, int pitch) {
-    for (int y = 0; y < height; y++) {
-        const uint8_t *src_row = src + y * pitch;
-        uint8_t *dst_row = dst + y * width * 4;
-
-        // Process 2 pixels at a time (one UYVY macro-pixel)
-        for (int x = 0; x < width; x += 2) {
-            // Extract UYVY components
-            int u = src_row[x * 2 + 0] - 128;
-            int y0 = src_row[x * 2 + 1];
-            int v = src_row[x * 2 + 2] - 128;
-            int y1 = src_row[x * 2 + 3];
-
-            // YUV to RGB conversion (BT.601)
-            // R = Y + 1.402 * V
-            // G = Y - 0.344 * U - 0.714 * V
-            // B = Y + 1.772 * U
-
-            // First pixel
-            int r0 = y0 + ((359 * v) >> 8);
-            int g0 = y0 - ((88 * u + 183 * v) >> 8);
-            int b0 = y0 + ((454 * u) >> 8);
-
-            // Clamp to [0, 255] and store as ABGR (vitaGL native format)
-            dst_row[x * 4 + 0] = 255;  // Alpha
-            dst_row[x * 4 + 1] = b0 < 0 ? 0 : (b0 > 255 ? 255 : b0);
-            dst_row[x * 4 + 2] = g0 < 0 ? 0 : (g0 > 255 ? 255 : g0);
-            dst_row[x * 4 + 3] = r0 < 0 ? 0 : (r0 > 255 ? 255 : r0);
-
-            // Second pixel
-            int r1 = y1 + ((359 * v) >> 8);
-            int g1 = y1 - ((88 * u + 183 * v) >> 8);
-            int b1 = y1 + ((454 * u) >> 8);
-
-            dst_row[(x + 1) * 4 + 0] = 255;  // Alpha
-            dst_row[(x + 1) * 4 + 1] = b1 < 0 ? 0 : (b1 > 255 ? 255 : b1);
-            dst_row[(x + 1) * 4 + 2] = g1 < 0 ? 0 : (g1 > 255 ? 255 : g1);
-            dst_row[(x + 1) * 4 + 3] = r1 < 0 ? 0 : (r1 > 255 ? 255 : r1);
-        }
-    }
-}
-
-// External timing accumulator
 extern float g_ProcessAndUploadTextureMs;
 
 so_hook ProcessAndUploadTexture_hook;
@@ -190,7 +130,7 @@ void ProcessAndUploadTexture
         sceRazorCpuPushMarkerWithHud("Upload as BGRA texture", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
         #endif 
 
-        // Upload as BGRA texture (vitaGL supports GL_BGRA natively)
+        // Upload as BGRA texture directly
         glTexImage2D(glTarget, 0, GL_BGRA,
                      width, height, 0,
                      GL_BGRA, GL_UNSIGNED_BYTE, sourceTextureData);
@@ -263,8 +203,6 @@ void D3DTexture_LockRect(void *pThis, uint32_t Level, int *pLockedRect, int *pRe
     // Check if this is a video texture with the problematic 4096 pitch
     // Video textures are 640 pixels wide with 4096 byte pitch (Xbox alignment)
     if (pLockedRect[0] == 4096) {
-        // Get width from dimensionsAndFlags
-        //uint32_t width = (*(uint32_t*)((char*)pThis + 0x10)) & 0xFFFF;
 
         uint32_t format;
         int isCompressed;

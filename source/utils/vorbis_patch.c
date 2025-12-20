@@ -14,7 +14,7 @@
 #include "logger.h"
 #include "utils/macros.h"
 #include "utils/oggstream_types.h"
-
+#include <fcntl.h>      // For file access modes (O_RDONLY)
 #ifdef PROFILER_ENABLED
 #include <utils/prof.h>
 #include <libperf.h>
@@ -42,142 +42,18 @@ SoundSystem* g_soundSystemBasePtr;
 _Static_assert(offsetof(SoundChannel, streamCount) == 0x2d8,
                "`state` is not at the right offset - fix the struct or add packed!");
 
-/*
-// Batched + Profiled version of ov_read that fills buffers efficiently
-long ov_read_profiled2(OggVorbis_File *vf, char *buffer, int length,
-                      int bigendianp, int word, int sgned, int *bitstream) {
 
-	// sceRazorCpuPushMarkerWithHud("ov_read", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
-
-	// long r = ov_read(vf, buffer, length, bigendianp, word, sgned, bitstream);
-	// //long r = SO_CONTINUE(long, snd_frame_hook);
-	// sceRazorCpuPopMarker();
-
-	//return r;
-	uint64_t startTime = sceKernelGetProcessTimeWide();
-
-	long totalRead = 0;
-	int internalCalls = 0;
-
-	// Validate vorbis file handle before attempting to read
-	// Prevents crash when FIOS closes idle file descriptors
-	if (vf == NULL) {
-		log_error("ov_read_profiled: NULL vorbis file handle, skipping read");
-		return 0;
-	}
-
-	// Keep calling ov_read until buffer is full or stream ends
-	// This batches multiple Vorbis packets into one call from the game's perspective
-	while (totalRead < length) {
-		SCE_PERF_ARM_PMON_STOP_ALL();
-		sceRazorCpuPushMarkerWithHud("ov_read", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
-		SCE_PERF_ARM_PMON_START_ALL();
-
-		long result = ov_read(vf, buffer + totalRead,
-		                     length - totalRead,
-		                     bigendianp, word, sgned, bitstream);
-		
-		SCE_PERF_ARM_PMON_STOP_ALL();
-		sceRazorCpuPopMarker();
-
-		internalCalls++;
-
-		if (result < 0) {
-			// Error (possibly closed file descriptor) - stop reading
-			logv_error("ov_read error: %ld (file descriptor may have been closed by FIOS)", result);
-			break;
-		}
-
-		if (result == 0) {
-			// EOF - stop reading
-			break;
-		}
-
-		totalRead += result;
-
-		// Stop if we've filled at least 90% of the requested buffer
-		// This balances efficiency vs. latency
-		if (totalRead >= (long)(length * 0.9)) {
-			break;
-		}
-
-		// Safety: don't loop forever if something is wrong
-		if (internalCalls > 1000) {
-			break;
-		}
-	}
-
-	int64_t endTime = sceKernelGetProcessTimeWide();
-	float elapsedMs = (endTime - startTime) / 1000.0f;
-
-	//Accumulate stats for this frame
-	g_ovReadCallCount++;
-	g_ovReadTotalTimeMs += elapsedMs;
-	g_ovReadTotalBytesRequested += length;
-	g_ovReadTotalBytesReturned += totalRead;
-	g_ovReadInternalCallCount += internalCalls;
-
-	if (length < g_ovReadMinBufferSize) g_ovReadMinBufferSize = length;
-	if (length > g_ovReadMaxBufferSize) g_ovReadMaxBufferSize = length;
-
-	return totalRead;
-}
-
-#define MAX_OV_READ_PER_FRAME 20000
-int current_bitstream = -1;
-int previous_bitstream = -1;
-
-long ov_read_profiled3(OggVorbis_File *vf, char *buffer, int length,
-                      int bigendianp, int word, int sgned, int *bitstream) {
-	g_ovReadCallCount++;
-
-	// if (g_ovReadCallCount >= MAX_OV_READ_PER_FRAME) {
-    //     return 0;  // Pretend we hit end of stream temporarily
-    // }
-
-	SCE_PERF_ARM_PMON_STOP_ALL();
-	sceRazorCpuPushMarkerWithHud("ov_read", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
-	SCE_PERF_ARM_PMON_START_ALL();
-
-	// // Also limit decode size per call
-    // const int MAX_CHUNK = 0x9000;  // 36KB per call
-    // if (length > MAX_CHUNK) {
-    //     length = MAX_CHUNK;
-    // }
-    
-
-	long result = ov_read(vf, buffer, length, bigendianp, word, sgned, bitstream);
-	
-	SCE_PERF_ARM_PMON_STOP_ALL();
-	sceRazorCpuPopMarker();
-
-	previous_bitstream = current_bitstream;
-	current_bitstream = *bitstream;
-
-	if (previous_bitstream != -1 && current_bitstream != previous_bitstream) {
-        logv_error("Stream changed from %d to %d - DECODER REINITIALIZED!\n",
-               previous_bitstream, current_bitstream);
-    }
-
-	//logv_error("ov_read stream = %d: ", *bitstream);
-
-
-	return result;
-}
-*/
 so_hook ov_read_hook;
-
 long ov_read_profiled(void *vf, char *buffer, int length,
                       int bigendianp, int word, int sgned, int *bitstream) {
-	g_ovReadCallCount++;
 
 	// if (g_ovReadCallCount >= MAX_OV_READ_PER_FRAME) {
     //     return 0;  // Pretend we hit end of stream temporarily
     // }
 
-	SCE_PERF_ARM_PMON_STOP_ALL();
-	sceRazorCpuPushMarkerWithHud("ov_read", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
-	SCE_PERF_ARM_PMON_START_ALL();
+	//SCE_PERF_ARM_PMON_STOP_ALL();
+	//sceRazorCpuPushMarkerWithHud("ov_read", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+	//SCE_PERF_ARM_PMON_START_ALL();
 
 	// // Also limit decode size per call
     // const int MAX_CHUNK = 0x9000;  // 36KB per call
@@ -188,8 +64,8 @@ long ov_read_profiled(void *vf, char *buffer, int length,
 
 	long result = SO_CONTINUE(long, ov_read_hook, vf, buffer, length, bigendianp, word, sgned, bitstream);
 	
-	SCE_PERF_ARM_PMON_STOP_ALL();
-	sceRazorCpuPopMarker();
+	//SCE_PERF_ARM_PMON_STOP_ALL();
+	//sceRazorCpuPopMarker();
 
 
 	//logv_error("ov_read: vf=%p, len=%d, totalRead=%ld, stream = %d: ",vf, length, result, *bitstream);
@@ -197,6 +73,7 @@ long ov_read_profiled(void *vf, char *buffer, int length,
 
 	return result;
 }
+
 // Hook for SND_Frame - reports ov_read stats per frame
 so_hook snd_frame_hook;
 void snd_frame_profiled(void) {
@@ -227,17 +104,17 @@ void snd_frame_profiled(void) {
 	// g_ovReadInternalCallCount = 0;
 
 	// Call original SND_Frame
-	sceRazorCpuPushMarkerWithHud("SND_Frame", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+	//sceRazorCpuPushMarkerWithHud("SND_Frame", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
 	SO_CONTINUE(void*, snd_frame_hook);
-	sceRazorCpuPopMarker();
+	//sceRazorCpuPopMarker();
 }
 
 so_hook ov_read_callback_hook;
 void ov_read_callback(void *param_1, int param_2,int param_3,void *param_4)
 {
-	sceRazorCpuPushMarkerWithHud("ov_read_callback", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+	//sceRazorCpuPushMarkerWithHud("ov_read_callback", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
 	SO_CONTINUE(void*, ov_read_callback_hook, param_1, param_2, param_3, param_4);
-	sceRazorCpuPopMarker();
+	//sceRazorCpuPopMarker();
 }
 
 so_hook snd_start_stream_hook;
@@ -248,9 +125,10 @@ void snd_start_stream(int channelId,char *path,int streamFlags,int startSample,u
 	logv_error("[%p] snd_start_stream: channelId=%d, path=%s, streamFlags=0x%X, startSample=0x%X, len=0x%X", caller, channelId, path, streamFlags, startSample, len);
 
 
-	// if (len == 0){
-	// 	len = 4;
-	// }
+	//   if (len == 0){
+	//   	len = 0x10000;
+	
+	//   }
 
 	// if (channelId == 0) {
 
@@ -269,7 +147,12 @@ void snd_start_stream(int channelId,char *path,int streamFlags,int startSample,u
 	int streamCount2 = g_soundSystemBasePtr->channels[2].streamCount;
 
     int streamCountPtr = g_soundSystemBasePtr->channels[channelId].streamCount;
-    int streamSlotIndex = streamCountPtr;
+    int streamSlotIndex = streamCountPtr - 1;
+	if (streamSlotIndex < 0)
+	{
+		streamSlotIndex = 0;
+	}
+	logv_error("streamSlotIndex=%d", streamSlotIndex);
     
     OggStream* oggStreamPtr = g_soundSystemBase.channels[channelId].streamSlots[streamSlotIndex].oggStream;
 	int endSample = g_soundSystemBase.channels[channelId].streamSlots[streamSlotIndex].endSample;
@@ -287,31 +170,25 @@ void snd_start_stream(int channelId,char *path,int streamFlags,int startSample,u
 	logv_error("[%p] RETURNED snd_start_stream: channelId=%d, path=%s, streamFlags=0x%X, startSample=0x%X, len=0x%X", caller, channelId, path, streamFlags, startSample, len);
 }
 
-so_hook snd_start_music_hook;
-void snd_start_music(char *path,int param)
-{
-	logv_error("snd_start_music: path=%s, param=0x%X", path, param);
-
-	SO_CONTINUE(void*, snd_start_music_hook, path, param);
-}
-
-
-
-typedef struct dialog_dir
+typedef struct __attribute__((__packed__)) dialog_dir
 {
 	char name[64];
 	int startAt;
 	int unk;
 	int len;
 }dialog_dir;
+_Static_assert(sizeof(struct dialog_dir) == 0x4C, "dialog_dir struct size should be 0x4C bytes");
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
 	char name[48];
+	void* data;
 	int unk1;
 	int unk2;
 	int len;
 	int unk3;
 }lmp_entry;
+_Static_assert(offsetof(lmp_entry, len) == 0x3C,
+               "`len` is not at the right offset");
 
 so_hook lump_query_hook;
 
@@ -322,10 +199,13 @@ lmp_entry* lump_query(char* query)
 }
 
 so_hook lump_find_resource_hook;
-lmp_entry* lump_find_resource(char *path,char *param)
+lmp_entry* lump_find_resource(char *path, char *param)
 {
-	//uintptr_t caller = (uintptr_t)__builtin_return_address(0);
-	//logv_error("[%p] lump_find_resource: path=%s, param=%s",caller, path, param);
+	// Redirect spanish dialog to default dialog since spanish dialog file is bugged even in the android version
+	if (strcmp(param, "s_dialog.bin") == 0)
+	{
+		return SO_CONTINUE(lmp_entry*, lump_find_resource_hook, path, "dialog.bin");
+	}
 
 	lmp_entry* res = SO_CONTINUE(lmp_entry*, lump_find_resource_hook,  path, param);
 	//logv_error("[%p] lump_find_resource: path=%s, param=%s res=0x%X", caller, path, param, res);
@@ -333,30 +213,58 @@ lmp_entry* lump_find_resource(char *path,char *param)
 	return res;
 }
 
+so_hook snd_get_dialog_filename_hook;
+char* snd_get_dialog_filename(uint8_t loc)
+{
+	//logv_error("1) g_SoundFilePath = %s, loc=0x%X", g_SoundFilePath, loc);
+	char* res = SO_CONTINUE(char*, snd_get_dialog_filename_hook, loc);
+
+	//logv_error("snd_get_dialog_filename (%x) ret=%s", loc, res);
+	//logv_error("2) g_SoundFilePath = %s", g_SoundFilePath);
+	return res;
+}
+
 int get_dialog_file_size()
 {
-	char query[126];
-	logv_error("world=%s", g_currentWorldName);
-	sprintf(query, "%s.lmp", g_currentWorldName);
-	
-	lmp_entry* entry = lump_find_resource(query, "dialog.bin");
+    char realPath[256]; 
+    snprintf(realPath, sizeof(realPath), "ux0:data/bgda/assets/res/%s", snd_get_dialog_filename(0));
 
-	return entry->len;
+    int fd = open_soloader(realPath, O_RDONLY);
+    if (fd == -1) {
+        logv_error("Error: open failed: %s", realPath); 
+        return -1; 
+    }
+    
+    off_t size = lseek_delegate(fd, 0, SEEK_END);
+    if (size == (off_t)-1) {
+        log_error("Error: lseek failed");
+        close_soloader(fd); 
+        return -1;
+    }
+    
+    close_soloader(fd);
+    return (int)size;
 }
 
 so_hook snd_get_dialog_dir_hook;
 
 dialog_dir* snd_get_dialog_dir()
 {
-	uintptr_t caller = (uintptr_t)__builtin_return_address(0);
-	logv_error("[%p]snd_get_dialog_dir called. g_curLanguage=(0x%X)", caller, g_curLanguage);
+	// uintptr_t caller = (uintptr_t)__builtin_return_address(0);
+	// logv_error("[%p]snd_get_dialog_dir called. g_curLanguage=(0x%X)", caller, g_curLanguage);
 
 	dialog_dir* res = SO_CONTINUE(dialog_dir*, snd_get_dialog_dir_hook);
 
-	logv_error("[%p]snd_get_dialog_dir returned=0x%X",caller, res);
-	return res;
+	// logv_debug("[%p]snd_get_dialog_dir returned=0x%X",caller, res);
 
-	int totalFileSize = get_dialog_file_size();
+	// In the android version of the game many dialog entries have incorrect lengths (len=0)
+	// This seems to glitch the audio and crash the game with OOM after running for a while in the vita
+	// So we fix the lengths in the table by calculating the diff from the next entry's start offset
+	// For the last entry we calculate from the total file size (this may not be accurate but it's better than 0)
+
+	// Seems like .vat files are just a bunch of concatenated ogg files pointed at by offset/lenght from the dialog.bin tables from (dialog dir)
+	int totalVatFileSize = get_dialog_file_size();
+	//logv_debug("totalFileSize=%d - 0x%X", totalFileSize, totalFileSize);
 
 	// First pass: count entries
 	dialog_dir* entry = res;
@@ -366,31 +274,29 @@ dialog_dir* snd_get_dialog_dir()
 		count++;
 	}
 	
-	logv_error("Found %d dialog entries for world %s", count, g_currentWorldName);
+	//logv_debug("Found %d dialog entries for world %s", count, g_currentWorldName);
 
 	// Second pass: fix lengths by calculating from next entry's start
 	entry = res;
 	for (int i = 0; i < count; i++) {
-		if (entry->len ==0) {
-			int calculatedLen;
+		//logv_debug("entry[%d]: name=%s, startAt=0x%X, len=0x%X (original)", i, entry->name, entry->startAt, entry->len);
+		if (entry->len == 0) {
+		 	int calculatedLen;
 			
-			if (i < count - 1) {
-				// Calculate length from next entry's start
-				dialog_dir* next_entry = entry + 1;
-				calculatedLen = next_entry->startAt - entry->startAt;
-			} else {
-				if (strcmp(g_currentWorldName,"cellar1") == 0){
-					calculatedLen = 0xC53FC;
-				}
-				//calculatedLen = totalFileSize - entry->startAt;
-			}
-			
-			// Fix the len field
-			entry->len = calculatedLen;
-			
-			logv_error("entry[%d]: name=%s, startAt=0x%X, unk=0x%X, len=0x%X (fixed)", 
-					i, entry->name, entry->startAt, entry->unk, entry->len);
-		}
+		 	if (i < count - 1) {
+		 		// Calculate length from next entry's start
+		 		dialog_dir* next_entry = entry + 1;
+		 		calculatedLen = next_entry->startAt - entry->startAt;
+		 	} else {
+		 		// Last entry - calculate length from total file size
+		 		calculatedLen = totalVatFileSize - entry->startAt;
+		 	}
+		
+		 	// Fix the len field
+		 	entry->len = calculatedLen;
+		
+		 	//logv_debug("entry[%d]: name=%s, startAt=0x%X, len=0x%X (fixed)", i, entry->name, entry->startAt, entry->len);
+		 }
 		entry++;
 	}
 
@@ -420,18 +326,6 @@ uint32_t x_get_language()
 {
 	uint32_t res = SO_CONTINUE(void*, x_get_language_hook);
 	logv_error("x_get_language ret=0x%X", res);
-
-	return res;
-}
-
-so_hook snd_get_dialog_filename_hook;
-char* snd_get_dialog_filename(uint8_t loc)
-{
-	logv_error("1) g_SoundFilePath = %s", g_SoundFilePath);
-	char* res = SO_CONTINUE(char*, snd_get_dialog_filename_hook, loc);
-
-	logv_error("snd_get_dialog_filename (%x) ret=%s", loc, res);
-	logv_error("2) g_SoundFilePath = %s", g_SoundFilePath);
 	return res;
 }
 
@@ -442,17 +336,11 @@ int ov_raw_seek_local(void *vf, long pos)
     return res;
 }
 
-
 so_hook ov_pcm_total_hook;
 uint64_t ov_pcm_total_local(void* pf, long x)
 {
-
-    //SO_CONTINUE(int, ov_raw_seek_hook, pf, 0);
-
     uint64_t res = SO_CONTINUE(uint64_t, ov_pcm_total_hook, pf, x);
-
     logv_error("ov_pcm_total called(%p, %d)=%ld", pf, x, res);
-
     return res;
 }
 
@@ -475,137 +363,37 @@ vorbis_info *ov_info_local(void *vf, int link)
 {
     vorbis_info* res = SO_CONTINUE(vorbis_info*, ov_info_hook, vf, link);
 
-    logv_error("ov_info_local called(%p, %d)=channels%d", vf, link, res->channels);
+	if (res != 0)
+	{
+    	logv_error("ov_info_local called(%p, %d)=channels=%d", vf, link, res->channels);
+		logv_error("ov_info_local called(%p, %d)=rate=%d", vf, link, res->rate);
+	}
+	else
+		log_error("ov_info_local returned 0!");
 
     return res;
 }
 
-so_hook ogg_stream_hook;
-
-// Match the exact signature from Ghidra
-typedef void* (*OggStreamConstructor)(void* thisptr, char* filePath, int* startSample, int* length, int channelId);
-
-void ogg_stream_patched(void* thisptr, char* filename, int* param_2, int* param_3, int param_4) {
-    // Log parameters for debugging
-    logv_error("OggStream: this=%p, file=%s, p2=%p, p3=%p, p4=%d\n", 
-           thisptr, filename, param_2, param_3, param_4);
-    
-    // Restore original instructions
-    kuKernelCpuUnrestrictedMemcpy((void *)ogg_stream_hook.addr, 
-                                  ogg_stream_hook.orig_instr, 
-                                  sizeof(ogg_stream_hook.orig_instr));
-    kuKernelFlushCaches((void *)ogg_stream_hook.addr, sizeof(ogg_stream_hook.orig_instr));
-    
-    // Call original - use addr directly if it's ARM code
-    OggStreamConstructor orig_func = (OggStreamConstructor)ogg_stream_hook.addr;
-    void* r = orig_func(thisptr, filename, param_2, param_3, param_4);
-    
-    logv_error("OggStream returned: %p\n", r);
-    
-    // Re-apply hook
-    kuKernelCpuUnrestrictedMemcpy((void *)ogg_stream_hook.addr, 
-                                  ogg_stream_hook.patch_instr, 
-                                  sizeof(ogg_stream_hook.patch_instr));
-    kuKernelFlushCaches((void *)ogg_stream_hook.addr, sizeof(ogg_stream_hook.patch_instr));
-    
-   // return r;
-}
-
-typedef struct _D3DLOCKED_RECT
-{
-    int32_t                 pitch;
-    void*               pBits;
-} D3DLOCKED_RECT;
-
-typedef int (*_XMVDecoder_GetNextFrame_t)(void *,void *,int);
-typedef void (*D3DSurface_LockRect_t)(int,D3DLOCKED_RECT*, uint32_t, uint32_t *);
-typedef void (*D3DSurface_UnlockRect_t)(int);
-
-so_hook EXT_XMVGetNextFrame_hook;
-int EXT_XMVGetNextFrame(void *this,void *outputFrame,int param_2){
-	return SO_CONTINUE(int, EXT_XMVGetNextFrame_hook, this, outputFrame, param_2);
-}
-
-so_hook XMVDecoder_GetNextFrame_hook;
-void XMVDecoder_GetNextFrame(void* decoder, void* surface, int *param_3)
-{
-	//SO_CONTINUE(void*, XMVDecoder_GetNextFrame_hook, decoder, param_3);
-	int iVar2;
-	int uVar3;
-	D3DLOCKED_RECT lockedRect;
-
-    // _XMVDecoder_GetNextFrame_t XMVGetNextFrame = (_XMVDecoder_GetNextFrame_t)((uintptr_t)LOC(0x0063f31c));
-	D3DSurface_LockRect_t D3DSurface_LockRect = (D3DSurface_LockRect_t)LOC(0x0021541c);
-	D3DSurface_UnlockRect_t D3DSurface_UnlockRect = (D3DSurface_UnlockRect_t)LOC(0x00215440);
-
-	D3DSurface_LockRect(surface,&lockedRect,0,0);
-
-	iVar2 = EXT_XMVGetNextFrame(decoder, lockedRect.pBits, lockedRect.pitch);
-
-	uVar3 = 1;
-	if (iVar2 != 0) {
-		uVar3 = 2;
-	}
-	*param_3 = uVar3;
-	D3DSurface_UnlockRect(surface);
-}
-
-
 
 void patch_vorbis(void) {
-	// hook_addr(so_symbol(&so_mod, "vorbis_analysis"), (uintptr_t)vorbis_analysis);
-	// hook_addr(so_symbol(&so_mod, "vorbis_analysis_blockout"), (uintptr_t)vorbis_analysis_blockout);
-	// hook_addr(so_symbol(&so_mod, "vorbis_analysis_buffer"), (uintptr_t)vorbis_analysis_buffer);
-	// hook_addr(so_symbol(&so_mod, "vorbis_analysis_headerout"), (uintptr_t)vorbis_analysis_headerout);
-	// hook_addr(so_symbol(&so_mod, "vorbis_analysis_init"), (uintptr_t)vorbis_analysis_init);
-	// hook_addr(so_symbol(&so_mod, "vorbis_analysis_wrote"), (uintptr_t)vorbis_analysis_wrote);
-	// hook_addr(so_symbol(&so_mod, "vorbis_bitrate_addblock"), (uintptr_t)vorbis_bitrate_addblock);
-	// hook_addr(so_symbol(&so_mod, "vorbis_bitrate_flushpacket"), (uintptr_t)vorbis_bitrate_flushpacket);
-	// hook_addr(so_symbol(&so_mod, "vorbis_block_clear"), (uintptr_t)vorbis_block_clear);
-	// hook_addr(so_symbol(&so_mod, "vorbis_block_init"), (uintptr_t)vorbis_block_init);
-	// hook_addr(so_symbol(&so_mod, "vorbis_comment_add"), (uintptr_t)vorbis_comment_add);
-	// hook_addr(so_symbol(&so_mod, "vorbis_comment_add_tag"), (uintptr_t)vorbis_comment_add_tag);
-	// hook_addr(so_symbol(&so_mod, "vorbis_comment_clear"), (uintptr_t)vorbis_comment_clear);
-	// hook_addr(so_symbol(&so_mod, "vorbis_comment_init"), (uintptr_t)vorbis_comment_init);
-	// hook_addr(so_symbol(&so_mod, "vorbis_comment_query"), (uintptr_t)vorbis_comment_query);
-	// hook_addr(so_symbol(&so_mod, "vorbis_comment_query_count"), (uintptr_t)vorbis_comment_query_count);
-	// hook_addr(so_symbol(&so_mod, "vorbis_commentheader_out"), (uintptr_t)vorbis_commentheader_out);
-	// hook_addr(so_symbol(&so_mod, "vorbis_dsp_clear"), (uintptr_t)vorbis_dsp_clear);
-	// hook_addr(so_symbol(&so_mod, "vorbis_info_blocksize"), (uintptr_t)vorbis_info_blocksize);
-	// hook_addr(so_symbol(&so_mod, "vorbis_info_clear"), (uintptr_t)vorbis_info_clear);
-	// hook_addr(so_symbol(&so_mod, "vorbis_info_init"), (uintptr_t)vorbis_info_init);
-	// hook_addr(so_symbol(&so_mod, "vorbis_packet_blocksize"), (uintptr_t)vorbis_packet_blocksize);
-	// hook_addr(so_symbol(&so_mod, "vorbis_synthesis"), (uintptr_t)vorbis_synthesis);
-	// hook_addr(so_symbol(&so_mod, "vorbis_synthesis_blockin"), (uintptr_t)vorbis_synthesis_blockin);
-	// hook_addr(so_symbol(&so_mod, "vorbis_synthesis_headerin"), (uintptr_t)vorbis_synthesis_headerin);
-	// hook_addr(so_symbol(&so_mod, "vorbis_synthesis_init"), (uintptr_t)vorbis_synthesis_init);
-	// hook_addr(so_symbol(&so_mod, "vorbis_synthesis_pcmout"), (uintptr_t)vorbis_synthesis_pcmout);
-	// hook_addr(so_symbol(&so_mod, "vorbis_synthesis_read"), (uintptr_t)vorbis_synthesis_read);
-	// hook_addr(so_symbol(&so_mod, "vorbis_synthesis_trackonly"), (uintptr_t)vorbis_synthesis_trackonly);
-	//ov_read_hook = hook_addr(so_symbol(&so_mod, "ov_read"), (uintptr_t)ov_read_profiled);
-	snd_start_stream_hook = hook_addr(so_symbol(&so_mod, "_Z15SND_StartStreamiPKciii"), (uintptr_t)snd_start_stream);
-	snd_start_music_hook = hook_addr(so_symbol(&so_mod, "_Z14SND_StartMusicPKci"), (uintptr_t)snd_start_music);
-	//lump_find_resource_hook = hook_addr(so_symbol(&so_mod, "_Z16lumpFindResourcePKcS0_"), (uintptr_t)lump_find_resource);
+	ov_read_hook = hook_addr(so_symbol(&so_mod, "ov_read"), (uintptr_t)ov_read_profiled);
+	lump_find_resource_hook = hook_addr(so_symbol(&so_mod, "_Z16lumpFindResourcePKcS0_"), (uintptr_t)lump_find_resource);
 	snd_get_dialog_dir_hook = hook_addr(so_symbol(&so_mod, "_Z16SND_GetDialogDirv"), (uintptr_t)snd_get_dialog_dir);
-	lump_query_hook = hook_addr(so_symbol(&so_mod, "_Z9lumpQueryPKc"), (uintptr_t)lump_query);
-	//ram_fs_open_hook = hook_addr(so_symbol(&so_mod, "_ZN3JBE4File6RamFSs4OpenEPKcRj"), (uintptr_t)ram_fs_open);
-	x_get_language_hook = hook_addr(so_symbol(&so_mod, "XGetLanguage"), (uintptr_t)x_get_language);
+	//lump_query_hook = hook_addr(so_symbol(&so_mod, "_Z9lumpQueryPKc"), (uintptr_t)lump_query);
 	snd_get_dialog_filename_hook = hook_addr(so_symbol(&so_mod, "_Z21SND_GetDialogFilenameb"), (uintptr_t)snd_get_dialog_filename);
 
-	ov_pcm_total_hook = hook_addr(so_symbol(&so_mod, "ov_pcm_total"), (uintptr_t)ov_pcm_total_local);
-    ov_info_hook = hook_addr(so_symbol(&so_mod, "ov_info"), (uintptr_t)ov_info_local);
+	//ov_pcm_total_hook = hook_addr(so_symbol(&so_mod, "ov_pcm_total"), (uintptr_t)ov_pcm_total_local);
+    //ov_info_hook = hook_addr(so_symbol(&so_mod, "ov_info"), (uintptr_t)ov_info_local);
 
-	//XMVDecoder_GetNextFrame_hook = hook_addr(LOC(0x00210bb8), (uintptr_t)XMVDecoder_GetNextFrame);
 	
-	//EXT_XMVGetNextFrame_hook = hook_addr(so_symbol(&so_mod_libxmv, "_ZN11_XMVDecoder12GetNextFrameEPvi"), (uintptr_t)EXT_XMVGetNextFrame);
    // ov_raw_seek_hook = hook_addr(so_symbol(&so_mod, "ov_raw_seek"), (uintptr_t)ov_raw_seek_local);
 
 	//ogg_stream_hook = hook_addr(so_symbol(&so_mod, "_ZN9OggStreamC2EPKcRiS2_i"), (uintptr_t)ogg_stream_patched);
 
 	g_currentWorldName = (char*)LOC(0x054cad8);
 	g_SoundFilePath = (char*)LOC(0x003e7758);
-	
-	int* ptr2 = LOC(0x0010a8b4);
+
+	int* ptr2 = LOC(0x0029e5c8);
 	g_curLanguage = *ptr2;
 
 	//create_file_a_hook = hook_addr(so_symbol(&so_mod, "CreateFileA"), (uintptr_t)create_file_a);

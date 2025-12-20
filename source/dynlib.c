@@ -23,6 +23,9 @@
 #include "dynlib.h"
 
 #include <psp2/kernel/clib.h>
+#include <psp2/kernel/dmac.h>
+#include <psp2/kernel/sysmem.h>
+#include <vitaGL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -82,6 +85,11 @@
 // include openal
 #include <AL/al.h>
 #include <AL/alc.h>
+
+#ifdef PROFILER_ENABLED
+#include <utils/prof.h>
+#include <libperf.h>
+#endif
 
 extern void * _ZNSt9exceptionD2Ev;
 extern void * _ZSt17__throw_bad_allocv;
@@ -152,9 +160,20 @@ extern const short *BIONIC_toupper_tab_;
 
 
 extern so_module so_mod;
- 
+
 
 static FILE __sF_fake[3];
+
+// DMA staging buffers (uncached CDRAM for vertex buffer uploads)
+#define DMA_STAGING_SIZE (1024 * 1024)  // 1MB staging buffer
+static void *dma_staging_buffer = NULL;
+
+// Shadow rendering optimization
+static int g_in_shadow_rendering = 0;
+static int g_shadow_clear_count = 0;
+#define SKIP_SHADOW_CLEARS 0  // Causes glitches - don't skip!
+#define OPTIMIZE_CLEAR_FLAGS 0  // Reduce clear flags (color only, not depth+stencil)
+#define SHADOW_TEXTURE_SCALE 2  // 1=full (512x128), 2=half (256x64), 4=quarter (128x32)
 
 int __atomic_dec(volatile int *ptr) {
 	return __sync_fetch_and_sub (ptr, 1);
@@ -307,6 +326,65 @@ int glCompressedTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GL
 	return 0;
 }
 
+// Original D3D functions (will be set during patching)
+void (*D3DDevice_Clear_orig)(uint32_t count, void *rects, uint32_t flags, uint32_t color, float depth, uint32_t stencil) = NULL;
+void (*RenderDelayedShadows_orig)(void) = NULL;
+extern so_hook clear_hook;
+extern so_hook renderDelayedShadows_hook;
+extern so_hook createTexture2_hook;
+// D3DDevice_Clear wrapper - optimize shadow clear flags
+void D3DDevice_Clear(uint32_t count, void *rects, uint32_t flags, uint32_t color, uint32_t depth, uint32_t stencil) {
+	uint32_t optimized_flags = flags;
+
+	#if OPTIMIZE_CLEAR_FLAGS
+	if (g_in_shadow_rendering && flags == 0xf0) {
+		// Original: 0xf0 = clear color+depth+stencil (expensive!)
+		// Optimized: 0x01 = clear color only (shadows don't use depth/stencil)
+		optimized_flags = 0x01;
+		g_shadow_clear_count++;
+		//sceRazorCpuPushMarkerWithHud("Clear_OPT", SCE_RAZOR_COLOR_GREEN, SCE_RAZOR_MARKER_DISABLE_HUD);
+	} else {
+	#endif
+		//sceRazorCpuPushMarkerWithHud("Clear", SCE_RAZOR_COLOR_YELLOW, SCE_RAZOR_MARKER_DISABLE_HUD);
+	#if OPTIMIZE_CLEAR_FLAGS
+	}
+	#endif
+
+	SO_CONTINUE(void*, clear_hook, count, rects, optimized_flags, color, depth, stencil);
+	//sceRazorCpuPopMarker();
+}
+
+// RenderDelayedShadows wrapper - track when we're in shadow rendering
+void renderDelayedShadows(void) {
+	g_in_shadow_rendering = 1;
+	g_shadow_clear_count = 0;
+
+	SO_CONTINUE(void *, renderDelayedShadows_hook);
+
+
+	g_in_shadow_rendering = 0;
+}
+
+// D3DDevice_CreateTexture2 wrapper - reduce shadow texture resolution
+void* D3DDevice_CreateTexture2(uint32_t width, uint32_t height, uint32_t levels, uint32_t usage,
+                                uint32_t pool, uint32_t format, uint32_t type) {
+	uint32_t optimized_width = width;
+	uint32_t optimized_height = height;
+
+	#if SHADOW_TEXTURE_SCALE > 1
+	// Detect shadow texture creation (512x128, format 6)
+	if (g_in_shadow_rendering && width == 0x200 && height == 0x80 && format == 6) {
+		optimized_width = width / SHADOW_TEXTURE_SCALE;
+		optimized_height = height / SHADOW_TEXTURE_SCALE;
+		// logv_info("Shadow texture: Reduced from %dx%d to %dx%d (scale=%d)",
+		// 	width, height, optimized_width, optimized_height, SHADOW_TEXTURE_SCALE);
+	}
+	#endif
+
+	return SO_CONTINUE(void*, createTexture2_hook, optimized_width, optimized_height,
+		levels, usage, pool, format, type);
+}
+
 void glGenTextures_profiled(GLsizei n, GLuint *textures) {
 	logv_error("glGenTextures(%i, %p) called", n, textures);
 	//Profiler_BeginSample("glGenTextures");
@@ -365,6 +443,9 @@ void app_dummy(void)
 }
 
 ssize_t read_delegate(int fd, void *buf, size_t count) {
+	if (count == 0) {
+		logv_error("!!! read_delegate called with count=0! fd=0x%x", fd);
+	}
 	//SceFiosFH fiosH = sceFiosFHToFileno(fd);
 	//if (fiosH == 0xffffffff)
 	if (fd < 0x18000)
@@ -383,31 +464,15 @@ ssize_t read_delegate(int fd, void *buf, size_t count) {
 	}
 }
 
-extern int retOpen;
-//lseek_delegate
 off_t lseek_delegate(int fd, off_t offset, int whence) {
-	//logv_error("lseek(0x%X, %i, %i) delegate called", fd, offset, whence);
-	//SceFiosFH fiosH = sceFiosFHToFileno(fd);
-	//logv_error("lseek(0x%X, %i, %i) delegate called sceFiosFHToFileno ret: 0x%X", fd, offset, whence, fiosH);
-	//if (fiosH == 0xffffffff)
 	if (fd < 0x18000)
 	{
-		//logv_error("non-fios lseek(fd=0x%x, 0x%x, %i) delegate called", fd, offset, whence);
 		int res = lseek(fd, offset, whence);
-		// if (fd == retOpen)
-		// {
-		// 	logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. res=%i", fd, offset, whence, res);
-		// }
-		//logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. res=%i", fd, offset, whence, res);
 		return res;
 	}
 	else
 	{
-		//logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. fiosH=0x%x", fd, offset, whence, 0);
-		//uint32_t pos = 0;
-		//int res = sceFiosFHSeek(fiosH, offset, whence);
 		int res = sceFiosFHSeek(fd, offset, whence);
-		//logv_error("lseek(fd=0x%x, 0x%x, %i) delegate called. fiosH=0x%x, pos=0x%x, res=0x%i", fd, offset, whence, fiosH, pos, res);
 		return res;
 	}
 }
@@ -445,20 +510,52 @@ void glDisable_profiled(GLenum cap) {
 // glDrawElements_profiled	
 void glDrawElements_profiled(GLenum mode, GLsizei count, GLenum type, const void *indices) {
 	//Profiler_BeginSample("glDrawElements");
+	//sceRazorCpuPushMarkerWithHud("glDrawElements", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+
 	glDrawElements(mode, count, type, indices);
-	//Profiler_EndSample();
+	//sceRazorCpuPopMarker();
 }
 
 void glBindBuffer_profiled(GLenum target, GLuint buffer) {
-	//Profiler_BeginSample("glBindBuffer");
+	// Profiler_BeginSample("glBindBuffer");
+	//sceRazorCpuPushMarkerWithHud("glBindBuffer", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
 	glBindBuffer(target, buffer);
-	//Profiler_EndSample();
+	//sceRazorCpuPopMarker();
 }
 
 void glBufferSubData_profiled(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) {
 	//Profiler_BeginSample("glBufferSubData");
+	//logv_error("glBufferSubData_profiled (0x%X, 0x%X, 0x%X, %p)", target, offset, size, data);
+	//sceRazorCpuPushMarkerWithHud("glBufferSubData", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+
+	// Optimize both frequent buffer updates: use glMapBufferRange instead of glBufferSubData
+	// Avoids intermediate buffer copy and allocation overhead
+	if (target == GL_ARRAY_BUFFER && offset == 0 && (size == 0x90000 || size == 0x5280)) {
+		// Try glMapBufferRange first (faster - direct write)
+		void *mapped = glMapBufferRange(GL_ARRAY_BUFFER, offset, size,
+			GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+
+		if (mapped) {
+			// Just use optimized memcpy - staging buffer approach is slower
+			// due to uncached memory write overhead
+			//sceRazorCpuPushMarkerWithHud("sceClibMemcpy", SCE_RAZOR_COLOR_GREEN, SCE_RAZOR_MARKER_DISABLE_HUD);
+			sceClibMemcpy(mapped, data, size);
+			//sceRazorCpuPopMarker();
+
+			glUnmapBuffer(GL_ARRAY_BUFFER);
+
+			//logv_error("  -> Used glMapBuffer for buffer (0x%X bytes)", size);
+		} else {
+			// Fallback to glBufferSubData if mapping fails
+			log_error("  -> glMapBuffer failed, using glBufferSubData");
+			glBufferSubData(target, offset, size, data);
+		}
+		//sceRazorCpuPopMarker();
+		return;
+	}
+
 	glBufferSubData(target, offset, size, data);
-	//Profiler_EndSample();
+	//sceRazorCpuPopMarker();
 }
 
 static GLfloat g_shadowDepthBiasFactor = 0.0f;  // Try: -1, 0, 1
@@ -491,6 +588,18 @@ GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
 void glBindTexture_fake(GLenum target, GLuint texture) {
 	glBindTexture(target, texture);
 	// No longer need shader uniform management - GXM handles palettes natively
+}
+
+void alSourceQueueBuffers_safe(ALuint source, ALsizei n, const ALuint *buffers) {
+      // Check if we have enough memory before calling
+      void *test = malloc(4);
+      if (!test) {
+          logv_error("alSourceQueueBuffers: Out of memory, skipping queue: %x, %x, %x", source, n, buffers);
+          return;  // Silently fail instead of crashing
+      }
+      free(test);
+
+      alSourceQueueBuffers(source, n, buffers);
 }
 
 // void glShaderSource_fake(GLuint shader, GLsizei count, const GLchar * const *string, const GLint *length) {
@@ -915,7 +1024,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glAlphaFuncx", (uintptr_t)&glAlphaFuncx },
 		{ "glAttachShader", (uintptr_t)&glAttachShader },
 		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation },
-		{ "glBindBuffer", (uintptr_t)&glBindBuffer },
+		{ "glBindBuffer", (uintptr_t)&glBindBuffer_profiled },
 		{ "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
 		{ "glBindRenderbuffer", (uintptr_t)&glBindRenderbuffer },
 		{ "glBindTexture", (uintptr_t)&glBindTexture },
@@ -957,7 +1066,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glDisableClientState", (uintptr_t)&glDisableClientState },
 		{ "glDisableVertexAttribArray", (uintptr_t)&glDisableVertexAttribArray },
 		{ "glDrawArrays", (uintptr_t)&glDrawArrays },
-		{ "glDrawElements", (uintptr_t)&glDrawElements },
+		{ "glDrawElements", (uintptr_t)&glDrawElements_profiled },
 		{ "glEnable", (uintptr_t)&glEnable },
 		{ "glEnableClientState", (uintptr_t)&glEnableClientState },
 		{ "glEnableVertexAttribArray", (uintptr_t)&glEnableVertexAttribArray },
@@ -1339,7 +1448,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "alGetBufferi", (uintptr_t)&alGetBufferi },
 		{ "alGetSourcef", (uintptr_t)&alGetSourcef },
 		{ "alSourceUnqueueBuffers", (uintptr_t)&alSourceUnqueueBuffers },
-		{ "alSourceQueueBuffers", (uintptr_t)&alSourceQueueBuffers },
+		{ "alSourceQueueBuffers", (uintptr_t)&alSourceQueueBuffers_safe },
 		{ "alListenerfv", (uintptr_t)&alListenerfv },
 		{ "alListener3f", (uintptr_t)&alListener3f },
 		{ "alDopplerFactor", (uintptr_t)&alDopplerFactor },

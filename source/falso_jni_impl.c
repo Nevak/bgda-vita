@@ -217,20 +217,20 @@ jobject getLocale(jmethodID id, va_list args) {
 	int res;
 	sceAppUtilSystemParamGetInt(SCE_SYSTEM_PARAM_ID_LANG, &res);
 	switch (res) {
-	case SCE_SYSTEM_PARAM_LANG_JAPANESE:
-		strcpy(arr, "ja");
-		break;
-	case SCE_SYSTEM_PARAM_LANG_SPANISH:
-		strcpy(arr, "es");
-		break;
-	case SCE_SYSTEM_PARAM_LANG_FRENCH:
-		strcpy(arr, "fr");
-		break;
-	case SCE_SYSTEM_PARAM_LANG_GERMAN:
-		strcpy(arr, "de");
-		break;
+	// case SCE_SYSTEM_PARAM_LANG_JAPANESE:
+	// 	strcpy(arr, "ja");
+	// 	break;
+	// case SCE_SYSTEM_PARAM_LANG_SPANISH:
+	// 	strcpy(arr, "es");
+	// 	break;
+	// case SCE_SYSTEM_PARAM_LANG_FRENCH:
+	// 	strcpy(arr, "fr");
+	// 	break;
+	// case SCE_SYSTEM_PARAM_LANG_GERMAN:
+	// 	strcpy(arr, "de");
+	// 	break;
 	default:
-		strcpy(arr, "en");
+		strcpy(arr, "es");
 		break;
 	}
 	
@@ -248,21 +248,21 @@ jobject getISO3Language(jmethodID id, va_list args) {
 	
 	printf("getISO3Language(%d)\n", res);
 	switch (res) {
-		case SCE_SYSTEM_PARAM_LANG_JAPANESE:
-			strcpy(arr, "jpn");
-			break;
-		case SCE_SYSTEM_PARAM_LANG_SPANISH:
-			strcpy(arr, "spa");
-			break;
-		case SCE_SYSTEM_PARAM_LANG_FRENCH:
-			strcpy(arr, "fra");
-			break;
-		case SCE_SYSTEM_PARAM_LANG_GERMAN:
-			strcpy(arr, "deu");
-			break;
+		// case SCE_SYSTEM_PARAM_LANG_JAPANESE:
+		// 	strcpy(arr, "jpn");
+		// 	break;
+		// case SCE_SYSTEM_PARAM_LANG_SPANISH:
+		// 	strcpy(arr, "spa");
+		// 	break;
+		// case SCE_SYSTEM_PARAM_LANG_FRENCH:
+		// 	strcpy(arr, "fra");
+		// 	break;
+		// case SCE_SYSTEM_PARAM_LANG_GERMAN:
+		// 	strcpy(arr, "deu");
+		// 	break;
 		default:
 			printf("default\n");
-			strcpy(arr, "eng");
+			strcpy(arr, "spa");
 			break;
 	}
 	

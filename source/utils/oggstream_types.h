@@ -75,5 +75,9 @@ _Static_assert(sizeof(struct SoundChannel) == 0x2dc, "SoundChannel must be packe
 
 _Static_assert(offsetof(SoundChannel, streamSlots) == 0x198,
                "`streamSlots` is not at the ritght offset - fix the struct or add packed!");
+_Static_assert(offsetof(SoundChannel, streamCount) == 0x2D8,
+               "`streamCount` is not at the ritght offset - fix the struct or add packed!");
+_Static_assert(offsetof(StreamSlot, oggStream) == 0x24,
+               "`oggStream` is not at the ritght offset - fix the struct or add packed!");
 
 _Static_assert(offsetof(OggStream, isOggS) == 0x2f0, "`isOggS` is not at the ritght offset - fix the struct or add packed!");

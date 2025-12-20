@@ -79,6 +79,8 @@ int log_allocs = 0;
 int log_profiler = 0;
 int profiling_idx = 0;
 
+bool enable_cheats = 0;
+
 float g_uvFactor = 1.0f;
 float g_uvFactorY = 1.0f;
 int input_thread_fn(SceSize args, void *argp) {
@@ -91,10 +93,11 @@ int input_thread_fn(SceSize args, void *argp) {
 		SceCtrlData pad;
 		sceCtrlPeekBufferPositiveExt2(0, &pad, 1);
 	
-		// if (pad.buttons & SCE_CTRL_L1 && !(pad_previous.buttons & SCE_CTRL_L1)) {
-		// 	// toggle log_allocs
-		// 	log_allocs = !log_allocs;
-		// }
+		 if (pad.buttons & SCE_CTRL_L1 && !(pad_previous.buttons & SCE_CTRL_L1)) {
+		 	// toggle log_allocs
+		 	//log_allocs = !log_allocs;
+			enable_cheats = !enable_cheats;
+		}
 		// if (pad.buttons & SCE_CTRL_R1 && !(pad_previous.buttons & SCE_CTRL_R1)) {
 		// 	log_profiler = !log_profiler;
 		// 	if (log_profiler) {
@@ -220,8 +223,8 @@ int main() {
 	}
 
 	// poll input in another thread
-	// SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
-	// sceKernelStartThread(input_thread, 0, NULL);
+	SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
+	 sceKernelStartThread(input_thread, 0, NULL);
 
 
 	log_info("Main thread shutting down");

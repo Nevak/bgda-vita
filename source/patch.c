@@ -21,7 +21,6 @@
 #include <libperf.h>
 #include <vitaGL.h>
 #include "utils/logger.h"
-#include "worldAllocateSegments.h"
 
 #include "utils/macros.h"
 
@@ -29,6 +28,8 @@
 #include "patches/frustum_culling.h"
 #include "patches/texture_decomp.h"
 #include "patches/texture_palette.h"
+#include "patches/worldAllocateSegments.h"
+
 #include "patches/usprintf.h"
 #include "patches/write_render_command.h"
 #include "patches/memory.h"
@@ -678,6 +679,9 @@ char* existing_files[] =
 
 int existing_files_len = sizeof(existing_files)/sizeof(existing_files[0]);
 
+extern void renderDelayedShadows(void);
+
+
 so_hook coreAddTask_hook;
 int coreAddTask(void *fn, int prio, char *name) {
 	logv_error("coreAddTask(%p, %i, %s)", fn, prio, name);
@@ -687,11 +691,11 @@ int coreAddTask(void *fn, int prio, char *name) {
 		return 0;
 	}
 
-	// if (name && strcmp(name, "RenderDelayedShadows") == 0) {
-	// //    	log_error("Ignoring renderDelayedShadows task\n");
-	// //    	return 0;
-	// 	return SO_CONTINUE(int, coreAddTask_hook, fn, 5, name);	
-	// }
+	if (name && strcmp(name, "RenderDelayedShadows") == 0) {
+	//    	log_error("Ignoring renderDelayedShadows task\n");
+	    //	return 0;
+		return SO_CONTINUE(int, coreAddTask_hook, renderDelayedShadows, prio, name);	
+	}
 
     return SO_CONTINUE(int, coreAddTask_hook, fn, prio, name);
 }
@@ -839,6 +843,7 @@ void ReadCommandCustom(struct d3dDeviceFake *thisPtr) {
 	fnReadCommand(thisPtr);
 }
 
+
 void D3DDevice_AsyncRenderCB(void *device_ptr) {
 	uint32_t threadId = sceKernelGetThreadId();
 	logv_error("[0x%X] ===============D3DDevice_AsyncRenderCB================\n", threadId);
@@ -960,9 +965,8 @@ void D3DDevice_Swap(int flags) {
 }
 
 so_hook renderDelayedShadows_hook;
-void renderDelayedShadows(void) {
-	SO_CONTINUE(void *, renderDelayedShadows_hook);
-}
+
+
 so_hook runObjects_hook;
 void runObjects(void) {
 	SO_CONTINUE(void *, runObjects_hook);
@@ -1311,28 +1315,91 @@ uintptr_t D3DTexture_UnlockRect_addr;
 
 so_hook ogg_stream_hook;
 void ogg_stream_patched(void* thisptr, char* filename, int* param_2, int* param_3, int param_4) {
-	// log_error("OggStream constructor called:");
-	// logv_error("  thisptr: %p", thisptr);
-	// logv_error("  filename: %s", filename ? filename : "NULL");
-	// logv_error("  param_2: %p (value: %d)", param_2, param_2 ? *param_2 : 0);
-	// logv_error("  param_3: %p (value: %d)", param_3, param_3 ? *param_3 : 0);
-	// logv_error("  param_4: %d", param_4);
+	 log_error("OggStream constructor called:");
+	 logv_error("  thisptr: %p", thisptr);
+	 logv_error("  filename: %s", filename ? filename : "NULL");
+	 logv_error("  param_2: %p (value: %d)", param_2, param_2 ? *param_2 : 0);
+	 logv_error("  param_3: %p (value: %d)", param_3, param_3 ? *param_3 : 0);
+	 logv_error("  param_4: %d", param_4);
 
 	SO_CONTINUE(void*, ogg_stream_hook, thisptr, filename, param_2, param_3, param_4);
 }
 
+/**
+ * Patch shadow rendering coordinates for half-resolution (256x64) shadow textures.
+ *
+ * The RenderDelayedShadows function has two loops that render shadows to a texture.
+ * Originally designed for 512x128 textures with Y positions at 64, 192, 320, 448.
+ * This patches them for 256x64 textures with Y positions at 32, 96, 160, 224.
+ *
+ * Changes:
+ * - Initial Y position: 64 → 32 pixels
+ * - Y increment: 128 → 64 pixels
+ * - Loop end: 576 → 288 pixels
+ * - Width constant: 400.0 → 200.0
+ * - Height constant: 64.0 → 32.0
+ */
+void patch_shadow_resolution() {
+	log_error("Patching shadow resolution coordinates for 256x64 textures...");
+
+	// ARM instruction encodings for half-resolution shadow textures
+    
+    uint32_t mov_r4_0x240 = 0xE3A04D09;      // mov r4, #0x240 
+
+	uint32_t mov_r4_0x20 = 0xe3a04020;      // mov r4, #0x20 (initial X = 32)
+	uint32_t add_r4_r4_0x40 = 0xe2844040;   // add r4, r4, #0x40 (X increment = 64)
+	uint32_t cmp_r4_0x120 = 0xe3540f48;     // cmp r4, #0x120 (loop end = 288)
+	uint32_t movt_r0_0x4348 = 0xe3400348;   // movt r0, #0x4348 (width = 200.0f)
+	uint32_t movt_r0_0x4200 = 0xe3400200;   // movt r0, #0x4200 (height = 32.0f)
+
+	// Phase 2 projection: Change division from 3.0 to 1.5 for half-resolution
+	uint32_t vmov_s28_1p5 = 0xeeb78a00;     // vmov.f32 s28, #1.5 (was 3.0)
+
+	// Loop 1: First shadow rendering loop
+	log_error("  Patching Loop 1 (Phase 1 rendering)...");
+	kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013d9c4), &mov_r4_0x20, 4);       // Initial X
+	kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013da0c), &add_r4_r4_0x40, 4);    // X increment
+	kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013da14), &cmp_r4_0x120, 4);      // Loop end
+	kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013dac0), &movt_r0_0x4348, 4);    // Width = 200.0
+	kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013dad0), &movt_r0_0x4200, 4);    // Height = 32.0
+
+	// Loop 2: Second shadow rendering loop (alternate vertex stream)
+	log_error("  Patching Loop 2 (Phase 1 rendering)...");
+	kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013dbb0), &mov_r4_0x20, 4);       // Initial X
+	kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013dbb8), &add_r4_r4_0x40, 4);    // X increment
+	kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013dbc0), &cmp_r4_0x120, 4);      // Loop end
+	kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013dc6c), &movt_r0_0x4348, 4);    // Width = 200.0
+	kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013dc7c), &movt_r0_0x4200, 4);    // Height = 32.0
+
+	// Phase 2: Shadow projection division constant
+	//log_error("  Patching Phase 2 (projection divisor 3.0 -> 1.5)...");
+	//kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013dda8), &vmov_s28_1p5, 4);      // Change 3.0 to 1.5
+
+	// Phase 1: Position offset scaling constants (constant pool)
+	// The offset calculations use: base + offset * (1/128) * (1/3)
+	// For half-resolution textures, the 1/3 factor needs to become 2/3
+	log_error("  Patching Phase 1 position offset constants (1/3 -> 2/3)...");
+	uint32_t two_thirds = 0x3f2aaaab;  // 2/3 (was 1/3 = 0x3eaaaaab)
+    uint32_t zero_point_two = 0x3e4ccccd;
+    uint32_t offsetScale = 0x3dcccccd;
+	//kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013da00), &zero_point_two, 4);  // Constant pool value 1
+    //kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013da04), &offsetScale, 4);  
+	//kuKernelCpuUnrestrictedMemcpy((void*)LOC(0x0013da04), &two_thirds, 4);  // Constant pool value 2
+
+	log_error("Shadow resolution patches applied successfully (complete)");
+}
+
+extern bool enable_cheats;
+so_hook isCheatTriggered_hook;
+bool isCheatTriggered()
+{
+    //logv_error("isCheatTriggered: 0x%x", enable_cheats);
+    return enable_cheats;
+}
+
+so_hook clear_hook;
+so_hook createTexture2_hook;
 void so_patch(void) {
-	//sceSysmoduleLoadModule(SCE_SYSMODULE_PERF);
-	//memAlloc_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z8memAllociPKc"), (uintptr_t)&memAlloc);
-	//cdStartStream_hook = hook_addr(LOC(0x000cd4b8), (uintptr_t)&cdStartStream);
-	//cdStreamLoad_hook = hook_addr(LOC(0x000cd75c), (uintptr_t)&cdStreamLoad);
-  	//gameLoadWorld_hook = hook_addr(LOC(0x0013f154), (uintptr_t)&gameLoadWorld);
-	//cdProcess_hook = hook_addr(LOC(0x000cd80c), (uintptr_t)&cdProcess);
-	//MC_LoadLevelEntities_hook = hook_addr(LOC(0x000e133c), (uintptr_t)&MC_LoadLevelEntities);
-	//lumpLoad_hook = hook_addr(LOC(0x000f810c), (uintptr_t)&lumpLoad);
-	//lumpLoadGlob_hook = hook_addr(LOC(0x000f82bc), (uintptr_t)&lumpLoadGlob);
-	//lockLoadingMutex_hook = hook_addr(LOC(0x0018364c), (uintptr_t)&lockLoadingMutex);
-	//releaseLoadingMutex_hook = hook_addr(LOC(0x0018367c), (uintptr_t)&releaseLoadingMutex);
 	lockLoadingMutex_addr = LOC(0x0018364c);
 	releaseLoadingMutex_addr = LOC(0x0018367c);
 
@@ -1415,7 +1482,8 @@ void so_patch(void) {
 	//ogg_stream_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN9OggStreamC2EPKcRiS2_i"), (uintptr_t)&ogg_stream_patched);
 	// _Z11coreAddTaskPFvvEiPKc coreAddTask
 	coreAddTask_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_Z11coreAddTaskPFvvEiPKc"), (uintptr_t)&coreAddTask);
-	//renderDelayedShadows_hook = hook_addr(LOC(0x0013d578), (uintptr_t)&renderDelayedShadows);
+    isCheatTriggered_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "_ZN14CommonControls16IsCheatTriggeredEv"), (uintptr_t)&isCheatTriggered);
+	renderDelayedShadows_hook = hook_addr(LOC(0x0013d578), (uintptr_t)&renderDelayedShadows);
 	//runObjects_hook = hook_addr(LOC(0x00114a1c), (uintptr_t)&runObjects);
 	//drawObjects_hook = hook_addr(LOC(0x00115094), (uintptr_t)&drawObjects);
 	ProcessAndUploadTexture_hook = hook_addr(LOC(0x0021225c), (uintptr_t)&ProcessAndUploadTexture);
@@ -1551,7 +1619,7 @@ void so_patch(void) {
 	if (D3DDevice_AsyncRenderCB_addr == 0) {
 		log_error("D3DDevice_AsyncRenderCB not found\n");
 	} else {
-		logv_error("D3DDevice_AsyncRenderCB found at %p\n", D3DDevice_AsyncRenderCB_addr);
+		logv_error(" found at %p\n", D3DDevice_AsyncRenderCB_addr);
 		D3DDevice_AsyncRenderCB_hook = hook_addr(D3DDevice_AsyncRenderCB_addr, (uintptr_t)&D3DDevice_AsyncRenderCB);
 	}
 
@@ -1626,6 +1694,21 @@ void so_patch(void) {
 	// This removes the "if (pitch < 0x41) { pitch = 0x40; }" constraint
 	uintptr_t pitchCheckAddress = so_mod.text_base + 0x00215c4c - 0x00010000;
 	uint32_t nopInstruction = 0xe1a00000; // NOP instruction for ARM (mov r0, r0)
-	logv_error("Patching pitch check at address %p with NOP", (void*)pitchCheckAddress);
+	//logv_error("Patching pitch check at address %p with NOP", (void*)pitchCheckAddress);
 	//kuKernelCpuUnrestrictedMemcpy((void *)pitchCheckAddress, &nopInstruction, sizeof(nopInstruction));
+
+	// Shadow optimization hooks - skip redundant Clear calls in shadow rendering
+	//extern void (*D3DDevice_Clear_orig)(uint32_t, void*, uint32_t, uint32_t, float, uint32_t);
+	//extern void (*RenderDelayedShadows_orig)(void);
+	extern void D3DDevice_Clear(uint32_t, void*, uint32_t, uint32_t, float, uint32_t);
+	//extern void RenderDelayedShadows_hook(void);
+
+	clear_hook = hook_addr(LOC(0x001e19c0), (uintptr_t)&D3DDevice_Clear);
+
+	// Hook D3DDevice_CreateTexture2 to reduce shadow texture resolution
+	extern void* D3DDevice_CreateTexture2(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
+	createTexture2_hook = hook_addr(LOC(0x00215bb0), (uintptr_t)&D3DDevice_CreateTexture2);
+
+	// Apply shadow resolution coordinate patches for 256x64 textures
+	//patch_shadow_resolution();
 }

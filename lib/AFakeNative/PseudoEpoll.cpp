@@ -6,6 +6,7 @@
 #include <map>
 #include <sys/unistd.h>
 #include <cstdio>
+#include <atomic>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/kernel/clib.h>
 
@@ -27,26 +28,55 @@ typedef struct _epoll_fd_internal {
 
 static _epoll_fd_internal epoll_fd_pool[EPOLL_FD_MAX];
 static SceKernelLwMutexWork * _epoll_lock = nullptr;
+static std::atomic<int> _epoll_lock_inited(0);
 
-
+// Thread-safe lazy initialization
 void _check_init_lock() {
-    if (_epoll_lock == nullptr) {
+    int expected = 0;
+    if (_epoll_lock_inited.compare_exchange_strong(expected, 1)) {
+        // We won the race, initialize the mutex
         _epoll_lock = (SceKernelLwMutexWork *) malloc(sizeof(SceKernelLwMutexWork));
-        sceKernelCreateLwMutex(_epoll_lock, "epoll_lock", 0, 0, NULL);
+        if (_epoll_lock) {
+            int ret = sceKernelCreateLwMutex(_epoll_lock, "epoll_lock", 0, 0, NULL);
+            if (ret < 0) {
+                printf("Error: failed to create epoll mutex: 0x%x\n", ret);
+                free(_epoll_lock);
+                _epoll_lock = nullptr;
+                _epoll_lock_inited.store(0);
+                return;
+            }
 
-        for (int i = 0; i < EPOLL_FD_MAX; ++i) {
-            epoll_fd_pool[i].fd = -1;
+            for (int i = 0; i < EPOLL_FD_MAX; ++i) {
+                epoll_fd_pool[i].fd = -1;
+            }
+
+            _epoll_lock_inited.store(2); // Mark as fully initialized
+        } else {
+            _epoll_lock_inited.store(0);
+        }
+    } else {
+        // Another thread is initializing, wait for it to complete
+        while (_epoll_lock_inited.load() == 1) {
+            sceKernelDelayThread(100); // Wait 0.1ms
         }
     }
 }
 
-void _lock() {
+// Returns 0 on success, -1 on failure
+int _lock() {
     _check_init_lock();
+    if (_epoll_lock_inited.load() != 2 || !_epoll_lock) {
+        errno = EAGAIN;  // Mutex not ready
+        return -1;
+    }
     sceKernelLockLwMutex(_epoll_lock, 1, NULL);
+    return 0;
 }
 
 void _unlock() {
-    if (_epoll_lock) sceKernelUnlockLwMutex(_epoll_lock, 1);
+    if (_epoll_lock_inited.load() == 2 && _epoll_lock) {
+        sceKernelUnlockLwMutex(_epoll_lock, 1);
+    }
 }
 
 int pseudo_epoll_create(int size) {
@@ -65,7 +95,9 @@ int pseudo_epoll_create1(int flags) {
         return -1;
     }
 
-    _lock();
+    if (_lock() < 0) {
+        return -1;
+    }
 
     _epoll_fd_internal * fd = nullptr;
     for (int i = 0; i < EPOLL_FD_MAX; ++i) {
@@ -232,7 +264,9 @@ int pseudo_epoll_wait(int epfd, struct pseudo_epoll_event *events, int maxevents
         return -1;
     }
 
-    _lock();
+    if (_lock() < 0) {
+        return -1;
+    }
 
     _epoll_fd_internal * fd = nullptr;
     for (int i = 0; i < EPOLL_FD_MAX; ++i) {
@@ -305,7 +339,9 @@ int pseudo_epoll_wait(int epfd, struct pseudo_epoll_event *events, int maxevents
 
         _unlock();
         usleep(10000); // give a chance for other threads to add new FDs to pool
-        _lock();
+        if (_lock() < 0) {
+            goto done;
+        }
     }
 
 done:

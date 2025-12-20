@@ -705,9 +705,6 @@ int open_soloader(char *_fname, int flags, ...) {
         //     goto normal_mode;
         // }
 
-        // This weird optimization had to be done because Baba Is You on every
-        // level/world calls fopen() for an unimaginable amount of non-existing
-        // files. The following code reduced level load from ~18 min to ~25 s.
         char *real_fname_ptr = real_fname;
         char **existing_file = (char **)bsearch(&real_fname_ptr, existing_files, existing_files_len, sizeof(char *), compare_strings);
         if (existing_file == NULL) {
@@ -716,7 +713,6 @@ int open_soloader(char *_fname, int flags, ...) {
         }
 
         //logv_error("res file: %s", real_fname);
-        // this returns stuff like 0x1800a
         int res = sceFiosFHOpenSync(NULL, &handle, real_fname, NULL);
         logv_error("sceFiosFHOpenSync(%s), ret=0x%X, Handle=(0x%X)\n", real_fname, res, handle);
         if (res != 0)
@@ -725,30 +721,7 @@ int open_soloader(char *_fname, int flags, ...) {
             return -1;
         }
 
-        // this returns stuff like 0x7fff8000
-       // int result = sceFiosFilenoToFH(handle);
-       // logv_error("sceFiosFilenoToFH(0x%X), ret=0x%X\n", handle, result);
-
-        //int result = handle;
-        //logv_error("res file: %s, handle: 0x%x, result: 0x%x", real_fname, handle, result);
-
-        // int size = sceFiosFHGetSize(handle);
-        // logv_error("size: %i", size);
-
-        // int fseekRes = sceFiosFHSeek(handle, 0, 2);
-        // logv_error("fseekRes: %i", fseekRes);
         return handle;
-
-        // if (res < 0) {
-        //     logv_error("res not found inside the PSARC!!! %s\n", real_fname);
-        // } else {
-        //     if (f == NULL) {
-        //         logv_error("res not found inside the PSARC!!! %s\n", real_fname);
-        //     } else {
-        //         logv_debug("res found inside the PSARC!!! %s\n", real_fname);
-        //         return res;
-        //     }
-        // }
     }
     
 //normal_mode:
@@ -777,7 +750,6 @@ int fstat_soloader(int fd, void *statbuf) {
     if (res == 0)
         stat_newlib_to_bionic(&st, statbuf);
 
-    //logv_debug("[io] fstat(fd#%i): %i", fd, res);
     return res;
 }
 
@@ -788,32 +760,23 @@ int stat_soloader(char *_pathname, stat64_bionic *statbuf) {
     if (res == 0)
         stat_newlib_to_bionic(&st, statbuf);
 
-    //logv_debug("[io] stat(%s): %i", _pathname, res);
     return res;
 }
 
 int fclose_soloader(FILE * f) {
     int ret = sceLibcBridge_fclose(f);
-
-    //logv_debug("[io] fclose(0x%x): %i", f, ret);
     return ret;
 }
 
 int close_soloader(int fd) {
-    //logv_error("close_soloader(%d)", fd);
-    //uint32_t fiosH = sceFiosFHToFileno(fd);
-	//if (fiosH == 0xffffffff)
     if (fd < 0x18000)
 	{
         int ret = close(fd);
-        //logv_error("[io]non-fios close(fd#%i): %i", fd, ret);
         return ret;
     }
     else
     {
-        //logv_error("[io] sceFiosFHCloseSync(fd#0x%x), fiosH=0x%x", fd, 0);
         int ret = sceFiosFHCloseSync(NULL, fd);
-        //logv_error("[io] return sceFiosFHCloseSync(fd#0x%x): %i", fd, ret);
         return ret;
     }
 }
