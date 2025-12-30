@@ -9,7 +9,7 @@
 // #include "libperf.h"
 // #endif
 
-#define PROFILE_TEX_DECOMP
+//#define PROFILE_TEX_DECOMP
 
 extern void* malloc(size_t size);
 extern void free(void* ptr);
@@ -563,31 +563,59 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
             total_blocks_decoded += blocks_decoded;
             total_textures++;
 #endif
-
+                
+            if (height < 32 || width < 32)
+            {
+                logv_error(" Loading SMALL tex %dx%d", width, height);
+            }
             // Downsample textures larger than the maximum to save GPU memory (preserving aspect ratio)
-            #define MAX_TEXTURE_DIM 1024
+            #define MAX_TEXTURE_DIM 256
             if (width > MAX_TEXTURE_DIM || height > MAX_TEXTURE_DIM) {
                 // Calculate uniform scale factor based on larger dimension
-                int max_dim = (width > height) ? width : height;
-                float scale = (float)max_dim / MAX_TEXTURE_DIM;
+               // int max_dim = (width > height) ? width : height;
+               // float scale = (float)max_dim / MAX_TEXTURE_DIM;
+                float scale = 2.0f;
 
-                int new_width = (int)(width / scale);
-                int new_height = (int)(height / scale);
+                // Calculate new dimensions preserving aspect ratio
+                int new_width = (int)(width / scale + 0.5f);   // Round to nearest
+                int new_height = (int)(height / scale + 0.5f);
                 int new_total_pixels = new_width * new_height;
 
-                logv_error("    Downsampling %dx%d -> %dx%d (scale %.2fx, saving %d bytes)",
-                           width, height, new_width, new_height, scale, total_pixels - new_total_pixels);
+                if (new_height < 64 || new_width < 64) {
+                    //  logv_error("SKIPPING    Downsampling %dx%d -> %dx%d (scale %.2fx, aspect %.3f -> %.3f)",
+                    //        width, height, new_width, new_height, scale,
+                    //        (float)width/(float)height, (float)new_width/(float)new_height);                    
+
+                    goto skip_downsample;
+                }
+
+                logv_error("    Downsampling %dx%d -> %dx%d (scale %.2fx, aspect %.3f -> %.3f)",
+                           width, height, new_width, new_height, scale,
+                           (float)width/(float)height, (float)new_width/(float)new_height);
 
                 // Allocate temporary buffer for downsampled texture
                 uint8_t *downsampled = (uint8_t*)malloc(new_total_pixels);
+                if (!downsampled) {
+                    logv_error("    ERROR: Failed to allocate %d bytes for downsampling!", new_total_pixels);
+                    goto skip_downsample;
+                }
 
-                // Downsample using coordinate mapping (works for any scale factor, including NPOT)
+                // Downsample using fixed-point coordinate mapping (avoids division in inner loop)
+                // Use 16.16 fixed-point format for sub-pixel precision
+                int x_step = (width << 16) / new_width;   // Fixed-point step per destination pixel
+                int y_step = (height << 16) / new_height;
+
                 for (int y = 0; y < new_height; y++) {
+                    int src_y = (y * y_step) >> 16;  // Calculate once per row
+                    // Clamp to valid range to prevent buffer overruns
+                    if (src_y >= height) src_y = height - 1;
+                    int src_row_offset = src_y * width;
+
                     for (int x = 0; x < new_width; x++) {
-                        // Map destination coordinate to source coordinate (nearest neighbor)
-                        int src_x = (x * width) / new_width;
-                        int src_y = (y * height) / new_height;
-                        downsampled[y * new_width + x] = temp_buffer[src_y * width + src_x];
+                        int src_x = (x * x_step) >> 16;
+                        // Clamp to valid range
+                        if (src_x >= width) src_x = width - 1;
+                        downsampled[y * new_width + x] = temp_buffer[src_row_offset + src_x];
                     }
                 }
 
@@ -599,6 +627,10 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
                 width = new_width;
                 height = new_height;
                 total_pixels = new_total_pixels;
+
+                logv_error("    Downsampling complete: final dimensions %dx%d", width, height);
+
+            skip_downsample:;
             }
 
 #ifdef PROFILE_TEX_DECOMP

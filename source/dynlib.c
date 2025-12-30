@@ -118,8 +118,23 @@ extern void *__cxa_pure_virtual;
 extern void *__cxa_guard_acquire;
 extern void *__cxa_guard_release;
 extern void *__gnu_unwind_frame;
-extern void *__stack_chk_fail;
+// extern void *__stack_chk_fail; // Implemented below instead
 extern void *__stack_chk_guard;
+
+// Custom stack smashing detector handler
+// The game's __stack_chk_fail calls through a GOT entry that can be corrupted
+// by the very stack overflow we're trying to detect. This safer implementation
+// logs the error and aborts cleanly.
+__attribute__((noreturn))
+void __stack_chk_fail(void) {
+    sceClibPrintf("\n*** STACK SMASHING DETECTED ***\n");
+    sceClibPrintf("Stack buffer overflow detected!\n");
+    sceClibPrintf("Aborting to prevent further corruption...\n");
+    // Use abort() which goes through proper cleanup
+    abort();
+    // Never reached, but needed for noreturn
+    __builtin_trap();
+}
 
 extern void *__aeabi_d2lz;
 extern void *__aeabi_dadd;
@@ -290,11 +305,11 @@ void *dlsym_fake(void *restrict handle, const char *restrict symbol) {
 		uintptr_t jbe_andoid_main_addr = (uintptr_t) so_symbol(&so_mod, "JBE_android_main_sub");
 		if (jbe_andoid_main_addr == 0)
 		{
-			log_error("[dlsym]JBE_android_main_sub not found\n");
+			log_error("[dlsym]JBE_android_main_sub not found");
 		}
 		else
 		{
-			//logv_error("[dlsym]JBE_android_main_sub found at %p\n", jbe_andoid_main_addr);
+			logv_debug("[dlsym]JBE_android_main_sub found at %p", jbe_andoid_main_addr);
 			return (void *) jbe_andoid_main_addr;
 		}
 	}

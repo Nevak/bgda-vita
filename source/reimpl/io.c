@@ -79,7 +79,7 @@ int open_soloader(char *_fname, int flags, ...) {
         return open_soloader("app0:/possible", flags);
     }
     else if (strncmp(_fname, "ux0:data/bgda/res/", 18) == 0) {
-        logv_debug("[io] tried to open(%s, %x): %i", _fname, flags, -1);
+        logv_error("[io] tried to open(%s, %x): %i", _fname, flags, -1);
         return -1;
     }
 
@@ -106,7 +106,7 @@ int open_soloader(char *_fname, int flags, ...) {
         char *real_fname_ptr = real_fname;
         char **existing_file = (char **)bsearch(&real_fname_ptr, existing_files, existing_files_len, sizeof(char *), compare_strings);
         if (existing_file == NULL) {
-            logv_error("res file not found inside the existing_files list!!! %s", real_fname);
+            logv_warn("res file not found inside the existing_files list!!! %s", real_fname);
             return -1;
         }
 
@@ -115,7 +115,7 @@ int open_soloader(char *_fname, int flags, ...) {
         logv_debug("sceFiosFHOpenSync(%s), ret=0x%X, Handle=(0x%X)", real_fname, res, handle);
         if (res != 0)
         {
-            logv_error("res not found inside the PSARC!!! %s", real_fname);
+            //logv_error("res not found inside the PSARC!!! %s", real_fname);
             return -1;
         }
 

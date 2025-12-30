@@ -23,7 +23,6 @@
 
 #include "utils/utils.h"
 #include "utils/logger.h"
-#include "utils/prof.h"
 
 #define  BIONIC_PTHREAD_COND_INITIALIZER              0
 #define  BIONIC_PTHREAD_MUTEX_INITIALIZER             0
@@ -45,42 +44,24 @@ enum {
 
 void * initializedObjects[512] = {0};
 static SceKernelLwMutexWork pthr_mutex;
-static atomic_int pthr_mutex_inited = 0;
-
-// Thread-safe lazy initialization of the pthr mutex
-static inline void pthr_mutex_init_once(void) {
-    int expected = 0;
-    if (atomic_compare_exchange_strong(&pthr_mutex_inited, &expected, 1)) {
-        // We won the race, initialize the mutex
-        int ret = sceKernelCreateLwMutex(&pthr_mutex, "pthr_lock", 0, 0, NULL);
-        if (ret < 0) {
-            sceClibPrintf("Error: failed to create pthr mutex: 0x%x\n", ret);
-            atomic_store(&pthr_mutex_inited, 0); // Reset on failure
-            return;
-        }
-        atomic_store(&pthr_mutex_inited, 2); // Mark as fully initialized
-    } else {
-        // Another thread is initializing, wait for it to complete
-        while (atomic_load(&pthr_mutex_inited) == 1) {
-            sceKernelDelayThread(100); // Wait 0.1ms
-        }
-    }
-}
+static volatile short int pthr_mutex_inited = 0;
 
 #define PTHR_LOCK \
-    pthr_mutex_init_once(); \
-    if (atomic_load(&pthr_mutex_inited) != 2) { \
-        sceClibPrintf("Error: pthr mutex not initialized, returning\n"); \
-        return 0; \
+    if (!pthr_mutex_inited) { \
+        int ret = sceKernelCreateLwMutex(&pthr_mutex, "log_lock", 0, 0, NULL); \
+        if (ret < 0) { \
+            sceClibPrintf("Error: failed to create pthr mutex: 0x%x\n", ret); \
+            return 0; \
+        } \
+        pthr_mutex_inited = 1; \
     } \
     sceKernelLockLwMutex(&pthr_mutex, 1, NULL);
 
 #define PTHR_UNLOCK \
-    if (atomic_load(&pthr_mutex_inited) == 2) { \
+    if (pthr_mutex_inited) { \
         sceKernelUnlockLwMutex(&pthr_mutex, 1); \
     }
 
-__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 int isObjectInitialized(const void * mut) {
     PTHR_LOCK
     for (int i = 0; i < 512; ++i) {
@@ -133,24 +114,11 @@ PTHR_INLINE int _attr_t_static_init(pthread_attr_t_bionic * attr) {
 PTHR_INLINE int _mutex_t_static_init(pthread_mutex_t_bionic * mutex, const pthread_mutexattr_t * attr) {
     int ret = 0, kind = PTHREAD_MUTEX_NORMAL;
 
-    // Lock BEFORE checking to prevent race condition
-    PTHR_LOCK
-
-    // Check if already initialized while holding lock
-    int already_initialized = 0;
-    for (int i = 0; i < 512; ++i) {
-        if (initializedObjects[i] == mutex) {
-            already_initialized = 1;
-            break;
-        }
-    }
-
-    if (already_initialized) {
-        PTHR_UNLOCK
+    if (isObjectInitialized(mutex)) {
+        //logv_debug("mutex already initialized: %p", mutex);
         return ret;
     }
 
-    // Determine mutex type
     if (attr) {
         pthread_mutexattr_gettype((pthread_mutexattr_t *) attr, &kind);
     } else {
@@ -159,13 +127,9 @@ PTHR_INLINE int _mutex_t_static_init(pthread_mutex_t_bionic * mutex, const pthre
         else if (* (int *) mutex == BIONIC_PTHREAD_ERRORCHECK_MUTEX_INITIALIZER) kind = PTHREAD_MUTEX_ERRORCHECK;
     }
 
-    // Allocate and zero-initialize memory (don't copy uninitialized stack data!)
+    pthread_mutex_t mut;
     mutex->real_ptr = malloc(sizeof(pthread_mutex_t));
-    if (!mutex->real_ptr) {
-        PTHR_UNLOCK
-        return ENOMEM;
-    }
-    sceClibMemset(mutex->real_ptr, 0, sizeof(pthread_mutex_t));
+    sceClibMemcpy(mutex->real_ptr, &mut, sizeof(pthread_mutex_t));
 
     pthread_mutexattr_t mutattr;
     pthread_mutexattr_init(&mutattr);
@@ -174,25 +138,11 @@ PTHR_INLINE int _mutex_t_static_init(pthread_mutex_t_bionic * mutex, const pthre
     pthread_mutexattr_destroy(&mutattr);
 
     if (ret == 0) {
-        // Remember object while still holding lock
-        int remembered = 0;
-        for (int i = 0; i < 512; ++i) {
-            if (initializedObjects[i] == 0) {
-                initializedObjects[i] = mutex;
-                remembered = 1;
-                break;
-            }
-        }
-        if (!remembered) {
-            logv_error("mutex tracking table full, cannot remember %p", mutex);
-        }
+        rememberObject(mutex);
     } else {
-        logv_error("mutex initialization for %p has failed: %d", mutex, ret);
-        free(mutex->real_ptr);
-        mutex->real_ptr = NULL;
+        logv_error("mutex initialization for %p has failed", mutex);
     }
 
-    PTHR_UNLOCK
     return ret;
 }
 
@@ -200,61 +150,28 @@ PTHR_INLINE int _mutex_t_static_init(pthread_mutex_t_bionic * mutex, const pthre
 PTHR_INLINE int _cond_t_static_init(pthread_cond_t_bionic * cond, const pthread_condattr_t * attr) {
     int ret = 0;
 
-    // Lock BEFORE checking to prevent race condition
-    PTHR_LOCK
-
-    // Check if already initialized while holding lock
-    int already_initialized = 0;
-    for (int i = 0; i < 512; ++i) {
-        if (initializedObjects[i] == cond) {
-            already_initialized = 1;
-            break;
-        }
-    }
-
-    if (already_initialized) {
-        PTHR_UNLOCK
+    if (isObjectInitialized(cond)) {
+        //logv_debug("cond already initialized: %p", cond);
         return ret;
     }
 
-    // Allocate and zero-initialize memory
+    pthread_cond_t c;
     cond->real_ptr = malloc(sizeof(pthread_cond_t));
-    if (!cond->real_ptr) {
-        PTHR_UNLOCK
-        return ENOMEM;
-    }
-    sceClibMemset(cond->real_ptr, 0, sizeof(pthread_cond_t));
+    sceClibMemcpy(cond->real_ptr, &c, sizeof(pthread_cond_t));
 
     ret = pthread_cond_init(cond->real_ptr, attr);
 
     if (ret == 0) {
-        // Remember object while still holding lock
-        int remembered = 0;
-        for (int i = 0; i < 512; ++i) {
-            if (initializedObjects[i] == 0) {
-                initializedObjects[i] = cond;
-                remembered = 1;
-                break;
-            }
-        }
-        if (!remembered) {
-            logv_error("cond tracking table full, cannot remember %p", cond);
-        }
+        rememberObject(cond);
     } else {
-        logv_error("cond initialization for %p has failed: %d", cond, ret);
-        free(cond->real_ptr);
-        cond->real_ptr = NULL;
+        logv_error("cond initialization for %p has failed", cond);
     }
 
-    PTHR_UNLOCK
     return ret;
 }
 
 int pthread_create_soloader(pthread_t *thread, const pthread_attr_t_bionic *attr, void *(*start)(void *), void *param) {
     int ret;
-    int caller_addr = (int) __builtin_return_address(0);
-    // sceClibPrintf("pthread_create_soloader: thread: %p, attr: %p, start: %p, param: %p, caller: 0x%x\n",
-    //               thread, attr, start, param, caller_addr);
 
     if (!attr) {
         pthread_attr_t a;
@@ -267,8 +184,7 @@ int pthread_create_soloader(pthread_t *thread, const pthread_attr_t_bionic *attr
         pthread_attr_setstacksize(attr->real_ptr, 512 * 1024);
         ret = pthread_create(thread, attr->real_ptr, start, param);
     }
-    sceClibPrintf("pthread_create_soloader: thread: %p, attr: %p, start: %p, param: %p, caller: 0x%x ret:0x%X\n",
-                  thread, attr, start, param, caller_addr, ret);
+
     return ret;
 }
 
@@ -529,13 +445,8 @@ int sem_init_soloader (int * uid, int pshared, unsigned int value) {
 }
 
 int sem_post_soloader (int * uid) {
-    //Profiler_BeginSample("sem_post_soloader");
     if (sceKernelSignalSema(*uid, 1) < 0)
-    {
-        //Profiler_EndSample();
         return -1;
-    }
-    //Profiler_EndSample();
     return 0;
 }
 
@@ -561,13 +472,7 @@ int sem_trywait_soloader (int * uid) {
 }
 
 int sem_wait_soloader (int * uid) {
-    //Profiler_BeginSample("sem_wait_soloader");
     if (sceKernelWaitSema(*uid, 1, NULL) < 0)
-    {
-        //Profiler_EndSample();
         return -1;
-    }
-
-    //Profiler_EndSample();
     return 0;
 }

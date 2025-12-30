@@ -46,8 +46,8 @@
  }
  
  void gl_init() {
-    vglSetVertexPoolSize(48 * 1024 * 1024);
-    vglSetParamBufferSize(16 * 1024 * 1024);
+    vglSetVertexPoolSize(32 * 1024 * 1024);
+    vglSetParamBufferSize(12 * 1024 * 1024);
     vglWaitVblankStart(GL_FALSE);
     vglUseTripleBuffering(GL_FALSE);
     //vglSetSemanticBindingMode(VGL_MODE_POSTPONED);
@@ -56,7 +56,6 @@
     
     vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_THRESHOLD_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);
     //eglSwapInterval(0, 2);
-    vglWaitVblankStart(GL_FALSE);
  }
  
 

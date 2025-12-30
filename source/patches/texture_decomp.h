@@ -58,11 +58,20 @@ void D3DDevice_SetTexture(uint32_t param_1, int param_2) {
 
 		uint32_t dimensionsAndFlags = *(param_2_ptr + 4);
 
+
+
+
 		width = (dimensionsAndFlags & 0xfff) + 1;
 		height = ((dimensionsAndFlags << 8) >> 0x14) + 1;
 
+		// if (width == 227 && height == 256){
+		// 	logv_error("FOUND D3DDevice_SetTexture: w: %i, h: %i\n", width, height);
+
+		// }
+
+
+
 		// log the width and height
-		//logv_error("D3DDevice_SetTexture: w: %i, h: %i\n", width, height);
 
 
 		int potWidth = 1;
@@ -71,6 +80,7 @@ void D3DDevice_SetTexture(uint32_t param_1, int param_2) {
 		}
 		if (potWidth < 32)
 			potWidth = 32;
+
 		int potHeight = 1;
 
 		while (potHeight < height) {
@@ -80,10 +90,21 @@ void D3DDevice_SetTexture(uint32_t param_1, int param_2) {
 			potHeight = 32;
 		//logv_error("D3DDevice_SetTexture: p2w: %i, p2h: %i\n", potWidth, potHeight);
 
+		// #define MAX_TEXTURE_DIM 256
+		// if (potWidth > MAX_TEXTURE_DIM || potHeight > MAX_TEXTURE_DIM) {
+		// 	// Calculate uniform scale factor based on larger dimension
+		// 	int max_dim = (potWidth > potHeight) ? potWidth : potHeight;
+		// 	float scale = (float)max_dim / MAX_TEXTURE_DIM;
+
+		// 	potWidth = (int)(potWidth / scale);
+		// 	potHeight = (int)(potHeight / scale);
+		// 	logv_error("D3DDevice_SetTexture: scaled to w: %i, h: %i\n", potWidth, potHeight);
+		// }
 			
 		// calculate the scale factor for width and height to pass it to the shader so it can scale the UV coordinates
 		float scaleX = ((float)potWidth / (float)width);
 		float scaleY = ((float)potHeight / (float)height);
+
 
 		float scale[4] = {scaleX, scaleY, 0.0f, 0.0f};
 		SO_CONTINUE(float, D3DDevice_SetVertexShaderConstantNotInline_hook, 24, (uint32_t)scale, 1);

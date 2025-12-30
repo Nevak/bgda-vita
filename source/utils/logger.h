@@ -10,6 +10,8 @@
 #ifndef SOLOADER_LOGGER_H
 #define SOLOADER_LOGGER_H
 
+//#define DEBUG_SOLOADER
+
 #include <psp2/kernel/clib.h>
 
 #ifdef __cplusplus

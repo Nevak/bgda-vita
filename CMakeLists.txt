@@ -20,7 +20,7 @@ set(VITA_VERSION "01.00")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
-set(PSVITAIP "192.168.1.57" CACHE STRING "PSVita IP (for FTP access)") #China
+set(PSVITAIP "192.168.1.10" CACHE STRING "PSVita IP (for FTP access)") #China
 #set(PSVITAIP "192.168.110.38" CACHE STRING "PSVita IP (for FTP access)") #China devkit
 set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
@@ -57,9 +57,9 @@ endif()
 option(RAZOR_PROFILER_ENABLED "Enable function instrumentation for profiling" OFF)
 
 # Base compiler flags without instrumentation
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wl,-q,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -Wl,--allow-multiple-definition -O3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer -save-temps")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wl,-q -Wl,--allow-multiple-definition -O3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer -save-temps")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q,--wrap,memcpy,--wrap,memset,--wrap,malloc,--wrap,memalign,--wrap,free,--wrap,calloc,--wrap,realloc -O3 -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q -O3 -fno-omit-frame-pointer")
 
 # Add instrumentation flags only if profiler is enabled
 if(RAZOR_PROFILER_ENABLED)
@@ -216,12 +216,12 @@ add_custom_target(send_kvdb
 
 add_custom_target(dump
 				  COMMAND ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump.sh ${PSVITAIP}
-				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 128
+				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt --so /vita-dev/soulcalibur_vita/original/libdarkalliance.so --load-addr 0x98400000 /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 128
 				  )
 
 add_custom_target(dump_local
 				  COMMAND bash ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump_local.sh
-				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 128
+				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt --so /vita-dev/soulcalibur_vita/original/libdarkalliance.so --load-addr 0x98400000 /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 128
 				  )
 
 add_custom_target(reboot

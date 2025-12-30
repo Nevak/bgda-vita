@@ -94,8 +94,9 @@ int coreAddTask(void *fn, int prio, char *name) {
 	}
 
 	if (name && strcmp(name, "RenderDelayedShadows") == 0) {
-	//    	log_error("Ignoring renderDelayedShadows task\n");
-	    //	return 0;
+		//log_error("Ignoring renderDelayedShadows task\n");
+		// Disable shadows for now since they are a bit expensive. Will optimize later
+	    return 0;
 	}
 
     return SO_CONTINUE(int, coreAddTask_hook, fn, prio, name);
@@ -163,15 +164,74 @@ void D3DDevice_SetTextureStages(uint8_t *param_1, uint32_t param_2) {
 	SO_CONTINUE(void *, D3DDevice_SetTextureStages_hook, param_1, param_2);
 }
 
+static uint32_t prev_vcount = 0;
+
+void init_vblank_counter(void) {
+    prev_vcount = sceDisplayGetVcount();
+}
+
+
+int compute_lastFrameVBlankCount(void) {
+    uint32_t now = sceDisplayGetVcount();
+    uint32_t delta = now - prev_vcount;   // wraps naturally for uint32_t
+    prev_vcount = now;
+
+    // If one vblank per rendered frame is "normal", extras mean catch-up:
+    if (delta == 0) return 0;
+    return (int)(delta - 1);
+}
+
 so_hook machFrameStart_hook;
 void machFrameStart(int p) {
 	sceKernelChangeThreadCpuAffinityMask(sceKernelGetThreadId(), SCE_KERNEL_CPU_MASK_USER_1);
+
+
 	SO_CONTINUE(void *, machFrameStart_hook, p);
 }
+
+extern int total_malloc_calls_in_frame;
+extern int total_free_calls_in_frame;
+extern uint64_t total_allocated_memory_in_frame;
+extern uint64_t total_time_taken_by_allocs_in_frame_us;
+
 
 so_hook mach_frameEnd_hook;
 void machFrameEnd(int param_1) {
 	SO_CONTINUE(void *, mach_frameEnd_hook, param_1);
+	
+	int lastFrameVBlankCount = compute_lastFrameVBlankCount();
+	if (lastFrameVBlankCount <= 0) {
+		lastFrameVBlankCount = 1;
+	}
+
+	// if (lastFrameVBlankCount > 1) {
+	// 	logv_debug("machFrameStart: lastFrameVBlankCount=%d", lastFrameVBlankCount);
+	// }
+
+	// write to global variable at 0029e5c4 using LOC() macro
+	// uint32_t *g_lastFrameVBlankCount = (uint32_t *)LOC(0x0029e5c4);
+	// *g_lastFrameVBlankCount = (uint32_t)lastFrameVBlankCount;
+
+	if (total_malloc_calls_in_frame == 0 && total_free_calls_in_frame == 0) {
+		// reset counters
+		total_malloc_calls_in_frame = 0;
+		total_free_calls_in_frame = 0;
+		total_allocated_memory_in_frame = 0;
+		total_time_taken_by_allocs_in_frame_us = 0;
+		return;
+	}
+	// logv_debug("machFrameEnd: malloc calls: %d, free calls: %d, total allocated memory: %llu bytes, total time in allocs: %llu us",
+	// 	total_malloc_calls_in_frame,
+	// 	total_free_calls_in_frame,
+	// 	total_allocated_memory_in_frame,
+	// 	total_time_taken_by_allocs_in_frame_us
+	// );
+
+	// reset counters
+	total_malloc_calls_in_frame = 0;
+	total_free_calls_in_frame = 0;
+	total_allocated_memory_in_frame = 0;
+	total_time_taken_by_allocs_in_frame_us = 0;
 }
 
 so_hook JBE_D3DDevice_Swap_hook;
@@ -224,6 +284,8 @@ void ReadCommandCustom(struct d3dDeviceFake *thisPtr) {
 }
 
 void D3DDevice_AsyncRenderCB(void *device_ptr) {
+	//init_vblank_counter();
+
 	uint32_t threadId = sceKernelGetThreadId();
 	logv_debug("[0x%X] ===============D3DDevice_AsyncRenderCB================\n", threadId);
 	sceKernelChangeThreadPriority(threadId, 100);
@@ -372,17 +434,17 @@ void DoNothing()
 {
 }
 
-so_hook memAlloc_hook;
-void* memAlloc(int size, const char* name) {
-	if (name && name[0] != '\0') {
-		logv_error("memAlloc(%d, \"%s\")", size, name);
-	}
-	void* ret = SO_CONTINUE(void*, memAlloc_hook, size, name);
-	if (name && name[0] != '\0') {
-		logv_error("ret=%p", ret);
-	}
-	return ret;
-}
+// so_hook memAlloc_hook;
+// void* memAlloc(int size, const char* name) {
+// 	if (name && name[0] != '\0') {
+// 		logv_error("memAlloc(%d, \"%s\")", size, name);
+// 	}
+// 	void* ret = SO_CONTINUE(void*, memAlloc_hook, size, name);
+// 	if (name && name[0] != '\0') {
+// 		logv_error("ret=%p", ret);
+// 	}
+// 	return ret;
+// }
 
 so_hook cdStartStream_hook;
 void cdStartStream(char *filename, int param_2) {
@@ -760,7 +822,7 @@ so_hook isCheatTriggered_hook;
 bool isCheatTriggered()
 {
     //logv_error("isCheatTriggered: 0x%x", enable_cheats);
-    return enable_cheats;
+    return !enable_cheats;
 }
 
 so_hook clear_hook;
@@ -769,6 +831,10 @@ so_hook createTexture2_hook;
 
 
 void so_patch(void) {
+
+    patch_memory();
+	//mach_frameEnd_hook = hook_addr(LOC(0x00181d04), (uintptr_t)&machFrameEnd);
+
 	lockLoadingMutex_addr = LOC(0x0018364c);
 	releaseLoadingMutex_addr = LOC(0x0018367c);
 
@@ -784,21 +850,14 @@ void so_patch(void) {
 
 	worldAllocateSegments_hook = hook_addr(LOC(0x00131aec), (uintptr_t)&worldAllocateSegments);
 
-	uintptr_t memInit_addr = (uintptr_t)so_symbol(&so_mod, "_Z7memInitPvi");
-	if (memInit_addr == 0) {
-		log_error("memInit not found\n");
-	} else {
-		logv_debug("memInit found at %p\n", memInit_addr);
-		memInit_hook = hook_addr(memInit_addr, (uintptr_t)&memInit);
-	}
-
-    // This fixes some weird texts in spanish
+    // This fixes some weird texts in spanish AND prevents buffer overflow in runDialog
 	uintptr_t usprintf_addr = (uintptr_t)so_symbol(&so_mod, "_Z8usprintfPtPKtfffffff");
 	if (usprintf_addr == 0) {
 		log_error("usprintf not found\n");
 	} else {
 		logv_debug("usprintf found at %p\n", usprintf_addr);
-		//usprintf_hook = hook_addr(usprintf_addr, (uintptr_t)&usprintf_patched);
+		usprintf_hook = hook_addr(usprintf_addr, (uintptr_t)&usprintf_patched);
+		//log_debug("usprintf hooked with bounds-checked version\n");
 	}
 
 	D3DDevice_SetTexture_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetTexture"), (uintptr_t)&D3DDevice_SetTexture);

@@ -77,7 +77,7 @@ long ov_read_profiled(void *vf, char *buffer, int length,
 // Hook for SND_Frame - reports ov_read stats per frame
 so_hook snd_frame_hook;
 void snd_frame_profiled(void) {
-	//return;
+	return;
 
 	g_sndFrameNumber++;
 
@@ -118,25 +118,12 @@ void ov_read_callback(void *param_1, int param_2,int param_3,void *param_4)
 }
 
 so_hook snd_start_stream_hook;
-void snd_start_stream(int channelId,char *path,int streamFlags,int startSample,uint32_t len)
+void snd_start_stream(int channelId, char *path, int streamFlags, int startSample, uint32_t len)
 {
 	// Get the caller address
 	uintptr_t caller = (uintptr_t)__builtin_return_address(0);
-	logv_error("[%p] snd_start_stream: channelId=%d, path=%s, streamFlags=0x%X, startSample=0x%X, len=0x%X", caller, channelId, path, streamFlags, startSample, len);
+	logv_debug("[%p] snd_start_stream: channelId=%d, path=%s, streamFlags=0x%X, startSample=0x%X, len=0x%X", caller, channelId, path, streamFlags, startSample, len);
 
-
-	//   if (len == 0){
-	//   	len = 0x10000;
-	
-	//   }
-
-	// if (channelId == 0) {
-
-	// }
-	// if (channelId == 1 || channelId == 0)
-	// {
-	// 	return;
-	// }
 
 	SO_CONTINUE(void*, snd_start_stream_hook, channelId, path, streamFlags, startSample, len);
 
@@ -152,22 +139,30 @@ void snd_start_stream(int channelId,char *path,int streamFlags,int startSample,u
 	{
 		streamSlotIndex = 0;
 	}
-	logv_error("streamSlotIndex=%d", streamSlotIndex);
+	logv_debug("streamSlotIndex=%d", streamSlotIndex);
     
     OggStream* oggStreamPtr = g_soundSystemBase.channels[channelId].streamSlots[streamSlotIndex].oggStream;
 	int endSample = g_soundSystemBase.channels[channelId].streamSlots[streamSlotIndex].endSample;
-    logv_error("  oggStreamPtr=%p", oggStreamPtr);
-    logv_error("  endSample=%d", endSample);
+    logv_debug("  oggStreamPtr=%p", oggStreamPtr);
+    logv_debug("  endSample=%d", endSample);
 	if (oggStreamPtr != 0)
 	{
-	 	logv_error("  isOgg=%hhx", oggStreamPtr->isOggS);
+	 	logv_debug("  isOgg=%hhx", oggStreamPtr->isOggS);
 	}
 
 
-	logv_error("streamCount[0]=%d", streamCount0);
-	logv_error("streamCount[1]=%d", streamCount1);
-	logv_error("streamCount[2]=%d", streamCount2);
-	logv_error("[%p] RETURNED snd_start_stream: channelId=%d, path=%s, streamFlags=0x%X, startSample=0x%X, len=0x%X", caller, channelId, path, streamFlags, startSample, len);
+	logv_debug("streamCount[0]=%d", streamCount0);
+	logv_debug("streamCount[1]=%d", streamCount1);
+	logv_debug("streamCount[2]=%d", streamCount2);
+	logv_debug("[%p] RETURNED snd_start_stream: channelId=%d, path=%s, streamFlags=0x%X, startSample=0x%X, len=0x%X", caller, channelId, path, streamFlags, startSample, len);
+}
+
+so_hook snd_start_music_hook;
+void snd_start_music(char *path,int param)
+{
+	logv_error("snd_start_music: path=%s, param=0x%X", path, param);
+
+	SO_CONTINUE(void*, snd_start_music_hook, path, param);
 }
 
 typedef struct __attribute__((__packed__)) dialog_dir
@@ -204,7 +199,7 @@ lmp_entry* lump_find_resource(char *path, char *param)
 	// Redirect spanish dialog to default dialog since spanish dialog file is bugged even in the android version
 	if (strcmp(param, "s_dialog.bin") == 0)
 	{
-		return SO_CONTINUE(lmp_entry*, lump_find_resource_hook, path, "dialog.bin");
+		//return SO_CONTINUE(lmp_entry*, lump_find_resource_hook, path, "dialog.bin");
 	}
 
 	lmp_entry* res = SO_CONTINUE(lmp_entry*, lump_find_resource_hook,  path, param);
@@ -250,8 +245,8 @@ so_hook snd_get_dialog_dir_hook;
 
 dialog_dir* snd_get_dialog_dir()
 {
-	// uintptr_t caller = (uintptr_t)__builtin_return_address(0);
-	// logv_error("[%p]snd_get_dialog_dir called. g_curLanguage=(0x%X)", caller, g_curLanguage);
+	uintptr_t caller = (uintptr_t)__builtin_return_address(0);
+	logv_debug("[%p]snd_get_dialog_dir called. g_curLanguage=(0x%X)", caller, g_curLanguage);
 
 	dialog_dir* res = SO_CONTINUE(dialog_dir*, snd_get_dialog_dir_hook);
 
@@ -264,7 +259,7 @@ dialog_dir* snd_get_dialog_dir()
 
 	// Seems like .vat files are just a bunch of concatenated ogg files pointed at by offset/lenght from the dialog.bin tables from (dialog dir)
 	int totalVatFileSize = get_dialog_file_size();
-	//logv_debug("totalFileSize=%d - 0x%X", totalFileSize, totalFileSize);
+	logv_debug("totalVatFileSize=%d - 0x%X", totalVatFileSize, totalVatFileSize);
 
 	// First pass: count entries
 	dialog_dir* entry = res;
@@ -274,12 +269,12 @@ dialog_dir* snd_get_dialog_dir()
 		count++;
 	}
 	
-	//logv_debug("Found %d dialog entries for world %s", count, g_currentWorldName);
+	logv_debug("Found %d dialog entries for world %s", count, g_currentWorldName);
 
 	// Second pass: fix lengths by calculating from next entry's start
 	entry = res;
 	for (int i = 0; i < count; i++) {
-		//logv_debug("entry[%d]: name=%s, startAt=0x%X, len=0x%X (original)", i, entry->name, entry->startAt, entry->len);
+		logv_debug("entry[%d]: name=%s, startAt=0x%X, len=0x%X (original)", i, entry->name, entry->startAt, entry->len);
 		if (entry->len == 0) {
 		 	int calculatedLen;
 			
@@ -295,7 +290,7 @@ dialog_dir* snd_get_dialog_dir()
 		 	// Fix the len field
 		 	entry->len = calculatedLen;
 		
-		 	//logv_debug("entry[%d]: name=%s, startAt=0x%X, len=0x%X (fixed)", i, entry->name, entry->startAt, entry->len);
+		 	logv_debug("entry[%d]: name=%s, startAt=0x%X, len=0x%X (fixed)", i, entry->name, entry->startAt, entry->len);
 		 }
 		entry++;
 	}
@@ -374,13 +369,24 @@ vorbis_info *ov_info_local(void *vf, int link)
     return res;
 }
 
+// _Z25lightVU0StoppedProcessingv
+so_hook light_vu0_stopped_processing_hook;
+void light_vu0_stopped_processing()
+{
+	log_error("lightVU0StoppedProcessing called!");
 
-void patch_vorbis(void) {
-	ov_read_hook = hook_addr(so_symbol(&so_mod, "ov_read"), (uintptr_t)ov_read_profiled);
-	lump_find_resource_hook = hook_addr(so_symbol(&so_mod, "_Z16lumpFindResourcePKcS0_"), (uintptr_t)lump_find_resource);
+	SO_CONTINUE(void*, light_vu0_stopped_processing_hook);
+}
+
+void patch_vorbis(void) 
+{
+	//ov_read_hook = hook_addr(so_symbol(&so_mod, "ov_read"), (uintptr_t)ov_read_profiled);
+	//lump_find_resource_hook = hook_addr(so_symbol(&so_mod, "_Z16lumpFindResourcePKcS0_"), (uintptr_t)lump_find_resource);
 	snd_get_dialog_dir_hook = hook_addr(so_symbol(&so_mod, "_Z16SND_GetDialogDirv"), (uintptr_t)snd_get_dialog_dir);
 	//lump_query_hook = hook_addr(so_symbol(&so_mod, "_Z9lumpQueryPKc"), (uintptr_t)lump_query);
 	snd_get_dialog_filename_hook = hook_addr(so_symbol(&so_mod, "_Z21SND_GetDialogFilenameb"), (uintptr_t)snd_get_dialog_filename);
+	//snd_start_stream_hook = hook_addr(so_symbol(&so_mod, "_Z15SND_StartStreamiPKciii"), (uintptr_t)snd_start_stream);
+	//snd_start_music_hook = hook_addr(so_symbol(&so_mod, "_Z14SND_StartMusicPKci"), (uintptr_t)snd_start_music);
 
 	//ov_pcm_total_hook = hook_addr(so_symbol(&so_mod, "ov_pcm_total"), (uintptr_t)ov_pcm_total_local);
     //ov_info_hook = hook_addr(so_symbol(&so_mod, "ov_info"), (uintptr_t)ov_info_local);
@@ -407,4 +413,5 @@ void patch_vorbis(void) {
 
 	// Hook SND_Frame to report ov_read stats per frame
 	//snd_frame_hook = hook_addr(so_symbol(&so_mod, "_Z9SND_Framev"), (uintptr_t)&snd_frame_profiled);
+	//light_vu0_stopped_processing_hook = hook_addr(so_symbol(&so_mod, "_Z25lightVU0StoppedProcessingv"), (uintptr_t)&light_vu0_stopped_processing);
 }

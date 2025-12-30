@@ -35,12 +35,30 @@
 
 __attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_calloc(uint32_t nmember, uint32_t size) { return vglCalloc(nmember, size); }
+
+int total_malloc_calls_in_frame = 0;
+int total_free_calls_in_frame = 0;
+uint64_t total_allocated_memory_in_frame = 0;
+uint64_t total_time_taken_by_allocs_in_frame_us = 0;
+
 __attribute__((__no_instrument_function__, __no_profile_instrument_function__))
-void __wrap_free(void *addr) { vglFree(addr); };
-//__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+void __wrap_free(void *addr) { 
+	total_free_calls_in_frame++;
+	vglFree(addr); 
+};
+
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_malloc(uint32_t size) { 
+
+	uint64_t time_start = sceKernelGetProcessTimeWide();
 	//Profiler_BeginSample("malloc");
 	void * r = vglMalloc(size); 
+	uint64_t time_end = sceKernelGetProcessTimeWide();
+
+	total_time_taken_by_allocs_in_frame_us += (time_end - time_start);
+	total_allocated_memory_in_frame += size;
+	total_malloc_calls_in_frame++;
+
 	// check if successful
 	if (r == NULL) {
 		logv_error("malloc(%d) failed", size);
@@ -49,17 +67,23 @@ void *__wrap_malloc(uint32_t size) {
 	//Profiler_EndSample();
 	return r;
 };
+
 __attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_memalign(uint32_t alignment, uint32_t size) { return vglMemalign(alignment, size); };
 __attribute__((__no_instrument_function__, __no_profile_instrument_function__))
-void *__wrap_realloc(void *ptr, uint32_t size) { return vglRealloc(ptr, size); };
+void *__wrap_realloc(void *ptr, uint32_t size) 
+{ 
+	logv_debug("realloc(%p, %d)", ptr, size);
+	return vglRealloc(ptr, size); 
+};
+
 __attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_memcpy (void *dst, const void *src, size_t num) { return sceClibMemcpy(dst, src, num); };
 __attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 void *__wrap_memset (void *ptr, int value, size_t num) { return sceClibMemset(ptr, value, num); };
 
 
-int _newlib_heap_size_user = 192 * 1024 * 1024;
+int _newlib_heap_size_user = 330 * 1024 * 1024;
 
 #ifdef USE_SCELIBC_IO
 int sceLibcHeapSize = 1 * 1024 * 1024;
@@ -93,11 +117,18 @@ int input_thread_fn(SceSize args, void *argp) {
 		SceCtrlData pad;
 		sceCtrlPeekBufferPositiveExt2(0, &pad, 1);
 	
-		 if (pad.buttons & SCE_CTRL_L1 && !(pad_previous.buttons & SCE_CTRL_L1)) {
-		 	// toggle log_allocs
-		 	//log_allocs = !log_allocs;
-			enable_cheats = !enable_cheats;
+		if (pad.buttons & SCE_CTRL_L1 
+			&& pad.buttons & SCE_CTRL_R1 
+			&& pad.buttons & SCE_CTRL_LEFT 
+			&& pad.buttons & SCE_CTRL_TRIANGLE) {
+			enable_cheats = true;
 		}
+		else {
+			enable_cheats = false;
+		}
+
+
+
 		// if (pad.buttons & SCE_CTRL_R1 && !(pad_previous.buttons & SCE_CTRL_R1)) {
 		// 	log_profiler = !log_profiler;
 		// 	if (log_profiler) {
@@ -215,7 +246,7 @@ int main() {
     	}
 		*/
 
-		// The second parameter is the device type corresponding to the enum above as found in the decompiled java code
+		// The last parameter is the device type corresponding to the enum above as found in the decompiled java code
 		// You can try with other values but I couldn't find one that shows the proper PS button icons or has bindings that make sense. Still experimenting
 
 		inputDeviceAdded(&jni, (void *)0x42424242, 0, 2);

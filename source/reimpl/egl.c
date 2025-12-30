@@ -21,7 +21,9 @@
  
 
  EGLBoolean eglInitialize(EGLDisplay dpy, EGLint *major, EGLint *minor) {
-     l_debug("eglInitialize(0x%x)", (int)dpy);
+    // get the caller address
+    uintptr_t caller = (uintptr_t)__builtin_return_address(0);
+     l_debug("eglInitialize(0x%x) called from %p", dpy, (void *)caller);
  
      gl_init();
  
