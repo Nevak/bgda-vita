@@ -22,6 +22,7 @@
 #include <so_util/so_util.h>
 
 #include <AFakeNative/AFakeNative.h>
+#include <AFakeNative/utils/controls.h>
 #include <vitasdk.h>
 #include <stdio.h>
 #include <string.h>
@@ -220,17 +221,15 @@ int main() {
 	}
 	else
 	{
-		//log_info("inputDeviceAdded is not NULL");
-
 		/*
 		enum Device {
 			NONE,           // 0
 			SIXAXIS,        // 1
-			XB360,        // 2      
+			XB360,          // 2
 			XB360_GENERIC,  // 3
 			WII,            // 4
 			NYKO_PLAYPAD,       // 5
-			NYKO_PLAYPAD_PRO,   // 6      
+			NYKO_PLAYPAD_PRO,   // 6
 			OUYA,               // 7
 			MOGA_PRO_HID,       // 8
 			BROADCOM_HID,       // 9
@@ -241,15 +240,20 @@ int main() {
 			NEXUS_PLAYER,       // 14
 			PS4,                // 15
 			FORGE_SERVAL,       // 16
-			UNKNOWN,        // 17
-			COUNT           // 18
-    	}
+			UNKNOWN,            // 17
+			COUNT               // 18
+		}
 		*/
 
-		// The last parameter is the device type corresponding to the enum above as found in the decompiled java code
-		// You can try with other values but I couldn't find one that shows the proper PS button icons or has bindings that make sense. Still experimenting
+		int num_detected = detectControllers();
+		int res = sceCtrlIsMultiControllerSupported();
+		logv_error("sceCtrlIsMultiControllerSupported = %d", res);
+		logv_error("Detected %d controller(s)", num_detected);
 
-		inputDeviceAdded(&jni, (void *)0x42424242, 0, 2);
+		for (int i = 0; i < num_detected; i++) {
+			inputDeviceAdded(&jni, (void *)0x42424242, i, 2);
+			logv_error("Registered controller %d", i);
+		}
 	}
 
 	// poll input in another thread

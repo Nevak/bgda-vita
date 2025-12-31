@@ -166,6 +166,12 @@ int32_t AInputEvent_getSource(const AInputEvent* event) {
     return e->source;
 }
 
+int32_t AInputEvent_getDeviceId(const AInputEvent* event) {
+    if (!event) return -1;
+    auto * e = reinterpret_cast<const inputEvent *>(event);
+    return e->deviceId;
+}
+
 int32_t AKeyEvent_getAction(const AInputEvent* key_event) {
     if (!key_event) return 0;
     auto * e = reinterpret_cast<const inputEvent *>(key_event);

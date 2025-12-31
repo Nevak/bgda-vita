@@ -152,6 +152,13 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
     char *world_name = (char*)LOC(0x0054cad8);
     logv_debug("worldAllocateSegments: world_name pointer=0x%08X", (uint32_t)world_name);
 
+    bool downsample_large_textures = false;
+    // Only downsample if world is "bog1"
+    if (strcmp(world_name, "bog1") == 0) {
+        downsample_large_textures = true;
+        logv_debug("Downsampling large textures for world '%s'", world_name);
+    }
+
     // Load world lumps if needed (ALWAYS run this, even when using cache)
     int element_count = worldHeader->element_count;
     //logv_error("worldAllocateSegments: element_count=%d, elemen_array_start=0x%08X",
@@ -568,9 +575,10 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
             {
                 logv_error(" Loading SMALL tex %dx%d", width, height);
             }
+            
             // Downsample textures larger than the maximum to save GPU memory (preserving aspect ratio)
             #define MAX_TEXTURE_DIM 256
-            if (width > MAX_TEXTURE_DIM || height > MAX_TEXTURE_DIM) {
+            if (downsample_large_textures && (width > MAX_TEXTURE_DIM || height > MAX_TEXTURE_DIM)) {
                 // Calculate uniform scale factor based on larger dimension
                // int max_dim = (width > height) ? width : height;
                // float scale = (float)max_dim / MAX_TEXTURE_DIM;

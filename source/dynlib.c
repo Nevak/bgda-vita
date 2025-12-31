@@ -231,10 +231,6 @@ int AAssetManager_openDir() {
 	return 0;
 }
 
-int AInputEvent_getDeviceId() {
-	//log_error("unimpl: AInputEvent_getDeviceId");
-	return 0;
-}
 int AKeyEvent_getFlags() {
 	//log_error("unimpl: AKeyEvent_getFlags");
 	return 0;
