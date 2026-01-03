@@ -1,7 +1,0 @@
-float4 main(
-    float4 oD0 : TEXCOORD0  // "VARYING_oD0(lowp vec4)" becomes an input parameter
-) : COLOR
-{
-    return oD0;  // Output the varying color directly
-}
-

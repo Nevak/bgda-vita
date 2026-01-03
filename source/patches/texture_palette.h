@@ -13,8 +13,6 @@
 
 #define GL_TEXTURE_MAX_LEVEL 0x813d
 
-// Forward declarations for vitaGL low-level access
-void* gpu_alloc_mapped_aligned(size_t alignment, size_t size, vglMemType type);
 void* gpu_alloc_palette(uint32_t* palette, uint32_t count, uint32_t bpe);
 void gpu_free_palette(void* palette);
 SceGxmTexture* vglGetGxmTexture(GLenum target);

@@ -20,7 +20,7 @@ set(VITA_VERSION "01.00")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
-set(PSVITAIP "192.168.1.10" CACHE STRING "PSVita IP (for FTP access)") #China
+set(PSVITAIP "192.168.1.17" CACHE STRING "PSVita IP (for FTP access)") #China
 #set(PSVITAIP "192.168.110.38" CACHE STRING "PSVita IP (for FTP access)") #China devkit
 set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
@@ -216,12 +216,12 @@ add_custom_target(send_kvdb
 
 add_custom_target(dump
 				  COMMAND ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump.sh ${PSVITAIP}
-				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt --so /vita-dev/soulcalibur_vita/original/libdarkalliance.so --load-addr 0x98400000 /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 128
+				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt --so ${CMAKE_SOURCE_DIR}/original/libdarkalliance.so --load-addr 0x98400000 ${CMAKE_BINARY_DIR}/coredump ${CMAKE_BINARY_DIR}/bgda -s 128
 				  )
 
 add_custom_target(dump_local
 				  COMMAND bash ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump_local.sh
-				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt --so /vita-dev/soulcalibur_vita/original/libdarkalliance.so --load-addr 0x98400000 /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 128
+				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt --so ${CMAKE_SOURCE_DIR}/original/libdarkalliance.so --load-addr 0x98400000 ${CMAKE_BINARY_DIR}/coredump ${CMAKE_BINARY_DIR}/bgda -s 128
 				  )
 
 add_custom_target(reboot

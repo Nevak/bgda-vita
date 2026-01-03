@@ -149,6 +149,12 @@ int detectControllers() {
 		num_controllers = 1;
 	}
 
+	if (num_controllers == 0) {
+		ALOGE("No controllers detected, enabling controller 1 by default");
+		controllers[0].is_available = true;
+		num_controllers = 1;
+	}
+
 	return num_controllers;
 }
 

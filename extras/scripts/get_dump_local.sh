@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Get the latest dump file from local dumps directory
-DUMPS_DIR="/vita-dev/soulcalibur_vita/dumps"
+DUMPS_DIR="/vita-dev/bgda_vita/dumps"
 
 # Find the most recent psp2core dump file
 LATEST_DUMP=$(ls -t "$DUMPS_DIR"/psp2core* 2>/dev/null | head -1)
