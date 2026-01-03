@@ -1,9 +1,9 @@
-# Balrdur's Gate: Dark Alliance Vita
+# Baldur's Gate: Dark Alliance Vita
 
 <p align="center"><img src="./screenshots/2026-01-04-010811.jpg"></p>
 <p align="center"><img src="./screenshots/2025-12-06-171920.jpg"></p>
 
-This is a wrapper/port of <b>Balrdur's Gate: Dark Alliance</b> for the *PS Vita*.
+This is a wrapper/port of <b>Baldur's Gate: Dark Alliance</b> for the *PS Vita*.
 
 The port works by loading the official Android ARMv7 executables in memory, resolving its imports with native functions and patching it in order to properly run.
 By doing so, it's basically as if we emulate a minimalist Android environment in which we run natively the executable as is.
