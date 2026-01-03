@@ -1,0 +1,63 @@
+diff --git forkSrcPrefix/source/lookup.c forkDstPrefix/source/lookup.c
+index 708b17fc91c974eadd188dca12321c658be798f5..4a282e63701fcc43ce6a96435f01dd0c67d43144 100644
+--- forkSrcPrefix/source/lookup.c
++++ forkDstPrefix/source/lookup.c
+@@ -439,6 +439,7 @@ static const struct {
+ 	{"vglUseVramForUSSE", (void *)vglUseVramForUSSE},
+ 	{"vglUseExtraMem", (void *)vglUseExtraMem},
+ 	{"vglWaitVblankStart", (void *)vglWaitVblankStart},
++	{"vglSetTexPalette", (void*)vglSetTexPalette}
+ #endif
+ 	// *egl
+ 	{"eglBindAPI", (void *)eglBindAPI},
+@@ -468,10 +469,22 @@ void *vglGetProcAddress(const char *name) {
+ 	const int len = strlen(name);
+ 	char tmpname[len + 1];
+ 	vgl_fast_memcpy(tmpname, name, len + 1);
+-	if (!strcmp(tmpname + len - 3, "EXT") || !strcmp(tmpname + len - 3, "ARB") || !strcmp(tmpname + len - 3, "OES")) {
++	if (!strcmp(tmpname + len - 3, "EXT") 
++	|| !strcmp(tmpname + len - 3, "ARB") 
++	|| !strcmp(tmpname + len - 3, "OES")) {
+ 		tmpname[len - 3] = 0;
+ 	}
+ 
++	// strip NV extension
++	if (!strcmp(tmpname + len - 2, "NV")) {
++		tmpname[len - 2] = 0;
++	}
++
++	// strip QCOM extension
++	if (!strcmp(tmpname + len - 4, "QCOM")) {
++		tmpname[len - 4] = 0;
++	}
++
+ 	// search for stripped name
+ 	for (size_t i = 0; i < vgl_numproc; ++i) {
+ 		if (!strcmp(tmpname, vgl_proctable[i].name)) {
+diff --git forkSrcPrefix/source/textures.c forkDstPrefix/source/textures.c
+index 4dd5bebc3d8e5156cce4f94ba5390edca8400974..fe56c46ecda17bbf5cd68f79e4214e2b94bec0a5 100644
+--- forkSrcPrefix/source/textures.c
++++ forkDstPrefix/source/textures.c
+@@ -613,7 +613,11 @@ static inline __attribute__((always_inline)) void _glTexImage2D_FlatIMPL(texture
+ 		switch (type) {
+ 		case GL_UNSIGNED_BYTE:
+ 			data_bpp = 1;
+-			if (internalFormat == GL_LUMINANCE || internalFormat == GL_SLUMINANCE || internalFormat == GL_SLUMINANCE8)
++			if (internalFormat == GL_LUMINANCE 
++				|| internalFormat == GL_SLUMINANCE
++				|| internalFormat == GL_SLUMINANCE8
++				// Hack for BGDA textures: added this condition to force fast path
++				|| internalFormat == GL_COLOR_INDEX8_EXT)
+ 				fast_store = GL_TRUE;
+ 			else
+ 				read_cb = readL;
+@@ -825,7 +829,8 @@ static inline __attribute__((always_inline)) void _glTexImage2D_FlatIMPL(texture
+ 		break;
+ 	case GL_COLOR_INDEX8_EXT:
+ 		tex->write_cb = writeR; // TODO: This is a hack
+-		tex_format = SCE_GXM_TEXTURE_FORMAT_P8_ABGR;
++		// Hack specific for BGDA texture format
++		tex_format = SCE_GXM_TEXTURE_FORMAT_P8_ARGB;
+ 		break;
+ 	case GL_SLUMINANCE:
+ 	case GL_SLUMINANCE8:
