@@ -13,7 +13,7 @@ project(bgda C CXX)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 # Vita application configuration
-set(VITA_APP_NAME "Balrdur's Gate: Dark Alliance")
+set(VITA_APP_NAME "Baldur's Gate: Dark Alliance")
 set(VITA_TITLEID "BGDA00001")
 set(VITA_VPKNAME "bgda")
 set(VITA_VERSION "01.00")
