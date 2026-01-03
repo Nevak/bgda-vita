@@ -3,6 +3,7 @@
 #include <sys/time.h>
 #include <psp2/kernel/clib.h>
 
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 uint64_t AFN_timeMillis() {
     struct timeval te{};
     gettimeofday(&te, nullptr);

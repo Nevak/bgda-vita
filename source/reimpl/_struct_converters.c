@@ -1,37 +1,69 @@
+/*
+ * Copyright (C) 2022-2024 Volodymyr Atamanenko
+ *
+ * This software may be modified and distributed under the terms
+ * of the MIT license. See the LICENSE file for details.
+ */
+
+/**
+ * @file  _struct_converters.c
+ * @brief Converters for `dirent` struct, `stat` struct, and `open()` flags
+ *        that deal with newlib (Vita) and bionic (Android) incompatibilities.
+ *
+ * This file has to be `#include`d in `reimpl/io.c` and not compiled on its own.
+ */
+
 #define SC_INLINE static inline __attribute__((always_inline))
 
-#define MUSL_O_WRONLY         01
-#define MUSL_O_RDWR           02
-#define MUSL_O_CREAT        0100
-#define MUSL_O_EXCL         0200
-#define MUSL_O_TRUNC       01000
-#define MUSL_O_APPEND      02000
-#define MUSL_O_NONBLOCK    04000
+#define BIONIC_O_WRONLY                                          01
+#define BIONIC_O_RDWR                                            02
+#define BIONIC_O_CREAT                                         0100
+#define BIONIC_O_EXCL                                          0200
+#define BIONIC_O_TRUNC                                        01000
+#define BIONIC_O_APPEND                                       02000
+#define BIONIC_O_NONBLOCK                                     04000
+#define BIONIC_O_DIRECTORY                                 00200000
+#define BIONIC__O_TMPFILE                                 020000000
+#define BIONIC_O_TMPFILE   (BIONIC__O_TMPFILE | BIONIC_O_DIRECTORY)
 
-SC_INLINE int oflags_newlib_to_oflags_musl(int flags)
-{
+/**
+ * Convert bionic (Android) `open()` flags to newlib (Vita) flags
+ *
+ * @param[in] flags open() flags created using musl defines
+ *
+ * @return open(flags) recreated using newlib defines
+ */
+SC_INLINE int oflags_bionic_to_newlib(int flags) {
     int out = 0;
-    if (flags & MUSL_O_RDWR)
+    if (flags & BIONIC_O_RDWR)
         out |= O_RDWR;
-    else if (flags & MUSL_O_WRONLY)
+    else if (flags & BIONIC_O_WRONLY)
         out |= O_WRONLY;
     else
         out |= O_RDONLY;
-    if (flags & MUSL_O_NONBLOCK)
+    if (flags & BIONIC_O_NONBLOCK)
         out |= O_NONBLOCK;
-    if (flags & MUSL_O_APPEND)
+    if (flags & BIONIC_O_APPEND)
         out |= O_APPEND;
-    if (flags & MUSL_O_CREAT)
+    if ((flags & BIONIC_O_CREAT) || (flags & BIONIC_O_TMPFILE))
         out |= O_CREAT;
-    if (flags & MUSL_O_TRUNC)
+    if (flags & BIONIC_O_TRUNC)
         out |= O_TRUNC;
-    if (flags & MUSL_O_EXCL)
+    if (flags & BIONIC_O_EXCL)
         out |= O_EXCL;
     return out;
 }
 
-SC_INLINE dirent64_bionic * dirent_newlib_to_dirent_bionic(const struct dirent* dirent_newlib)
-{
+/**
+ * Convert newlib (Vita) `dirent` struct to bionic (Android) format.
+ *
+ * @param[in] dirent_newlib Pointer to a newlib-format dirent struct
+ *
+ * @return Pointer to a bionic-format dirent struct.
+ *         Must be freed by the caller.
+ */
+SC_INLINE
+dirent64_bionic * dirent_newlib_to_bionic(const struct dirent* dirent_newlib) {
     dirent64_bionic * ret = malloc(sizeof(dirent64_bionic));
     strncpy(ret->d_name, dirent_newlib->d_name, sizeof(ret->d_name));
     ret->d_off = 0;
@@ -40,11 +72,13 @@ SC_INLINE dirent64_bionic * dirent_newlib_to_dirent_bionic(const struct dirent* 
     return ret;
 }
 
-SC_INLINE void stat_newlib_to_stat_bionic(const struct stat * src, stat64_bionic * dst)
-{
-    if (!src) return;
-    if (!dst) dst = malloc(sizeof(stat64_bionic));
-
+/**
+ * Convert newlib (Vita) `stat` struct to bionic (Android) format.
+ * @param[in]  src Pointer to a newlib-format stat struct
+ * @param[out] dst Pointer to a bionic-format stat struct
+ */
+SC_INLINE
+void stat_newlib_to_bionic(const struct stat * src, stat64_bionic * dst) {
     dst->st_dev = src->st_dev;
     dst->st_ino = src->st_ino;
     dst->st_mode = src->st_mode;

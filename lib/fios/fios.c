@@ -9,9 +9,12 @@
 #include <malloc.h>
 
 #include "fios.h"
+#include "utils/utils.h"
+#include <psp2/kernel/clib.h>
 
 #define MAX_PATH_LENGTH 256
 #define RAMCACHEBLOCKSIZE (128 * 1024)
+#define PSARCCACHEBLOCKSIZE (192 * 1024)
 #define RAMCACHEBLOCKNUM 64
 
 static int64_t g_OpStorage[SCE_FIOS_OP_STORAGE_SIZE(64, MAX_PATH_LENGTH) / sizeof(int64_t) + 1];
@@ -20,7 +23,12 @@ static int64_t g_FHStorage[SCE_FIOS_FH_STORAGE_SIZE(1024, MAX_PATH_LENGTH) / siz
 static int64_t g_DHStorage[SCE_FIOS_DH_STORAGE_SIZE(32, MAX_PATH_LENGTH) / sizeof(int64_t) + 1];
 
 static SceFiosRamCacheContext g_RamCacheContext = SCE_FIOS_RAM_CACHE_CONTEXT_INITIALIZER;
+static SceFiosPsarcDearchiverContext g_PsarcContext;
 static char *g_RamCacheWorkBuffer;
+static int32_t g_ResHandle;
+static SceFiosBuffer g_MountBuffer;
+
+uint8_t psarc_exists = 0;
 
 int fios_init(void) {
     int res;
@@ -47,6 +55,29 @@ int fios_init(void) {
     res = sceFiosInitialize(&params);
     if (res < 0)
         return res;
+    
+    psarc_exists = file_exists("ux0:data/bgda/assets/res.psarc");
+    //psarc_exists = 0;
+	if (psarc_exists) {
+		sceClibMemset(&g_PsarcContext, 0, sizeof(SceFiosPsarcDearchiverContext));
+		g_PsarcContext.size = sizeof(SceFiosPsarcDearchiverContext);
+		g_PsarcContext.pWorkBuffer = memalign(64, PSARCCACHEBLOCKSIZE);
+		g_PsarcContext.workBufferSize = PSARCCACHEBLOCKSIZE;
+		res = sceFiosIOFilterAdd(0, sceFiosIOFilterPsarcDearchiver, &g_PsarcContext);
+		if (res < 0)
+			return res;
+	
+		res = sceFiosArchiveGetMountBufferSizeSync(NULL, "ux0:data/bgda/assets/res.psarc", NULL);
+		if (res < 0)
+			return res;
+
+		g_MountBuffer.length = res;
+		g_MountBuffer.pPtr = malloc(res);
+	
+		res = sceFiosArchiveMountSync(NULL, &g_ResHandle, "ux0:data/bgda/assets/res.psarc", "/", g_MountBuffer, NULL);
+		if (res < 0)
+			return res;
+	}
 
     g_RamCacheWorkBuffer = memalign(8, RAMCACHEBLOCKNUM * RAMCACHEBLOCKSIZE);
     if (!g_RamCacheWorkBuffer)

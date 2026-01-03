@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <sys/unistd.h>
+#include <atomic>
 #include "AFakeNative/AFakeNative_Utils.h"
 #include "AFakeNative/PseudoEpoll.h"
 
@@ -20,22 +21,46 @@ typedef struct eventfd_internal {
 } eventfd_internal;
 
 static eventfd_internal eventfd_pool[EVENTFD_MAX];
-SceKernelLwMutexWork eventfd_pool_mutex = {{0xFEE1DEAD}};
+static SceKernelLwMutexWork eventfd_pool_mutex;
+static std::atomic<int> eventfd_pool_mutex_inited(0);
 
-int pseudo_eventfd(unsigned int initval, int flags) {
-    if (eventfd_pool_mutex.data[0] == 0xFEE1DEAD) {
-        sceKernelCreateLwMutex(&eventfd_pool_mutex, "eventfd_pool_mutex", 0, 0, NULL);
-        sceKernelLockLwMutex(&eventfd_pool_mutex, 1, NULL);
+// Thread-safe lazy initialization
+static inline void eventfd_mutex_init_once(void) {
+    int expected = 0;
+    if (eventfd_pool_mutex_inited.compare_exchange_strong(expected, 1)) {
+        // We won the race, initialize the mutex
+        int ret = sceKernelCreateLwMutex(&eventfd_pool_mutex, "eventfd_pool_mutex", 0, 0, NULL);
+        if (ret < 0) {
+            printf("Error: failed to create eventfd_pool mutex: 0x%x\n", ret);
+            eventfd_pool_mutex_inited.store(0);
+            return;
+        }
 
+        // Initialize the pool
         for (int i = 0; i < EVENTFD_MAX; ++i) {
             eventfd_pool[i].fd = -1;
             eventfd_pool[i].value = 0;
             eventfd_pool[i].flags = 0;
             eventfd_pool[i].mutex = (SceKernelLwMutexWork *) malloc(sizeof(SceKernelLwMutexWork));
         }
+
+        eventfd_pool_mutex_inited.store(2); // Mark as fully initialized
     } else {
-        sceKernelLockLwMutex(&eventfd_pool_mutex, 1, NULL);
+        // Another thread is initializing, wait for it to complete
+        while (eventfd_pool_mutex_inited.load() == 1) {
+            sceKernelDelayThread(100); // Wait 0.1ms
+        }
     }
+}
+
+int pseudo_eventfd(unsigned int initval, int flags) {
+    eventfd_mutex_init_once();
+
+    if (eventfd_pool_mutex_inited.load() != 2) {
+        return -1; // Initialization failed
+    }
+
+    sceKernelLockLwMutex(&eventfd_pool_mutex, 1, NULL);
 
     eventfd_internal * fd = nullptr;
     for (int i = 0; i < EVENTFD_MAX; ++i) {
@@ -64,6 +89,12 @@ int pseudo_eventfd(unsigned int initval, int flags) {
 }
 
 bool is_eventfd(int fd) {
+    eventfd_mutex_init_once();
+
+    if (eventfd_pool_mutex_inited.load() != 2) {
+        return false; // Can't determine if not initialized
+    }
+
     eventfd_internal * p = nullptr;
 
     sceKernelLockLwMutex(&eventfd_pool_mutex, 1, NULL);
@@ -81,7 +112,7 @@ bool is_eventfd(int fd) {
 }
 
 ssize_t pseudo_eventfd_read(int fd, void *buf, size_t count) {
-    if (eventfd_pool_mutex.data[0] == 0xFEE1DEAD) {
+    if (eventfd_pool_mutex_inited.load() != 2) {
         return -1;
     }
     sceKernelLockLwMutex(&eventfd_pool_mutex, 1, NULL);
@@ -147,7 +178,7 @@ ssize_t pseudo_eventfd_read(int fd, void *buf, size_t count) {
 }
 
 ssize_t pseudo_eventfd_write(int fd, const void *buf, size_t count) {
-    if (eventfd_pool_mutex.data[0] == 0xFEE1DEAD) {
+    if (eventfd_pool_mutex_inited.load() != 2) {
         return -1;
     }
     sceKernelLockLwMutex(&eventfd_pool_mutex, 1, NULL);
@@ -205,7 +236,7 @@ ssize_t pseudo_eventfd_write(int fd, const void *buf, size_t count) {
 }
 
 void pseudo_eventfd_status(int fd, bool * is_readable, bool * is_writeable) {
-    if (eventfd_pool_mutex.data[0] == 0xFEE1DEAD) {
+    if (eventfd_pool_mutex_inited.load() != 2) {
         return;
     }
 

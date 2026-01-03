@@ -1,7 +1,7 @@
 /*
  * main.c
  *
- * ARMv7 Shared Libraries loader. Soulcalibur Edition
+ * ARMv7 Shared Libraries loader. Baldur's Gate Dark Alliance Edition
  *
  * Copyright (C) 2021 Andy Nguyen
  * Copyright (C) 2021-2023 Rinnegatamante
@@ -22,15 +22,73 @@
 #include <so_util/so_util.h>
 
 #include <AFakeNative/AFakeNative.h>
+#include <AFakeNative/utils/controls.h>
 #include <vitasdk.h>
 #include <stdio.h>
+#include <string.h>
 #include <psp2/gxm.h>
+#ifdef PROFILER_ENABLED
+#include "utils/prof.h"
+#include <profilerino.h>
+#endif
 
-int _newlib_heap_size_user = 256 * 1024 * 1024;
+#include "utils/vorbis_patch.h"
+
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+void *__wrap_calloc(uint32_t nmember, uint32_t size) { return vglCalloc(nmember, size); }
+
+int total_malloc_calls_in_frame = 0;
+int total_free_calls_in_frame = 0;
+uint64_t total_allocated_memory_in_frame = 0;
+uint64_t total_time_taken_by_allocs_in_frame_us = 0;
+
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+void __wrap_free(void *addr) { 
+	total_free_calls_in_frame++;
+	vglFree(addr); 
+};
+
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+void *__wrap_malloc(uint32_t size) { 
+
+	uint64_t time_start = sceKernelGetProcessTimeWide();
+	//Profiler_BeginSample("malloc");
+	void * r = vglMalloc(size); 
+	uint64_t time_end = sceKernelGetProcessTimeWide();
+
+	total_time_taken_by_allocs_in_frame_us += (time_end - time_start);
+	total_allocated_memory_in_frame += size;
+	total_malloc_calls_in_frame++;
+
+	// check if successful
+	if (r == NULL) {
+		logv_error("malloc(%d) failed", size);
+	}
+
+	//Profiler_EndSample();
+	return r;
+};
+
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+void *__wrap_memalign(uint32_t alignment, uint32_t size) { return vglMemalign(alignment, size); };
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+void *__wrap_realloc(void *ptr, uint32_t size) 
+{ 
+	logv_debug("realloc(%p, %d)", ptr, size);
+	return vglRealloc(ptr, size); 
+};
+
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+void *__wrap_memcpy (void *dst, const void *src, size_t num) { return sceClibMemcpy(dst, src, num); };
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+void *__wrap_memset (void *ptr, int value, size_t num) { return sceClibMemset(ptr, value, num); };
+
+
+int _newlib_heap_size_user = 330 * 1024 * 1024;
 
 #ifdef USE_SCELIBC_IO
-int sceLibcHeapSize = 24 * 1024 * 1024;
-#endif
+int sceLibcHeapSize = 1 * 1024 * 1024;
+#endif 
 
 so_module so_mod;
 so_module so_mod_libcpufeatues;
@@ -38,7 +96,83 @@ so_module so_mod_jbejni;
 so_module so_mod_libcpp;
 so_module so_mod_libxmv;
 
+SceCtrlData pad_previous;
+
+#define DEFAULT_RAZOR_CAPTURE_PATH "ur0:data/librazorcapture_es4.suprx"
+
+int log_allocs = 0;
+int log_profiler = 0;
+int profiling_idx = 0;
+
+bool enable_cheats = 0;
+
+float g_uvFactor = 1.0f;
+float g_uvFactorY = 1.0f;
+int input_thread_fn(SceSize args, void *argp) {
+	//log_error("Polling input");
+
+	while (1) {
+		// poll input
+		//log_error("Polling input");
+		sceKernelDelayThread(1000);
+		SceCtrlData pad;
+		sceCtrlPeekBufferPositiveExt2(0, &pad, 1);
+	
+		if (pad.buttons & SCE_CTRL_L1 
+			&& pad.buttons & SCE_CTRL_R1 
+			&& pad.buttons & SCE_CTRL_LEFT 
+			&& pad.buttons & SCE_CTRL_TRIANGLE) {
+			enable_cheats = true;
+		}
+		else {
+			enable_cheats = false;
+		}
+
+
+
+		// if (pad.buttons & SCE_CTRL_R1 && !(pad_previous.buttons & SCE_CTRL_R1)) {
+		// 	log_profiler = !log_profiler;
+		// 	if (log_profiler) {
+		// 		sceClibPrintf("Starting profiling\n");
+		// 		//gprof_start();
+		// 	} else {
+		// 		sceClibPrintf("Stopping profiling\n");
+		// 		//char fname[256];
+		// 		//sprintf(fname, "ux0:data/prof_%d.out", profiling_idx++);
+		// 		//gprof_stop(fname, 1);
+		// 	}
+		// }
+		// if (pad.buttons & SCE_CTRL_R1) {
+		// 	g_uvFactor -= 0.001f;
+		// 	logv_error("g_uvFactor: %f\n", g_uvFactor);
+		// }
+
+		// if (pad.buttons & SCE_CTRL_LEFT ) {
+		// 	g_uvFactorY += 0.001f;
+		// 	logv_error("g_uvFactorY: %f\n", g_uvFactor);
+		// }
+		// if (pad.buttons & SCE_CTRL_RIGHT) {
+		// 	g_uvFactorY -= 0.001f;
+		// 	logv_error("g_uvFactorY: %f\n", g_uvFactor);
+		// }
+		// if (pad.buttons & SCE_CTRL_CIRCLE) {
+		// 	g_uvFactor = 1.0f;
+		// 	g_uvFactorY = 1.0f;
+		// }
+		pad_previous = pad;
+	}
+
+	return 0;
+}
+
+
 int main() {
+	//gprof_stop("ux0:/data/gmon.out", 0);
+#ifdef PROFILER_ENABLED
+	log_error("profilerino_init!");
+	profilerino_init();
+#endif
+
 	SceAppUtilInitParam appUtilParam;
 	SceAppUtilBootParam appUtilBootParam;
 	memset(&appUtilParam, 0, sizeof(SceAppUtilInitParam));
@@ -48,12 +182,14 @@ int main() {
 	soloader_init_all();
 
 
+
     int (*JNI_OnLoad)(JavaVM* jvm) = (void*)so_symbol(&so_mod_jbejni, "JNI_OnLoad");
 
 	int (*ANativeActivity_onCreate)(ANativeActivity *activity, void *savedState,
 		size_t savedStateSize) = (void *) so_symbol(&so_mod_jbejni, "ANativeActivity_onCreate");
 
 	ANativeActivity *activity = ANativeActivity_create();
+	init_jni_fields(activity->env);
 
 	log_info("Created NativeActivity object");
 
@@ -76,6 +212,8 @@ int main() {
 	activity->callbacks->onWindowFocusChanged(activity, 1);
 	log_info("onWindowFocusChanged() passed");
 
+
+	
 	void (*inputDeviceAdded)(JNIEnv *env, jclass clazz, jint device_id, jint device_type) = (void *) so_symbol(&so_mod_jbejni, "Java_com_jbe_Activity_inputDeviceAdded");
 	if (inputDeviceAdded == NULL)
 	{
@@ -83,17 +221,15 @@ int main() {
 	}
 	else
 	{
-		log_info("inputDeviceAdded is not NULL");
-
 		/*
 		enum Device {
 			NONE,           // 0
 			SIXAXIS,        // 1
-			XB360,        // 2      
+			XB360,          // 2
 			XB360_GENERIC,  // 3
 			WII,            // 4
 			NYKO_PLAYPAD,       // 5
-			NYKO_PLAYPAD_PRO,   // 6      
+			NYKO_PLAYPAD_PRO,   // 6
 			OUYA,               // 7
 			MOGA_PRO_HID,       // 8
 			BROADCOM_HID,       // 9
@@ -104,145 +240,28 @@ int main() {
 			NEXUS_PLAYER,       // 14
 			PS4,                // 15
 			FORGE_SERVAL,       // 16
-			UNKNOWN,        // 17
-			COUNT           // 18
-    	}
+			UNKNOWN,            // 17
+			COUNT               // 18
+		}
 		*/
 
-		// The second parameter is the device type corresponding to the enum above as found in the decompiled java code
-		// You can try with other values but I couldn't find one that shows the proper PS button icons or has bindings that make sense. Still experimenting
+		int num_detected = detectControllers();
+		int res = sceCtrlIsMultiControllerSupported();
+		logv_error("sceCtrlIsMultiControllerSupported = %d", res);
+		logv_error("Detected %d controller(s)", num_detected);
 
-		inputDeviceAdded(&jni, (void *)0x42424242, 0, 2);
+		for (int i = 0; i < num_detected; i++) {
+			inputDeviceAdded(&jni, (void *)0x42424242, i, 2);
+			logv_error("Registered controller %d", i);
+		}
 	}
 
-	log_info("Main  thread shutting down");
+	// poll input in another thread
+	SceUID input_thread = sceKernelCreateThread("input_thread", &input_thread_fn, 0x10000100, 0x10000, 0, 0, NULL);
+	 sceKernelStartThread(input_thread, 0, NULL);
 
 
-	//JBE_android_main_sub(NULL);
+	log_info("Main thread shutting down");
 	
-
-	// /* JBEMain(int, char const**) */
-	// int (* JBEMain)(int, char const**) = (void *) so_symbol(&so_mod, "JBEMain");
-	
-	// /*void JBE_System_Printf(char *param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4)*/
-	// void (* JBE_System_Printf)(char *, int, int, int) = (void *) so_symbol(&so_mod, "JBE_System_Printf");
-
-	// //JBE_System_Printf("Hello from main.c\n", 0, 0, 0);
-
-
-	//JBEMain(0, NULL);
-	
-
-	// int (*ANativeActivity_onCreate)(ANativeActivity *activity, void *savedState, size_t savedStateSize) = (void *) so_symbol(&so_mod, "ANativeActivity_onCreate");
-	// ANativeActivity_onCreate(activity, NULL, 0);
-	
-	// log_info("ANativeActivity_onCreate() passed");
-	// void JBE_android_main_sub(android_app *param_1)
-	// void (* JBE_android_main_sub)(void *) = (void *) so_symbol(&so_mod, "JBE_android_main_sub");
-	// if (JBE_android_main_sub == NULL)
-	// {
-	// 	log_error("JBE_android_main_sub is NULL");
-	// }
-	// else
-	// {
-	//   	log_info("JBE_android_main_sub is not NULL");
-	//   	JBE_android_main_sub(activity);
-	// }
-
-	// log_info("JBE_android_main_sub() passed");
-
-
-
-	// log_info("JBEMain333() passed");
-
-	// activity->callbacks->onStart(activity);
-	// log_info("onStart() passed");
-
-	// AInputQueue *aInputQueue = AInputQueue_create();
-	// activity->callbacks->onInputQueueCreated(activity, aInputQueue);
-	// log_info("onInputQueueCreated() passed");
-
-	//  ANativeWindow *aNativeWindow = ANativeWindow_create();
-	//  activity->callbacks->onNativeWindowCreated(activity, aNativeWindow);
-	//  log_info("onNativeWindowCreated() passed");
-
-	// activity->callbacks->onWindowFocusChanged(activity, 1);
-	// log_info("onWindowFocusChanged() passed");
-
-	//_ZN3JBE8SystemPF13SetAndroidAppEP11android_app
-	/* JBE::SystemPF::SetAndroidApp(android_app*) */
-
-
-
-
-
-	// void (* JBE_SystemPF_SetAndroidApp)(void *) = (void *) so_symbol(&so_mod, "_ZN3JBE8SystemPF13SetAndroidAppEP11android_app");
-	// if (JBE_SystemPF_SetAndroidApp == NULL)
-	// {
-	// 	log_error("JBE_SystemPF_SetAndroidApp is NULL");
-	// }
-	// else
-	// {
-	// 	log_info("JBE_SystemPF_SetAndroidApp is not NULL");
-	// 	JBE_SystemPF_SetAndroidApp(activity->instance);
-	// }
-
-	// log_info("JBE_SystemPF_SetAndroidApp() passed");
-
-
-	// int (* JBEStartup)(void) = (void *) so_symbol(&so_mod, "_Z10JBEStartupv");
-	// if (JBEStartup == NULL)
-	// {
-	// 	log_error("JBEStartup is NULL");
-	// }
-	// else
-	// {
-	// 	log_info("JBEStartup is not NULL");
-	// 	JBEStartup();
-	// }
-
-	// log_info("JBEStartup() passed");
-
-
-	// // void JBEMain(int param_1,char **param_2)
-	// void (* JBEMain)(int, char **) = (void *) so_symbol(&so_mod, "_Z7JBEMainiPPKc");
-	// if (JBEMain == NULL)
-	// {
-	// 	log_error("JBEMain is NULL");
-	// }
-	// else
-	// {
-	// 	log_info("JBEMain is not NULL");
-	// 	char *argv[] = { "soulcalibur", NULL };
-	// 	JBEMain(1, argv);
-	// }
-
-
-	//_Z11wrappedMainiPPc
-	// void (* wrappedMain)(int, char **) = (void *) so_symbol(&so_mod, "_Z11wrappedMainiPPc");
-	// if (wrappedMain == NULL)
-	// {
-	// 	log_error("wrappedMain is NULL");
-	// }
-	// else
-	// {
-	// 	log_info("wrappedMain is not NULL");
-	// 	char *argv[] = { "soulcalibur", NULL };
-	// 	wrappedMain(1, argv);
-	// }
-
-	// log_info("wrappedMain() passed");
-
-	// log_info("Main thread shutting down");
-/*
-	uint8_t * DAT_0033a95c = (uint8_t *)(so_mod.text_base + 0x0033a95c);
-	uint8_t * DAT_0033a96c = (uint8_t *)(so_mod.text_base + 0x0033a96c);
-	uint8_t * DAT_0033a94c = (uint8_t *)(so_mod.text_base + 0x0033a94c);
-
-	while (true) {
-		sceClibPrintf("flags: DAT_0033a95c:%i(exp 1); DAT_0033a96c:%i(exp 0); DAT_0033a94c:%i(exp 1)\n", *DAT_0033a95c, *DAT_0033a96c, *DAT_0033a94c);
-		sceKernelDelayThread(500000);
-	}*/
-
 	sceKernelExitDeleteThread(0);
 }

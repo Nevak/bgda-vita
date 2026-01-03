@@ -1,3 +1,4 @@
+#include <falso_jni/FalsoJNI.h>
 #include <falso_jni/FalsoJNI_Impl.h>
 #include <falso_jni/FalsoJNI_Logger.h>
 #include <string.h>
@@ -65,6 +66,7 @@ NameToMethodID nameToMethodId[] = {
 	{ 49, "isPVRTraceActive", METHOD_TYPE_BOOLEAN },
 	{ 50, "initCloud", METHOD_TYPE_OBJECT },
 	{ 51, "getISO3Language", METHOD_TYPE_OBJECT },
+	{ 52, "initSocial", METHOD_TYPE_OBJECT },
 };
 
 void stringCatcher(jmethodID id, va_list args) {
@@ -94,7 +96,7 @@ jint getStore(jmethodID id, va_list args) {
 }
 
 jint getAssetPackCount(jmethodID id, va_list args) {
-	return 1;
+	return 2;
 }
 
 jint getOrientation(jmethodID id, va_list args) {
@@ -173,7 +175,7 @@ jboolean isPhone(jmethodID id, va_list args) {
 }
 
 jboolean isAAB(jmethodID id, va_list args) {
-	return JNI_FALSE;
+	return JNI_TRUE;
 }
 
 jboolean isPVRTraceActive(jmethodID id, va_list args) {
@@ -189,38 +191,23 @@ jboolean isJoyStick(jmethodID id, va_list args) {
 }
 
 jobject getExpansionPath(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
-    char *arr = ret->array;
-	strcpy(arr, "ux0:data/bgda");
-    return (jobject)ret;
+	return jni->NewStringUTF(&jni, "ux0:data/bgda");
 }
 
 jobject getVersionName(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(4, FIELD_TYPE_BYTE);
-    char *arr = ret->array;
-	strcpy(arr, "1.0");
-    return (jobject)ret;
+	return jni->NewStringUTF(&jni, "1.0");
 }
 
 jobject getDataPath(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
-    char *arr = ret->array;
-	strcpy(arr, "ux0:data/bgda");
-    return (jobject)ret;
+	return jni->NewStringUTF(&jni, "ux0:data/bgda");
 }
 
 jobject getPubData(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("Port by Rinnegatamante") + 1, FIELD_TYPE_BYTE);
-    char *arr = ret->array;
-	strcpy(arr, "Port by Rinnegatamante");
-    return (jobject)ret;
+	return jni->NewStringUTF(&jni, "Port by Nevak");
 }
 
 jobject getPubLink(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("https://vitadb.rinnegatamante.it") + 1, FIELD_TYPE_BYTE);
-    char *arr = ret->array;
-	strcpy(arr, "https://vitadb.rinnegatamante.it");
-    return (jobject)ret;
+	return jni->NewStringUTF(&jni, "https://vitadb.rinnegatamante.it");
 }
 
 jobject getLocale(jmethodID id, va_list args) {
@@ -247,97 +234,82 @@ jobject getLocale(jmethodID id, va_list args) {
 		break;
 	}
 	
-    return (jobject)ret;
+    //return (jobject)ret;
+	return jni->NewStringUTF(&jni, arr);
 }
 
 jobject getISO3Language(jmethodID id, va_list args) {
 	JavaDynArray * ret = jda_alloc(3, FIELD_TYPE_BYTE);
 	char *arr = ret->array;
 	
+	
 	int res;
 	sceAppUtilSystemParamGetInt(SCE_SYSTEM_PARAM_ID_LANG, &res);
+	
+	printf("getISO3Language(%d)\n", res);
 	switch (res) {
-	case SCE_SYSTEM_PARAM_LANG_JAPANESE:
-		strcpy(arr, "jpn");
-		break;
-	case SCE_SYSTEM_PARAM_LANG_SPANISH:
-		strcpy(arr, "spa");
-		break;
-	case SCE_SYSTEM_PARAM_LANG_FRENCH:
-		strcpy(arr, "fra");
-		break;
-	case SCE_SYSTEM_PARAM_LANG_GERMAN:
-		strcpy(arr, "deu");
-		break;
-	default:
-		strcpy(arr, "eng");
-		break;
+		case SCE_SYSTEM_PARAM_LANG_JAPANESE:
+			strcpy(arr, "jpn");
+			break;
+		case SCE_SYSTEM_PARAM_LANG_SPANISH:
+			strcpy(arr, "spa");
+			break;
+		case SCE_SYSTEM_PARAM_LANG_FRENCH:
+			strcpy(arr, "fra");
+			break;
+		case SCE_SYSTEM_PARAM_LANG_GERMAN:
+			strcpy(arr, "deu");
+			break;
+		default:
+			printf("default\n");
+			strcpy(arr, "eng");
+			break;
 	}
 	
-	return (jobject)ret;
+	printf("getISO3Language() %s\n", arr);
+
+	//return (jobject)arr;
+	return jni->NewStringUTF(&jni, arr);
 }
 
 jobject getSubLibPath(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
-	char *arr = ret->array;
-	strcpy(arr, "ux0:data/bgda");
-	return (jobject)ret;
+    return jni->NewStringUTF(&jni, "ux0:data/bgda");
 }
 
 jobject getCacheDir(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
-	char *arr = ret->array;
-	strcpy(arr, "ux0:data/bgda");
-	return (jobject)ret;
+	// JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
+	// char *arr = ret->array;
+	// strcpy(arr, "ux0:data/bgda");
+	// return (jobject)ret;
+	return jni->NewStringUTF(&jni, "ux0:data/bgda");
 }
 
 jobject getAbsolutePath(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
-	char *arr = ret->array;
-	strcpy(arr, "ux0:data/bgda");
-	return (jobject)ret;
+	return jni->NewStringUTF(&jni, "ux0:data/bgda");
 }
 
 jobject getExternalCacheDir(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
-	char *arr = ret->array;
-	strcpy(arr, "ux0:data/bgda");
-	return (jobject)ret;
+	return jni->NewStringUTF(&jni, "ux0:data/bgda");
 }
 
 jobject mountAPKExpansion(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
-	char *arr = ret->array;
-	strcpy(arr, "ux0:data/bgda");
-	return (jobject)ret;
+	return jni->NewStringUTF(&jni, "ux0:data/bgda");
 }
 
 jobject getAPKExpansionFileName(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("bgda") + 1, FIELD_TYPE_BYTE);
-	char *arr = ret->array;
-	strcpy(arr, "bgda");
-	return (jobject)ret;
+	return jni->NewStringUTF(&jni, "bgda");
 }
 
 jobject mountAPKPatch(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
-	char *arr = ret->array;
-	strcpy(arr, "ux0:data/bgda");
-	return (jobject)ret;
+	return jni->NewStringUTF(&jni, "ux0:data/bgda");
 }
 
 jobject getAPKPatchFileName(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("bgda") + 1, FIELD_TYPE_BYTE);
-	char *arr = ret->array;
-	strcpy(arr, "bgda");
-	return (jobject)ret;
+	return jni->NewStringUTF(&jni, "bgda");
 }
 
 jobject getAssetPackPath(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
-	char *arr = ret->array;
-	strcpy(arr, "ux0:data/bgda");
-	return (jobject)ret;
+	return jni->NewStringUTF(&jni, "ux0:data/bgda");
 }
 
 jobject loadClass(jmethodID id, va_list args) {
@@ -352,10 +324,7 @@ jobject loadClass(jmethodID id, va_list args) {
 }
 
 jobject getFilesDir(jmethodID id, va_list args) {
-	JavaDynArray * ret = jda_alloc(strlen("ux0:data/bgda") + 1, FIELD_TYPE_BYTE);
-	char *arr = ret->array;
-	strcpy(arr, "ux0:data/bgda");
-	return (jobject)ret;
+	return jni->NewStringUTF(&jni, "ux0:data/bgda");
 }
 
 
@@ -390,6 +359,11 @@ jobject initCloud(jmethodID id, va_list args) {
     // Just ensure it's not NULL and won't break if the code calls methods on it.
     
     return NULL;
+}
+
+jobject initSocial(jmethodID id, va_list args) {
+	fjni_log_err("initSocial CALLED");
+	return NULL;
 }
 
 MethodsBoolean methodsBoolean[] = {
@@ -447,6 +421,7 @@ MethodsObject methodsObject[] = {
 	{ 47, getAbsolutePath },
 	{ 50, initCloud },
 	{ 51, getISO3Language },
+	{ 52, initSocial },
 };
 
 MethodsVoid methodsVoid[] = {
@@ -471,9 +446,34 @@ MethodsVoid methodsVoid[] = {
 // https://developer.android.com/reference/android/content/Context.html#WINDOW_SERVICE
 char WINDOW_SERVICE[] = "window";
 
+jstring str_window_service;
+jstring str_release;
+jstring str_device;
+jstring str_model;
+jstring str_cpu_abi;
+
+void init_jni_fields(JNIEnv *env) {
+	str_window_service = (*env)->NewStringUTF(env, WINDOW_SERVICE);
+	str_release = (*env)->NewStringUTF(env, "1.0.7");
+	str_device = (*env)->NewStringUTF(env, "vita");
+	str_model = (*env)->NewStringUTF(env, "PlayStation Vita");
+	str_cpu_abi = (*env)->NewStringUTF(env, "armeabi-v7a");
+	
+	// Populate the fieldsObject array after strings are created
+	fieldsObject[0].value = str_window_service;
+	fieldsObject[1].value = str_release;
+	fieldsObject[2].value = str_device;
+	fieldsObject[3].value = str_model;
+	fieldsObject[4].value = str_cpu_abi;
+}
+
 NameToFieldID nameToFieldId[] = {
 	{ 0, "WINDOW_SERVICE", FIELD_TYPE_OBJECT }, 
 	{ 1, "SDK_INT", FIELD_TYPE_INT },
+	{ 2, "RELEASE", FIELD_TYPE_OBJECT },
+	{ 3, "DEVICE", FIELD_TYPE_OBJECT },
+	{ 4, "MODEL", FIELD_TYPE_OBJECT },
+	{ 5, "CPU_ABI", FIELD_TYPE_OBJECT },
 };
 
 FieldsBoolean fieldsBoolean[] = {};
@@ -485,9 +485,14 @@ FieldsInt fieldsInt[] = {
 	{ 1, SDK_INT },
 };
 FieldsObject fieldsObject[] = {
-	{ 0, WINDOW_SERVICE },
+	{ 0, NULL },
+	{ 2, NULL }, // RELEASE
+	{ 3, NULL }, // DEVICE
+	{ 4, NULL }, // MODEL
+	{ 5, NULL }, // CPU_ABI
 };
 FieldsLong fieldsLong[] = {};
 FieldsShort fieldsShort[] = {};
+
 
 __FALSOJNI_IMPL_CONTAINER_SIZES

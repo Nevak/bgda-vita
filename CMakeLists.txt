@@ -20,7 +20,8 @@ set(VITA_VERSION "01.00")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
-set(PSVITAIP "192.168.110.16" CACHE STRING "PSVita IP (for FTP access)")
+set(PSVITAIP "192.168.1.17" CACHE STRING "PSVita IP (for FTP access)") #China
+#set(PSVITAIP "192.168.110.38" CACHE STRING "PSVita IP (for FTP access)") #China devkit
 set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
 # Game-specific definitions
@@ -52,13 +53,25 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   add_definitions(-DDEBUG_SOLOADER)
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q,--allow-multiple-definition -O0 -fno-inline -g -ffast-math -mfloat-abi=softfp -Wno-deprecated")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -O0 -fno-inline -g")
+# Option to enable profiler instrumentation
+option(RAZOR_PROFILER_ENABLED "Enable function instrumentation for profiling" OFF)
+
+# Base compiler flags without instrumentation
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wl,-q -Wl,--allow-multiple-definition -O3 -ffast-math -mfloat-abi=softfp -Wno-deprecated -mfpu=neon -march=armv7-a -mtune=cortex-a9 -ftree-vectorize -fsingle-precision-constant -fno-omit-frame-pointer -save-temps")
+
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++20 -Wno-write-strings -Wno-psabi -Wl,-q -O3 -fno-omit-frame-pointer")
+
+# Add instrumentation flags only if profiler is enabled
+if(RAZOR_PROFILER_ENABLED)
+  #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -finstrument-functions -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
+  #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -finstrument-functions -finstrument-functions-exclude-file-list=third_party/**,allocators/** -finstrument-functions-exclude-function-list=__cyg_profile_func_enter,__cyg_profile_func_exit")
+  add_definitions(-DPROFILER_ENABLED)
+endif()
 
 add_executable(${CMAKE_PROJECT_NAME}
 			   source/main.c
 			   source/dynlib.c
-			   source/dll_psp2.c
+			   #source/dll_psp2.c
 			   source/falso_jni_impl.c
 			   source/patch.c
 			   source/reimpl/ctype_patch.c
@@ -71,16 +84,22 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   source/reimpl/mem.c
 			   source/reimpl/pthr.c
 			   source/reimpl/sys.c
+			   #source/utils/ogg_patch.c
+			   source/utils/vorbis_patch.c
+			   #source/utils/ffmpeg_patch.c
+			   source/utils/prof.c
 			   source/utils/dialog.c
 			   source/utils/glutil.c
 			   source/utils/init.c
 			   source/utils/logger.c
 			   source/utils/settings.c
 			   source/utils/utils.c
-			   source/utils/trophies.c
+			   #source/remap_section.c
+			   #source/utils/trophies.c
 			   lib/falso_jni/FalsoJNI.c
 			   lib/falso_jni/FalsoJNI_ImplBridge.c
 			   lib/falso_jni/FalsoJNI_Logger.c
+			   lib/falso_jni/converter.c
 			   lib/AFakeNative/polling/pseudo_eventfd.cpp
 			   lib/AFakeNative/polling/pseudo_pipe.cpp
 			   lib/AFakeNative/PseudoEpoll.cpp
@@ -114,14 +133,14 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 target_link_libraries(${CMAKE_PROJECT_NAME}
 					  -Wl,--whole-archive pthread -Wl,--no-whole-archive
 					  stdc++
-					  OpenSLES
+					  SceLibKernel_stub
+					  #sndfile
+                      #vorbis
+                      #vorbisfile
+					  #ogg
+					  #FLAC
+					  #vorbisidec
 					  openal
-					  sndfile
-					  vorbisfile
-					  vorbis
-					  ogg
-					  vorbisenc
-					  FLAC
 					  vitaGL
 					  vitashark
 					  SceShaccCgExt
@@ -134,14 +153,12 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  kubridge_stub
 					  SceHid_stub
 					  SceTouch_stub
-					  SceMotion_stub
 					  SceAppMgr_stub
 					  SceAppUtil_stub
 					  SceAudio_stub
 					  SceAudioIn_stub
 					  SceCommonDialog_stub
 					  SceSysmodule_stub
-					  SceNpTrophy_stub
 					  ${CMAKE_BINARY_DIR}/lib/libc_bridge/stubs/libSceLibcBridge_stub.a
 					  SceDisplay_stub
 					  SceKernelDmacMgr_stub
@@ -153,7 +170,16 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  SceVshBridge_stub
 					  )
 
-vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR)
+if(RAZOR_PROFILER_ENABLED)
+target_link_libraries(${CMAKE_PROJECT_NAME}
+	profilerino
+	ScePerf_stub
+	SceRazorHud_stub
+	SceRazorCapture_stub
+)
+endif()
+
+vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR UNCOMPRESSED GEN_EXPORTS exports.txt)
 vita_create_vpk(${VITA_VPKNAME}.vpk ${VITA_TITLEID} eboot.bin
 				VERSION ${VITA_VERSION}
 				NAME ${VITA_APP_NAME}
@@ -174,6 +200,9 @@ add_custom_target(send
 				  COMMAND echo destroy | nc ${PSVITAIP} 1338
 				  COMMAND echo destroy | nc ${PSVITAIP} 1338
 				  COMMAND curl -T eboot.bin ftp://${PSVITAIP}:1337/ux0:/app/${VITA_TITLEID}/
+				  COMMAND nm --without-symbol-versions --demangle bgda > sym.txt
+				  COMMAND echo "nm output saved to sym.txt"
+				  COMMAND curl -T sym.txt ftp://${PSVITAIP}:1337/ux0:/app/${VITA_TITLEID}/
 				  COMMAND echo launch ${VITA_TITLEID} | nc ${PSVITAIP} 1338
 				  DEPENDS ${VITA_VPKNAME}.vpk-vpk
 				  )
@@ -187,7 +216,12 @@ add_custom_target(send_kvdb
 
 add_custom_target(dump
 				  COMMAND ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump.sh ${PSVITAIP}
-				  COMMAND python ${PARSECOREPATH} /vita-dev/soulcalibur_vita/build/coredump /vita-dev/soulcalibur_vita/build/bgda -s 24
+				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt --so ${CMAKE_SOURCE_DIR}/original/libdarkalliance.so --load-addr 0x98400000 ${CMAKE_BINARY_DIR}/coredump ${CMAKE_BINARY_DIR}/bgda -s 128
+				  )
+
+add_custom_target(dump_local
+				  COMMAND bash ${CMAKE_SOURCE_DIR}/extras/scripts/get_dump_local.sh
+				  COMMAND python ${PARSECOREPATH} --sym ${CMAKE_BINARY_DIR}/sym.txt --so ${CMAKE_SOURCE_DIR}/original/libdarkalliance.so --load-addr 0x98400000 ${CMAKE_BINARY_DIR}/coredump ${CMAKE_BINARY_DIR}/bgda -s 128
 				  )
 
 add_custom_target(reboot

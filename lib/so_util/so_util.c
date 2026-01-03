@@ -14,7 +14,9 @@
 #include <string.h>
 
 #include "utils/dialog.h"
-#include "so_util.h"
+#include "utils/logger.h"
+
+#include "so_util/so_util.h"
 
 #ifndef SCE_KERNEL_MEMBLOCK_TYPE_USER_RX
 #define SCE_KERNEL_MEMBLOCK_TYPE_USER_RX                 (0x0C20D050)
@@ -60,7 +62,6 @@ static so_module *head = NULL, *tail = NULL;
 
 so_hook hook_thumb(uintptr_t addr, uintptr_t dst) {
     so_hook h;
-    printf("THUMB HOOK\n");
     if (addr == 0)
         return h;
     h.thumb_addr = addr;
@@ -69,7 +70,6 @@ so_hook hook_thumb(uintptr_t addr, uintptr_t dst) {
         uint16_t nop = 0xbf00;
         kuKernelCpuUnrestrictedMemcpy((void *)addr, &nop, sizeof(nop));
         addr += 2;
-        printf("THUMB UNALIGNED\n");
     }
 
     h.addr = addr;
@@ -83,7 +83,6 @@ so_hook hook_thumb(uintptr_t addr, uintptr_t dst) {
 
 so_hook hook_arm(uintptr_t addr, uintptr_t dst) {
     so_hook h;
-    printf("ARM HOOK\n");
     if (addr == 0)
         return h;
     uint32_t hook[2];
@@ -114,12 +113,12 @@ void so_flush_caches(so_module *mod) {
 }
 
 int _so_load(so_module *mod, SceUID so_blockid, void *so_data, uintptr_t load_addr) {
-    printf("Loading module\n");
+    //log_error("Loading module\n");
     int res = 0;
     uintptr_t data_addr = 0;
 
     if (memcmp(so_data, ELFMAG, SELFMAG) != 0) {
-        printf("Invalid ELF magic\n");
+        log_error("Invalid ELF magic\n");
         res = -1;
         goto err_free_so;
     }
@@ -147,7 +146,7 @@ int _so_load(so_module *mod, SceUID so_blockid, void *so_data, uintptr_t load_ad
                 res = mod->patch_blockid = kuKernelAllocMemBlock("rx_block", SCE_KERNEL_MEMBLOCK_TYPE_USER_RX, mod->patch_size, &opt);
                 if (res < 0)
                 {
-                    printf("kuKernelAllocMemBlock failed: 0x%08X\n", res);
+                    logv_error("kuKernelAllocMemBlock failed: 0x%08X\n", res);
                     goto err_free_so;
                 }
 
@@ -162,7 +161,7 @@ int _so_load(so_module *mod, SceUID so_blockid, void *so_data, uintptr_t load_ad
                 res = mod->text_blockid = kuKernelAllocMemBlock("rx_block", SCE_KERNEL_MEMBLOCK_TYPE_USER_RX, prog_size, &opt);
                 if (res < 0)
                 {
-                    printf("kuKernelAllocMemBlock failed: 0x%08X\n", res);
+                    logv_error("kuKernelAllocMemBlock failed: 0x%08X\n", res);
                     goto err_free_so;
                 }
 
@@ -185,13 +184,13 @@ int _so_load(so_module *mod, SceUID so_blockid, void *so_data, uintptr_t load_ad
             } else {
                 if (data_addr == 0)
                 {
-                    printf("Text segment must be loaded before data segment\n");
+                    log_error("Text segment must be loaded before data segment\n");
                     goto err_free_so;
                 }
 
                 if (mod->n_data >= MAX_DATA_SEG)
                 {
-                    printf("Too many data segments\n");
+                    log_error("Too many data segments\n");
                     goto err_free_data;
                 }
 
@@ -205,7 +204,7 @@ int _so_load(so_module *mod, SceUID so_blockid, void *so_data, uintptr_t load_ad
                 res = mod->data_blockid[mod->n_data] = kuKernelAllocMemBlock("rw_block", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, prog_size, &opt);
                 if (res < 0)
                 {
-                    printf("kuKernelAllocMemBlock failed: 0x%08X\n", res);
+                    logv_error("kuKernelAllocMemBlock failed: 0x%08X\n", res);
                     goto err_free_text;
                 }
 
@@ -219,6 +218,7 @@ int _so_load(so_module *mod, SceUID so_blockid, void *so_data, uintptr_t load_ad
                 mod->n_data++;
             }
 
+            //logv_error("Allocating %d bytes\n", prog_size - mod->phdr[i].p_filesz);
             char *zero = malloc(prog_size - mod->phdr[i].p_filesz);
             memset(zero, 0, prog_size - mod->phdr[i].p_filesz);
             kuKernelCpuUnrestrictedMemcpy(prog_data + mod->phdr[i].p_filesz, zero, prog_size - mod->phdr[i].p_filesz);
@@ -287,14 +287,14 @@ int _so_load(so_module *mod, SceUID so_blockid, void *so_data, uintptr_t load_ad
     return 0;
 
     err_free_data:
-    printf(" err_free_data Failed to load .so\n");
+    log_error(" err_free_data Failed to load .so\n");
     for (int i = 0; i < mod->n_data; i++)
         sceKernelFreeMemBlock(mod->data_blockid[i]);
     err_free_text:
-    printf(" err_free_text Failed to load .so\n");
+    log_error(" err_free_text Failed to load .so\n");
     sceKernelFreeMemBlock(mod->text_blockid);
     err_free_so:
-    printf(" err_free_so Failed to load .so\n");
+    log_error(" err_free_so Failed to load .so\n");
     sceKernelFreeMemBlock(so_blockid);
 
     return res;
@@ -320,14 +320,14 @@ int so_file_load(so_module *mod, const char *filename, uintptr_t load_addr) {
     SceUID so_blockid;
     void *so_data;
 
-    printf("[so_file_load] Loading %s\n", filename);
+   // logv_error("[so_file_load] Loading %s\n", filename);
 
     memset(mod, 0, sizeof(so_module));
 
     SceUID fd = sceIoOpen(filename, SCE_O_RDONLY, 0);
     if (fd < 0)
     {
-        printf("[so_file_load] Failed to sceIoOpen %s\n", filename);
+        logv_error("[so_file_load] Failed to sceIoOpen %s\n", filename);
         return fd;
     }
     
@@ -337,7 +337,7 @@ int so_file_load(so_module *mod, const char *filename, uintptr_t load_addr) {
     so_blockid = sceKernelAllocMemBlock("so block", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, (so_size + 0xfff) & ~0xfff, NULL);
     if (so_blockid < 0)
     {
-        printf("[so_file_load] Failed to sceKernelAllocMemBlock\n");
+        log_error("[so_file_load] Failed to sceKernelAllocMemBlock\n");
         return so_blockid;
     }
 
@@ -346,7 +346,7 @@ int so_file_load(so_module *mod, const char *filename, uintptr_t load_addr) {
     sceIoRead(fd, so_data, so_size);
     sceIoClose(fd);
 
-    printf("[so_file_load] Loaded %s\n", filename);
+    //logv_error("[so_file_load] Loaded %s\n", filename);
 
     return _so_load(mod, so_blockid, so_data, load_addr);
 }

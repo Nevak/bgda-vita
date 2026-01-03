@@ -6,6 +6,7 @@
 #include <map>
 #include <sys/unistd.h>
 #include <cstdio>
+#include <atomic>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/kernel/clib.h>
 
@@ -27,26 +28,55 @@ typedef struct _epoll_fd_internal {
 
 static _epoll_fd_internal epoll_fd_pool[EPOLL_FD_MAX];
 static SceKernelLwMutexWork * _epoll_lock = nullptr;
+static std::atomic<int> _epoll_lock_inited(0);
 
-
+// Thread-safe lazy initialization
 void _check_init_lock() {
-    if (_epoll_lock == nullptr) {
+    int expected = 0;
+    if (_epoll_lock_inited.compare_exchange_strong(expected, 1)) {
+        // We won the race, initialize the mutex
         _epoll_lock = (SceKernelLwMutexWork *) malloc(sizeof(SceKernelLwMutexWork));
-        sceKernelCreateLwMutex(_epoll_lock, "epoll_lock", 0, 0, NULL);
+        if (_epoll_lock) {
+            int ret = sceKernelCreateLwMutex(_epoll_lock, "epoll_lock", 0, 0, NULL);
+            if (ret < 0) {
+                printf("Error: failed to create epoll mutex: 0x%x\n", ret);
+                free(_epoll_lock);
+                _epoll_lock = nullptr;
+                _epoll_lock_inited.store(0);
+                return;
+            }
 
-        for (int i = 0; i < EPOLL_FD_MAX; ++i) {
-            epoll_fd_pool[i].fd = -1;
+            for (int i = 0; i < EPOLL_FD_MAX; ++i) {
+                epoll_fd_pool[i].fd = -1;
+            }
+
+            _epoll_lock_inited.store(2); // Mark as fully initialized
+        } else {
+            _epoll_lock_inited.store(0);
+        }
+    } else {
+        // Another thread is initializing, wait for it to complete
+        while (_epoll_lock_inited.load() == 1) {
+            sceKernelDelayThread(100); // Wait 0.1ms
         }
     }
 }
 
-void _lock() {
+// Returns 0 on success, -1 on failure
+int _lock() {
     _check_init_lock();
+    if (_epoll_lock_inited.load() != 2 || !_epoll_lock) {
+        errno = EAGAIN;  // Mutex not ready
+        return -1;
+    }
     sceKernelLockLwMutex(_epoll_lock, 1, NULL);
+    return 0;
 }
 
 void _unlock() {
-    if (_epoll_lock) sceKernelUnlockLwMutex(_epoll_lock, 1);
+    if (_epoll_lock_inited.load() == 2 && _epoll_lock) {
+        sceKernelUnlockLwMutex(_epoll_lock, 1);
+    }
 }
 
 int pseudo_epoll_create(int size) {
@@ -65,7 +95,9 @@ int pseudo_epoll_create1(int flags) {
         return -1;
     }
 
-    _lock();
+    if (_lock() < 0) {
+        return -1;
+    }
 
     _epoll_fd_internal * fd = nullptr;
     for (int i = 0; i < EPOLL_FD_MAX; ++i) {
@@ -127,7 +159,7 @@ int pseudo_epoll_ctl(int epfd, int op, int fd, struct pseudo_epoll_event *event)
         return -1;
     }
 
-    if (op == PSEUDO_EPOLL_CTL_ADD && epoll->interest->contains(fd)) {
+    if (op == PSEUDO_EPOLL_CTL_ADD && epoll->interest->contains(fd)) { 
 #ifdef DEBUG_EPOLL
         ALOGD("pseudo_epoll_ctl(epfd:%i, op:%s, fd:%i): EEXIST: op was EPOLL_CTL_ADD, and the supplied file descriptor fd is already registered with this epoll instance.", epfd, __op_to_str(op), fd);
 #endif
@@ -232,7 +264,9 @@ int pseudo_epoll_wait(int epfd, struct pseudo_epoll_event *events, int maxevents
         return -1;
     }
 
-    _lock();
+    if (_lock() < 0) {
+        return -1;
+    }
 
     _epoll_fd_internal * fd = nullptr;
     for (int i = 0; i < EPOLL_FD_MAX; ++i) {
@@ -305,13 +339,19 @@ int pseudo_epoll_wait(int epfd, struct pseudo_epoll_event *events, int maxevents
 
         _unlock();
         usleep(10000); // give a chance for other threads to add new FDs to pool
-        _lock();
+        if (_lock() < 0) {
+            goto done;
+        }
     }
 
 done:
     _unlock();
     return eventsReported;
 }
+
+// Declare read_delegate to be used from external
+extern "C" ssize_t read_delegate(int fd, void *buf, size_t count);
+
 
 ssize_t pseudo_read(int fd, void *buf, size_t count) {
     if (is_eventfd(fd)) {
@@ -320,7 +360,7 @@ ssize_t pseudo_read(int fd, void *buf, size_t count) {
         return pseudo_pipe_read(fd, buf, count);
     } else {
         // not eventfd or pipe, fallback to normal read
-        return read(fd, buf, count);
+        return read_delegate(fd, buf, count);
     }
 }
 

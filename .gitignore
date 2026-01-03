@@ -4,3 +4,9 @@ build/*
 cmake-build-*/
 lib/libc_bridge/out/
 apk/
+dumps
+audio
+razorcaps
+exports.txt
+/original
+/shaders

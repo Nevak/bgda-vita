@@ -39,11 +39,20 @@ typedef struct {
     int32_t android_button;
 } ButtonMapping;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void controls_init(AInputQueue * queue);
 void * controls_poll(void * arg);
 void pollTouch();
 void pollPad();
 void pollAccel();
 void runSilentStartHelper();
+int detectControllers();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // AFAKENATIVE

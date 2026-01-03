@@ -19,19 +19,24 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <psp2/kernel/threadmgr.h>
-
-#ifdef USE_SCELIBC_IO
+#include <so_util/so_util.h>
+//#ifdef USE_SCELIBC_IO
 #include <libc_bridge/libc_bridge.h>
-#endif
-
+//#endif
 #include "utils/logger.h"
 #include "utils/utils.h"
+#include "utils/existing_files.h"
+
+#include <fios/fios.h>
 
 // Includes the following inline utilities:
 // int oflags_newlib_to_oflags_musl(int flags);
 // dirent64_bionic * dirent_newlib_to_dirent_bionic(struct dirent* dirent_newlib);
 // void stat_newlib_to_stat_bionic(struct stat * src, stat64_bionic * dst);
 #include "_struct_converters.c"
+
+
+extern uint8_t psarc_exists;
 
 FILE *fopen_soloader(char *fname, char *mode) {
     if (strcmp(fname, "/proc/cpuinfo") == 0) {
@@ -46,18 +51,22 @@ FILE *fopen_soloader(char *fname, char *mode) {
         return fopen_soloader("app0:/possible", mode);
     }
 
-    #ifdef USE_SCELIBC_IO
-        FILE* ret = sceLibcBridge_fopen(fname, mode);
-    #else
-        FILE* ret = fopen(fname, mode);
-    #endif
+    // this returns stuff like  0x81700010
+    FILE* ret = sceLibcBridge_fopen(fname, mode);
 
-    //logv_debug("[io] fopen(%s, %s): 0x%x", fname, mode, ret);
+    logv_debug("[io] fopen(%s, %s): 0x%x", fname, mode, ret);
 
     return ret;
+
 }
 
-int open_soloader(char *_fname, int flags) {
+int compare_strings(const void *a, const void *b) {
+    return strcmp(*(const char **)a, *(const char **)b);
+}
+extern so_module so_mod;
+
+int retOpen = 0;
+int open_soloader(char *_fname, int flags, ...) {
     if (strcmp(_fname, "/proc/cpuinfo") == 0) {
         return open_soloader("app0:/cpuinfo", flags);
     } else if (strcmp(_fname, "/proc/meminfo") == 0) {
@@ -69,10 +78,67 @@ int open_soloader(char *_fname, int flags) {
     } else if (strcmp(_fname, "/sys/devices/system/cpu/possible") == 0) {
         return open_soloader("app0:/possible", flags);
     }
+    else if (strncmp(_fname, "ux0:data/bgda/res/", 18) == 0) {
+        logv_error("[io] tried to open(%s, %x): %i", _fname, flags, -1);
+        return -1;
+    }
 
-    flags = oflags_newlib_to_oflags_musl(flags);
+    SceFiosFH handle = 0;
+    char real_fname[256];
+    mode_t mode = 0666;
+
+    if (psarc_exists && !strncmp(_fname, "ux0:data/bgda/assets//res/", 26) || !strncmp(_fname, "ux0:data/bgda/assets/res/", 25)) {
+        // real name is whatever is after the prefix "ux0:data/bgda/assets//res/", so strip that
+        // for example ux0:data/bgda/assets/res/add_texture.lmp should be /res/add_texture.lmp
+        int offset = 21;
+        if (!strncmp(_fname, "ux0:data/bgda/assets/res/", 25)){
+            offset = 20;
+        }
+
+        strcpy(real_fname, _fname + offset);
+
+        // if (strcmp(real_fname, "/res/cellar1.vat") == 0)
+        // {
+        //     logv_error("Normal mode for %s", _fname);
+        //     goto normal_mode;
+        // }
+
+        char *real_fname_ptr = real_fname;
+        char **existing_file = (char **)bsearch(&real_fname_ptr, existing_files, existing_files_len, sizeof(char *), compare_strings);
+        if (existing_file == NULL) {
+            logv_warn("res file not found inside the existing_files list!!! %s", real_fname);
+            return -1;
+        }
+
+        //logv_error("res file: %s", real_fname);
+        int res = sceFiosFHOpenSync(NULL, &handle, real_fname, NULL);
+        logv_debug("sceFiosFHOpenSync(%s), ret=0x%X, Handle=(0x%X)", real_fname, res, handle);
+        if (res != 0)
+        {
+            //logv_error("res not found inside the PSARC!!! %s", real_fname);
+            return -1;
+        }
+
+        return handle;
+    }
+    
+//normal_mode:
+    if (((flags & BIONIC_O_CREAT) == BIONIC_O_CREAT) ||
+        ((flags & BIONIC_O_TMPFILE) == BIONIC_O_TMPFILE)) {
+        va_list args;
+        va_start(args, flags);
+        mode = (mode_t)(va_arg(args, int));
+        va_end(args);
+    }
+
+    flags = oflags_bionic_to_newlib(flags);
     int ret = open(_fname, flags);
-    //logv_debug("[io] open(%s, %x): %i", _fname, flags, ret);
+    // if (!strncmp(_fname, "ux0:data/bgda/assets//res/", 26))
+    // {
+    //     logv_debug("[io] open(%s, %x): %i", _fname, flags, ret);
+    //     retOpen = ret;
+    // }
+    //logv_error("[io] open(%s, %x): %i", _fname, flags, ret);
     return ret;
 }
 
@@ -80,9 +146,8 @@ int fstat_soloader(int fd, void *statbuf) {
     struct stat st;
     int res = fstat(fd, &st);
     if (res == 0)
-        stat_newlib_to_stat_bionic(&st, statbuf);
+        stat_newlib_to_bionic(&st, statbuf);
 
-    logv_debug("[io] fstat(fd#%i): %i", fd, res);
     return res;
 }
 
@@ -91,27 +156,27 @@ int stat_soloader(char *_pathname, stat64_bionic *statbuf) {
     int res = stat(_pathname, &st);
 
     if (res == 0)
-        stat_newlib_to_stat_bionic(&st, statbuf);
+        stat_newlib_to_bionic(&st, statbuf);
 
-    //logv_debug("[io] stat(%s): %i", _pathname, res);
     return res;
 }
 
 int fclose_soloader(FILE * f) {
-    #ifdef USE_SCELIBC_IO
-        int ret = sceLibcBridge_fclose(f);
-    #else
-        int ret = fclose(f);
-    #endif
-
-    logv_debug("[io] fclose(0x%x): %i", f, ret);
+    int ret = sceLibcBridge_fclose(f);
     return ret;
 }
 
 int close_soloader(int fd) {
-    int ret = close(fd);
-    //logv_debug("[io] close(fd#%i): %i", fd, ret);
-    return ret;
+    if (fd < 0x18000)
+	{
+        int ret = close(fd);
+        return ret;
+    }
+    else
+    {
+        int ret = sceFiosFHCloseSync(NULL, fd);
+        return ret;
+    }
 }
 
 DIR* opendir_soloader(char* _pathname) {
@@ -127,7 +192,7 @@ struct dirent64_bionic * readdir_soloader(DIR * dir) {
     logv_debug("[io] readdir(%p): %p", dir, ret);
 
     if (ret) {
-        dirent64_bionic* entry_tmp = dirent_newlib_to_dirent_bionic(ret);
+        dirent64_bionic* entry_tmp = dirent_newlib_to_bionic(ret);
         memcpy(&dirent_tmp, entry_tmp, sizeof(dirent64_bionic));
         free(entry_tmp);
         //logv_debug("  [io] readdir(%p): %s", dir, dirent_tmp.d_name);
@@ -144,7 +209,7 @@ int readdir_r_soloader(DIR *dirp, dirent64_bionic *entry, dirent64_bionic **resu
     int ret = readdir_r(dirp, &dirent_tmp, &pdirent_tmp);
 
     if (ret == 0) {
-        dirent64_bionic* entry_tmp = dirent_newlib_to_dirent_bionic(&dirent_tmp);
+        dirent64_bionic* entry_tmp = dirent_newlib_to_bionic(&dirent_tmp);
         memcpy(entry, entry_tmp, sizeof(dirent64_bionic));
         *result = (pdirent_tmp != NULL) ? entry : NULL;
         free(entry_tmp);
@@ -169,4 +234,27 @@ int fsync_soloader(int fd) {
     int ret = fsync(fd);
     logv_debug("[io] fsync(%i): %i", fd, ret);
     return ret;
+}
+
+size_t fread_soloader(void *p, size_t size, size_t num, FILE *f) {
+    //logv_error("[io] fread(%p, %i, %i, 0x%x)", p, size, num, f);
+	return sceLibcBridge_fread(p, size, num, f);
+}
+
+int fstat_hook(int fd, void *statbuf) {
+	struct stat st;
+	int res = fstat(fd, &st);
+	if (res == 0)
+		*(uint64_t *)(statbuf + 0x30) = st.st_size;
+	return res;
+}
+
+int fseek_soloader(FILE *f, int dist, int off) {
+    logv_debug("[io] fseek(0x%x, %i, %i)", f, dist, off);
+	return sceLibcBridge_fseek(f, dist, off);
+}
+
+long ftell_soloader(FILE *f) {
+    logv_debug("[io] ftell(0x%x)", f);
+	return sceLibcBridge_ftell(f);
 }

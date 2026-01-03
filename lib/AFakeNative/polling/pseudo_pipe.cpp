@@ -1,5 +1,7 @@
 #include <psp2/kernel/threadmgr.h>
 #include <cerrno>
+#include <atomic>
+#include <cstdio>
 #include "pseudo_pipe.h"
 #include "AFakeNative/AFakeNative_Utils.h"
 
@@ -18,17 +20,22 @@ typedef struct pipefd_internal {
 } pipefd_internal;
 
 static pipefd_internal pipefd_pool[PIPEFD_MAX];
-SceKernelLwMutexWork pipefd_pool_mutex = {{0xFEE1DEAD}};
+static SceKernelLwMutexWork pipefd_pool_mutex;
+static std::atomic<int> pipefd_pool_mutex_inited(0);
 
-int pseudo_pipe(int pipefd[2]) {
-#ifdef DEBUG_PIPEFD
-    ALOGD("pseudo_pipe: called\n");
-#endif
+// Thread-safe lazy initialization
+static inline void pipefd_mutex_init_once(void) {
+    int expected = 0;
+    if (pipefd_pool_mutex_inited.compare_exchange_strong(expected, 1)) {
+        // We won the race, initialize the mutex
+        int ret = sceKernelCreateLwMutex(&pipefd_pool_mutex, "pipefd_pool_mutex", 0, 0, nullptr);
+        if (ret < 0) {
+            printf("Error: failed to create pipefd_pool mutex: 0x%x\n", ret);
+            pipefd_pool_mutex_inited.store(0);
+            return;
+        }
 
-    if (pipefd_pool_mutex.data[0] == 0xFEE1DEAD) {
-        sceKernelCreateLwMutex(&pipefd_pool_mutex, "pipefd_pool_mutex", 0, 0, nullptr);
-        sceKernelLockLwMutex(&pipefd_pool_mutex, 1, nullptr);
-
+        // Initialize the pool
         for (int i = 0; i < PIPEFD_MAX; ++i) {
             pipefd_pool[i].readfd = -1;
             pipefd_pool[i].writefd = -1;
@@ -40,9 +47,28 @@ int pseudo_pipe(int pipefd[2]) {
         #ifdef DEBUG_PIPEFD
             ALOGD("pseudo_pipe: initialized the pool\n");
         #endif
+
+        pipefd_pool_mutex_inited.store(2); // Mark as fully initialized
     } else {
-        sceKernelLockLwMutex(&pipefd_pool_mutex, 1, nullptr);
+        // Another thread is initializing, wait for it to complete
+        while (pipefd_pool_mutex_inited.load() == 1) {
+            sceKernelDelayThread(100); // Wait 0.1ms
+        }
     }
+}
+
+int pseudo_pipe(int pipefd[2]) {
+#ifdef DEBUG_PIPEFD
+    ALOGD("pseudo_pipe: called\n");
+#endif
+
+    pipefd_mutex_init_once();
+
+    if (pipefd_pool_mutex_inited.load() != 2) {
+        return -1; // Initialization failed
+    }
+
+    sceKernelLockLwMutex(&pipefd_pool_mutex, 1, nullptr);
 
     int ret = sceKernelCreateMsgPipe("pseudo_pipe", MSGPIPE_MEMTYPE_USER_MAIN, MSGPIPE_THREAD_ATTR_PRIO, 4 * 4096, NULL);
     if (ret < 0) {
@@ -87,7 +113,7 @@ int pseudo_pipe(int pipefd[2]) {
 }
 
 ssize_t pseudo_pipe_read(int fd, void *buf, size_t count) {
-    if (pipefd_pool_mutex.data[0] == 0xFEE1DEAD) {
+    if (pipefd_pool_mutex_inited.load() != 2) {
         return -1;
     }
     sceKernelLockLwMutex(&pipefd_pool_mutex, 1, NULL);
@@ -131,7 +157,7 @@ ssize_t pseudo_pipe_read(int fd, void *buf, size_t count) {
 #define SCE_KERNEL_MSG_PIPE_MODE_FULL 0x00000001U
 
 ssize_t pseudo_pipe_write(int fd, const void *buf, size_t count) {
-    if (pipefd_pool_mutex.data[0] == 0xFEE1DEAD) {
+    if (pipefd_pool_mutex_inited.load() != 2) {
         return -1;
     }
     sceKernelLockLwMutex(&pipefd_pool_mutex, 1, NULL);
@@ -175,7 +201,7 @@ ssize_t pseudo_pipe_write(int fd, const void *buf, size_t count) {
 }
 
 void pseudo_pipe_status(int fd, bool * is_readable, bool * is_writeable) {
-    if (pipefd_pool_mutex.data[0] == 0xFEE1DEAD) {
+    if (pipefd_pool_mutex_inited.load() != 2) {
         return;
     }
     sceKernelLockLwMutex(&pipefd_pool_mutex, 1, NULL);
@@ -194,6 +220,12 @@ void pseudo_pipe_status(int fd, bool * is_readable, bool * is_writeable) {
 }
 
 bool is_pipe(int fd) {
+    pipefd_mutex_init_once();
+
+    if (pipefd_pool_mutex_inited.load() != 2) {
+        return false; // Can't determine if not initialized
+    }
+
     pipefd_internal * p = nullptr;
 
     sceKernelLockLwMutex(&pipefd_pool_mutex, 1, NULL);

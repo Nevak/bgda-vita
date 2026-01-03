@@ -82,6 +82,7 @@ void AInputQueue_detachLooper(AInputQueue* queue) {
     pthread_mutex_unlock(&q->mLock);
 }
 
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 int32_t AInputQueue_getEvent(AInputQueue* queue, AInputEvent** outEvent) {
     if (!queue) {
         ALOGE("AInputQueue_getEvent: bad queue");
@@ -163,6 +164,12 @@ int32_t AInputEvent_getSource(const AInputEvent* event) {
     if (!event) return AINPUT_SOURCE_UNKNOWN;
     auto * e = reinterpret_cast<const inputEvent *>(event);
     return e->source;
+}
+
+int32_t AInputEvent_getDeviceId(const AInputEvent* event) {
+    if (!event) return -1;
+    auto * e = reinterpret_cast<const inputEvent *>(event);
+    return e->deviceId;
 }
 
 int32_t AKeyEvent_getAction(const AInputEvent* key_event) {

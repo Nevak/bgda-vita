@@ -23,6 +23,9 @@
 #include "dynlib.h"
 
 #include <psp2/kernel/clib.h>
+#include <psp2/kernel/dmac.h>
+#include <psp2/kernel/sysmem.h>
+#include <vitaGL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -37,9 +40,9 @@
 #include <locale.h>
 #include <poll.h>
 #include "dll_psp2.h"
+#include <fios/fios.h>
 
-
-#include <SLES/OpenSLES.h>
+//#include <SLES/OpenSLES.h>
 
 #include <sys/stat.h>
 #include <sys/unistd.h>
@@ -52,6 +55,7 @@
 #include "utils/glutil.h"
 #include "utils/utils.h"
 #include "utils/logger.h"
+#include "utils/prof.h"
 
 #ifdef USE_SCELIBC_IO
 #include <libc_bridge/libc_bridge.h>
@@ -66,6 +70,7 @@
 #include "reimpl/mem.h"
 #include "reimpl/pthr.h"
 #include "reimpl/sys.h"
+#include "patch.h"
 
 #include <AFakeNative/ALooper.h>
 #include <AFakeNative/AAssetManager.h>
@@ -80,6 +85,11 @@
 // include openal
 #include <AL/al.h>
 #include <AL/alc.h>
+
+#ifdef PROFILER_ENABLED
+#include <utils/prof.h>
+#include <libperf.h>
+#endif
 
 extern void * _ZNSt9exceptionD2Ev;
 extern void * _ZSt17__throw_bad_allocv;
@@ -108,8 +118,23 @@ extern void *__cxa_pure_virtual;
 extern void *__cxa_guard_acquire;
 extern void *__cxa_guard_release;
 extern void *__gnu_unwind_frame;
-extern void *__stack_chk_fail;
+// extern void *__stack_chk_fail; // Implemented below instead
 extern void *__stack_chk_guard;
+
+// Custom stack smashing detector handler
+// The game's __stack_chk_fail calls through a GOT entry that can be corrupted
+// by the very stack overflow we're trying to detect. This safer implementation
+// logs the error and aborts cleanly.
+__attribute__((noreturn))
+void __stack_chk_fail(void) {
+    sceClibPrintf("\n*** STACK SMASHING DETECTED ***\n");
+    sceClibPrintf("Stack buffer overflow detected!\n");
+    sceClibPrintf("Aborting to prevent further corruption...\n");
+    // Use abort() which goes through proper cleanup
+    abort();
+    // Never reached, but needed for noreturn
+    __builtin_trap();
+}
 
 extern void *__aeabi_d2lz;
 extern void *__aeabi_dadd;
@@ -150,9 +175,20 @@ extern const short *BIONIC_toupper_tab_;
 
 
 extern so_module so_mod;
- 
+
 
 static FILE __sF_fake[3];
+
+// DMA staging buffers (uncached CDRAM for vertex buffer uploads)
+#define DMA_STAGING_SIZE (1024 * 1024)  // 1MB staging buffer
+static void *dma_staging_buffer = NULL;
+
+// Shadow rendering optimization
+static int g_in_shadow_rendering = 0;
+static int g_shadow_clear_count = 0;
+#define SKIP_SHADOW_CLEARS 0  // Causes glitches - don't skip!
+#define OPTIMIZE_CLEAR_FLAGS 0  // Reduce clear flags (color only, not depth+stencil)
+#define SHADOW_TEXTURE_SCALE 2  // 1=full (512x128), 2=half (256x64), 4=quarter (128x32)
 
 int __atomic_dec(volatile int *ptr) {
 	return __sync_fetch_and_sub (ptr, 1);
@@ -180,10 +216,7 @@ int AAsset_getLength() {
 	log_error("unimpl: AAsset_getLength");
 	return 0;
 }
-int AAsset_openFileDescriptor() {
-	log_error("unimpl: AAsset_openFileDescriptor");
-	return 0;
-}
+
 int AAssetDir_close() {
 	log_error("unimpl: AAssetDir_close");
 	return 0;
@@ -198,10 +231,6 @@ int AAssetManager_openDir() {
 	return 0;
 }
 
-int AInputEvent_getDeviceId() {
-	//log_error("unimpl: AInputEvent_getDeviceId");
-	return 0;
-}
 int AKeyEvent_getFlags() {
 	//log_error("unimpl: AKeyEvent_getFlags");
 	return 0;
@@ -251,15 +280,16 @@ void exit_soloader(int status) {
 }
 
 void *dlopen_hook(const char *restrict filename, int flags) {
+	// if libandroid.so, we handle it
+	if (strstr(filename, "libandroid.so") != NULL) {
+		logv_error("dlopen(%s, %i) called", filename, flags);
+		// Just return whatever for this case.
+		// The game will call dlsym(0xDEADBEEF, "AMotionEvent_getAxisValue") immediately after dlopen
+		// and we will handle it in dlsym_fake.
+		return (void *)0xDEADBEEF;
+	}
+
 	logv_error("Not Implemented dlopen(%s, %i) called", filename, flags);
-
-	// void* res = dlopen("ux0:/data/bgda/lib/armeabi-v7a/libdarkalliance.so", flags);
-
-	// if (!res) {
-	// 	// Check dlerror()
-	// 	char* err = dlerror();
-	// 	logv_error("dlopen error: %s", err);
-	// }
 
 	return 0;
 }
@@ -269,112 +299,33 @@ void *dlsym_fake(void *restrict handle, const char *restrict symbol) {
 
 	if (strcmp("JBE_android_main_sub", symbol) == 0) {
 		uintptr_t jbe_andoid_main_addr = (uintptr_t) so_symbol(&so_mod, "JBE_android_main_sub");
-		if (jbe_andoid_main_addr == NULL)
+		if (jbe_andoid_main_addr == 0)
 		{
-			log_error("[dlsym]JBE_android_main_sub not found\n");
+			log_error("[dlsym]JBE_android_main_sub not found");
 		}
 		else
 		{
-			logv_error("[dlsym]JBE_android_main_sub found at %p\n", jbe_andoid_main_addr);
+			logv_debug("[dlsym]JBE_android_main_sub found at %p", jbe_andoid_main_addr);
 			return (void *) jbe_andoid_main_addr;
 		}
 	}
-
-	return dlsym(handle, symbol);
-
-	// if (strcmp("AMotionEvent_getAxisValue", symbol) == 0) {
-	// 	return &AMotionEvent_getAxisValue;
-	// } else if (strcmp("AMotionEvent_getHistoricalAxisValue", symbol) == 0) {
-	// 	return &AMotionEvent_getHistoricalAxisValue;
-	// }
-
-	// logv_error("symbol %s not found", symbol);
-	// return NULL;
-}
-
-// glCreateProgram_wrapper
-GLuint glCreateProgram_wrapper(void) {
-	GLuint res = glCreateProgram();
-	logv_info("glCreateProgram() called, returning %i", res);
-	return res;
-}
-
-//glCreateShader_wrapper
-GLuint glCreateShader_wrapper(GLenum type) {
-	GLuint res = glCreateShader(type);
-	// Check for errors
-	if (res == 0) {
-		log_error("glCreateShader failed");
+	if (strcmp("AMotionEvent_getAxisValue", symbol) == 0) {
+		return (void *)AMotionEvent_getAxisValue;
 	}
-	log_info("glCreateShader successful");
-	return res;
-}
 
-// glBindAttribLocation_wrapper
-void glBindAttribLocation_wrapper(GLuint program, GLuint index, const GLchar *name) {
-	logv_info("glBindAttribLocation(%i, %i, %s) called", program, index, name);
-	glBindAttribLocation(program, index, name);
-
-	// // Test with glGetAttribLocation
-	// GLint loc = glGetAttribLocation(program, name);
-	// if (loc == -1) {
-	// 	log_error("glBindAttribLocation failed");
-	// }
-	// else
-	// {
-	// 	logv_info("glBindAttribLocation successful at %i", loc);
-	// }
-}
-
-// glCompileShader_wrapper
-void glCompileShader_wrapper(GLuint shader) {
-	logv_info("glCompileShader(%i) called", shader);
-	glCompileShader(shader);
-	// Check for errors
-	GLint status = 0;
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-	if (status == GL_FALSE) {
-		GLint log_length = 0;
-		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
-		if (log_length > 0) {
-			char *log = malloc(log_length);
-			glGetShaderInfoLog(shader, log_length, NULL, log);
-			logv_error("Shader compilation failed: %s", log);
-			free(log);
-		}
-	}
-	else {
-		log_info("Shader compilation successful");
-	}
-}
-
-// glAttachShader_wrapper
-void glAttachShader_wrapper(GLuint program, GLuint shader) {
-	logv_info("glAttachShader(%i, %i) was called", program, shader);
-	glAttachShader(program, shader);
-}
-
-// glShaderSource_wrapper
-void glShaderSource_wrapper(GLuint shader, GLsizei count, const GLchar **string, const GLint *length) {
-	logv_info("glShaderSource(%i, %i, %p, %p) called", shader, count, string, length);
-	// // Debug the address of the shader
-	// logv_info("shader address: %p", *string);
-	// Also log the shader source
-	// for (int i = 0; i < count; i++) {
-	// 	logv_info("shader source: %s", string[i]);
-	// }
-	glShaderSource(shader, count, string, length);
+	logv_error("dlsym(%p, %s) not implemented", handle, symbol);
+	return NULL;
 }
 
 // glTexParameterfv_fake
 void glTexParameterfv_fake(GLenum target, GLenum pname, const GLfloat *params) {
-	logv_info("glTexParameterfv(%i, %i, %p) called", target, pname, params);
+	logv_error("[UNIMPLEMENTED] glTexParameterfv(%i, %i, %p) called", target, pname, params);
 	//glTexParameterfv(target, pname, params);
 }
 
 // glBlendColor_wrap
 void glBlendColor_wrap(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) {
-	logv_info("glBlendColor(%f, %f, %f, %f) called", red, green, blue, alpha);
+	logv_error("[UNIMPLEMENTED] glBlendColor(%f, %f, %f, %f) called", red, green, blue, alpha);
 	//glBlendColor(red, green, blue, alpha);
 	return;
 }
@@ -386,113 +337,115 @@ int glCompressedTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GL
 	return 0;
 }
 
-// glCompressedTexImage2D_fake
-void glCompressedTexImage2D_fake(GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data) {
-	logv_info("glCompressedTexImage2D(%i, %i, %i, %i, %i, %i, %i, %p) called", target, level, internalformat, width, height, border, imageSize, data);
-	glCompressedTexImage2D(target, level, internalformat, width, height, border, imageSize, data);
+// Original D3D functions (will be set during patching)
+void (*D3DDevice_Clear_orig)(uint32_t count, void *rects, uint32_t flags, uint32_t color, float depth, uint32_t stencil) = NULL;
+void (*RenderDelayedShadows_orig)(void) = NULL;
+extern so_hook clear_hook;
+extern so_hook renderDelayedShadows_hook;
+extern so_hook createTexture2_hook;
+// D3DDevice_Clear wrapper - optimize shadow clear flags
+void D3DDevice_Clear(uint32_t count, void *rects, uint32_t flags, uint32_t color, uint32_t depth, uint32_t stencil) {
+	uint32_t optimized_flags = flags;
+
+	#if OPTIMIZE_CLEAR_FLAGS
+	if (g_in_shadow_rendering && flags == 0xf0) {
+		// Original: 0xf0 = clear color+depth+stencil (expensive!)
+		// Optimized: 0x01 = clear color only (shadows don't use depth/stencil)
+		optimized_flags = 0x01;
+		g_shadow_clear_count++;
+		//sceRazorCpuPushMarkerWithHud("Clear_OPT", SCE_RAZOR_COLOR_GREEN, SCE_RAZOR_MARKER_DISABLE_HUD);
+	} else {
+	#endif
+		//sceRazorCpuPushMarkerWithHud("Clear", SCE_RAZOR_COLOR_YELLOW, SCE_RAZOR_MARKER_DISABLE_HUD);
+	#if OPTIMIZE_CLEAR_FLAGS
+	}
+	#endif
+
+	SO_CONTINUE(void*, clear_hook, count, rects, optimized_flags, color, depth, stencil);
+	//sceRazorCpuPopMarker();
 }
 
-// glTexSubImage2D_fake
-// void glTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) {
-// 	logv_info("glTexSubImage2D(%i, %i, %i, %i, %i, %i, %i, %i, %p) called", target, level, xoffset, yoffset, width, height, format, type, pixels);
-// 	glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
-// }
+// RenderDelayedShadows wrapper - track when we're in shadow rendering
+void renderDelayedShadows(void) {
+	g_in_shadow_rendering = 1;
+	g_shadow_clear_count = 0;
+
+	SO_CONTINUE(void *, renderDelayedShadows_hook);
+
+
+	g_in_shadow_rendering = 0;
+}
+
+// D3DDevice_CreateTexture2 wrapper - reduce shadow texture resolution
+void* D3DDevice_CreateTexture2(uint32_t width, uint32_t height, uint32_t levels, uint32_t usage,
+                                uint32_t pool, uint32_t format, uint32_t type) {
+	uint32_t optimized_width = width;
+	uint32_t optimized_height = height;
+
+	#if SHADOW_TEXTURE_SCALE > 1
+	// Detect shadow texture creation (512x128, format 6)
+	if (g_in_shadow_rendering && width == 0x200 && height == 0x80 && format == 6) {
+		optimized_width = width / SHADOW_TEXTURE_SCALE;
+		optimized_height = height / SHADOW_TEXTURE_SCALE;
+		// logv_info("Shadow texture: Reduced from %dx%d to %dx%d (scale=%d)",
+		// 	width, height, optimized_width, optimized_height, SHADOW_TEXTURE_SCALE);
+	}
+	#endif
+
+	return SO_CONTINUE(void*, createTexture2_hook, optimized_width, optimized_height,
+		levels, usage, pool, format, type);
+}
+
+void glGenTextures_profiled(GLsizei n, GLuint *textures) {
+	logv_error("glGenTextures(%i, %p) called", n, textures);
+	//Profiler_BeginSample("glGenTextures");
+	glGenTextures(n, textures);
+	//Profiler_EndSample();
+}
+
+void glVertexAttrib4fv_profiled(GLuint index, const GLfloat *v) {
+	//Profiler_BeginSample("glVertexAttrib4fv");
+	glVertexAttrib4fv(index, v);
+	//Profiler_EndSample();
+}
 
 // glTexImage2D_fake
 void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels) {
-	logv_error("glTexImage2D(%i, %i, format:0x%x, w:%i, h:%i, %i, format0x%x, type:0x%x, %p) called", 
-		target, level, internalformat, width, height, border, format, type, pixels);
-    
-	// Generate one random color (RGBA). 
-	// You may want to call srand() once, in some init code.
-	unsigned char r = 0;
-	unsigned char g = 256;
-	unsigned char b = 0;
-	unsigned char a = 255;
+	// if (level > 0)
+	// {
+	// 	return;
+	// }
+    // GLint prog = 0;
+    // glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    // int usePalette = 0;
+	// if (width == 1024 && height == 1024) {
+	// 	      int* caller = __builtin_return_address(0);
 
-
-	// 2) Check format/type pairs and fill
-	if (type == GL_UNSIGNED_BYTE && (format == GL_RGBA || format == GL_BGRA)) {
-		// Cast away 'const' to overwrite the buffer
-		unsigned char *fakePixels = NULL;
-		size_t totalPixels = (size_t)width * (size_t)height;
-		size_t totalBytes = totalPixels * 4; // 4 bytes per pixel
-		fakePixels = (unsigned char *)malloc(totalBytes);
-		
-		if (format == GL_RGBA) {
-			log_error("FAKE:   Filling RGBA with GL_UNSIGNED_BYTE.\n");
-			// RGBA means index 0=R, 1=G, 2=B, 3=A
-			//size_t totalPixels = (size_t)width * (size_t)height;
-			for (size_t i = 0; i < totalPixels; i++) {
-				fakePixels[i*4 + 0] = r;
-				fakePixels[i*4 + 1] = g;
-				fakePixels[i*4 + 2] = b;
-				fakePixels[i*4 + 3] = a;
-			}
-		}
-		else if (format == GL_BGRA) {
-			log_error("FAKE:   Filling BGRA with GL_UNSIGNED_BYTE.\n");
-			// BGRA means index 0=B, 1=G, 2=R, 3=A
-			//size_t totalPixels = (size_t)width * (size_t)height;
-			for (size_t i = 0; i < totalPixels; i++) {
-				fakePixels[i*4 + 0] = b;
-				fakePixels[i*4 + 1] = g;
-				fakePixels[i*4 + 2] = r;
-				fakePixels[i*4 + 3] = a;
-			}
-		}
-		else {
-			// Unhandled format for debug
-			logv_error("FAKE:   Unhandled format=0x%x with GL_UNSIGNED_BYTE.\n", (unsigned)format);
-		}
-
-		// Call the real glTexImage2D with the fake data
-		log_error("FAKE:   Calling real glTexImage2D.\n");
-		glTexImage2D(target, level, internalformat, width, height, border, format, type, fakePixels);
-		free(fakePixels);
-		return;
-	}
-	else {
-		// Other type combos not handled here
-		logv_error("FAKE:   Unhandled format=0x%x, type=0x%x.\n", (unsigned)format, (unsigned)type);
-	}
-
-	log_error("FAKE:   Calling real glTexImage2D.\n");
+	// 	logv_error("1024 found, prog=%d from: %p", prog, caller);
+	// }
 	glTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
 }
 
-// glActiveTexture_fake
-void glActiveTexture_fake(GLenum texture) {
-	logv_info("glActiveTexture(0x%x) called. Will override with location 0x84C0 for debug.", texture);
-	glActiveTexture(texture); // GL_TEXTURE0
+void glTexSubImage2D_fake(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) {
+	//logv_error("glTexSubImage2D: target=0x%x, level=%d, offset=(%d,%d), size=(%dx%d), format=0x%x, type=0x%x, pixels=%p",
+	//	target, level, xoffset, yoffset, width, height, format, type, pixels);
+
+	glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
 }
 
-//glBindTexture_fake
-void glBindTexture_fake(GLenum target, GLuint texture) {
-	//logv_info("glBindTexture(0x%x, 0x%x) called", target, texture);
- 	glBindTexture(target, texture);
+void glTexParameteri_fake(GLenum target, GLenum pname, GLint param) {
+	// Override filtering parameters to always use GL_NEAREST
+	// if (pname == GL_TEXTURE_MIN_FILTER || pname == GL_TEXTURE_MAG_FILTER) {
+	// 	//logv_error("glTexParameteri: Overriding filter 0x%x from %d to GL_NEAREST", pname, param);
+	// 	param = GL_NEAREST;
+	// }
+
+	glTexParameteri(target, pname, param);
 }
 
-// glGenTextures_fake
-void glGenTextures_fake(GLsizei n, GLuint *textures) {
-	logv_info("glGenTextures(%i, %p) called", n, textures);
-	glGenTextures(n, textures);
-}
-
-// sscanf_fake
-int sscanf_fake(const char *str, const char *format, ...) {
-	logv_error("sscanf(%s, %s) called", str, format);
-	va_list args;
-	va_start(args, format);
-	#ifdef USE_SCELIBC_IO
-	int res = sceLibcBridge_sscanf(str, format, args);
-	#else
-	int res = sscanf(str, format, args);
-	#endif
-	va_end(args);
-
-	
-	return res;
+void glDeleteTextures_fake(GLsizei n, const GLuint *textures) {
+	// Native GXM palettes don't need manual state cleanup
+	glDeleteTextures(n, textures);
 }
 
 void app_dummy(void)
@@ -500,167 +453,201 @@ void app_dummy(void)
 	return;
 }
 
-//glDrawArrays_fake
-void glDrawArrays_fake(GLenum mode, GLint first, GLsizei count) {
-	//logv_info("glDrawArrays(%i, %i, %i) called", mode, first, count);
-	glDrawArrays(mode, first, count);
-}
-
-//glUseProgram_fake
-void glUseProgram_fake(GLuint program) {
-	//logv_info("glUseProgram(%i) called", program);
-	glUseProgram(program);
-}
-
-// glUniform1i_fake
-void glUniform1i_fake(GLint location, GLint v0) {
-	logv_info("glUniform1i(%i, %i) called", location, v0);
-	glUniform1i(location, v0);
-}
-
-// glUiform1f_fake
-void glUniform1f_fake(GLint location, GLfloat v0) {
-	logv_info("glUniform1f(%i, %f) called", location, v0);
-	glUniform1f(location, v0);
-} 
-
-// glUniform1fv_fake
-void glUniform1fv_fake(GLint location, GLsizei count, const GLfloat *value) {
-	logv_info("glUniform1fv(%i, %i, %p) called", location, count, value);
-	glUniform1fv(location, count, value);
-}
-
-// glUniform1iv_fake
-void glUniform1iv_fake(GLint location, GLsizei count, const GLint *value) {
-	logv_info("glUniform1iv(%i, %i, %p) called", location, count, value);
-	glUniform1iv(location, count, value);
-}
-
-// glUniform2f_fake
-void glUniform2f_fake(GLint location, GLfloat v0, GLfloat v1) {
-	logv_info("glUniform2f(%i, %f, %f) called", location, v0, v1);
-	glUniform2f(location, v0, v1);
-}
-
-// glUniform2fv_fake
-void glUniform2fv_fake(GLint location, GLsizei count, const GLfloat *value) {
-	logv_info("glUniform2fv(%i, %i, %p) called", location, count, value);
-	glUniform2fv(location, count, value);
-}
-
-// glUniform2iv_fake
-void glUniform2iv_fake(GLint location, GLsizei count, const GLint *value) {
-	logv_info("glUniform2iv(%i, %i, %p) called", location, count, value);
-	glUniform2iv(location, count, value);
-}
-
-// glUniform3fv_fake
-void glUniform3fv_fake(GLint location, GLsizei count, const GLfloat *value) {
-	logv_info("glUniform3fv(%i, %i, %p) called", location, count, value);
-	for (int i = 0; i < count; i+=3) {
-		logv_info("  value[%i] = %f", i, value[i]);
-		logv_info("  value[%i] = %f", i+1, value[i+1]);
-		logv_info("  value[%i] = %f", i+2, value[i+2]);
+ssize_t read_delegate(int fd, void *buf, size_t count) {
+	if (count == 0) {
+		logv_error("!!! read_delegate called with count=0! fd=0x%x", fd);
 	}
-	glUniform3fv(location, count, value);
-}
-
-// glUniform4fv_fake
-void glUniform4fv_fake(GLint location, GLsizei count, const GLfloat *value) {
-	logv_info("glUniform4fv(%i, %i, %p) called", location, count, value);
-	for (int i = 0; i < count; i+=4) {
-		logv_info("  value[%i] = %f", i, value[i]);
-		logv_info("  value[%i] = %f", i+1, value[i+1]);
-		logv_info("  value[%i] = %f", i+2, value[i+2]);
-		logv_info("  value[%i] = %f", i+3, value[i+3]);
+	//SceFiosFH fiosH = sceFiosFHToFileno(fd);
+	//if (fiosH == 0xffffffff)
+	if (fd < 0x18000)
+	{
+		//logv_error("non-fios read(fd=0x%x, 0x%p, %zu) delegate called", fd, buf, count);
+		return read(fd, buf, count);
 	}
-	glUniform4fv(location, count, value);
-	logv_info("glUniform4fv(%i, %i, %p) done", location, count, value);
+	else
+	{
+		//logv_error("read(fd=0x%x, 0x%p, %zu) delegate called .fiosH=0x%x", fd, buf, count, fiosH);
+		//uint32_t read = 0;
+		//int res = sceFiosFHReadSync(NULL, fiosH, buf, count);
+		int res = sceFiosFHReadSync(NULL, fd, buf, count);
+		//logv_error("read(fd=0x%x, 0x%p, %zu) delegate called .fiosH=0x%x, read=0x%x, res=%i", fd, buf, count, fiosH, read, res);
+		return res;
+	}
 }
 
-// glGetUniformLocation_fake
-GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
-	GLint res = glGetUniformLocation(program, name);
-	logv_info("glGetUniformLocation(%i, %s) called. Returning %i", program, name, res);
+off_t lseek_delegate(int fd, off_t offset, int whence) {
+	if (fd < 0x18000)
+	{
+		int res = lseek(fd, offset, whence);
+		return res;
+	}
+	else
+	{
+		int res = sceFiosFHSeek(fd, offset, whence);
+		return res;
+	}
+}
+
+//glViewport_profiled
+void glViewport_profiled(GLint x, GLint y, GLsizei width, GLsizei height) {
+	//Profiler_BeginSample("glViewport");
+	glViewport(x, y, width, height);
+	//Profiler_EndSample();
+}
+
+// eglSwapBuffers_profiled
+int eglSwapBuffers_profiled(EGLDisplay dpy, EGLSurface surface) {
+	//Profiler_BeginSample("eglSwapBuffers");
+	int res = eglSwapBuffers(dpy, surface);
+	//Profiler_EndSample();
+
 	return res;
 }
 
-// glLinkProgram_fake
-void glLinkProgram_fake(GLuint program) {
-	logv_info("glLinkProgram(%i) called", program);
-	glLinkProgram(program);
+// glEnable_profiled
+void glEnable_profiled(GLenum cap) {
+	//Profiler_BeginSample("glEnable");
+	glEnable(cap);
+	//Profiler_EndSample();
 }
 
-// glGetAttribLocation_fake
-GLint glGetAttribLocation_fake(GLuint program, const GLchar *name) {
-	logv_error("glGetAttribLocation(%i, %s) called", program, name);
-	return glGetAttribLocation(program, name);
+// glDisable_profiled
+void glDisable_profiled(GLenum cap) {
+	//Profiler_BeginSample("glDisable");
+	glDisable(cap);
+	//Profiler_EndSample();
 }
 
-// glGetActiveUniform_fake
-void glGetActiveUniform_fake(GLuint program, GLuint index, GLsizei bufSize, GLsizei *length, GLint *size, GLenum *type, GLchar *name) {
-	logv_info("glGetActiveUniform(%i, %i, %i, %p, %p, %p, %p) called", program, index, bufSize, length, size, type, name);
-	glGetActiveUniform(program, index, bufSize, length, size, type, name);
+// glDrawElements_profiled	
+void glDrawElements_profiled(GLenum mode, GLsizei count, GLenum type, const void *indices) {
+	//Profiler_BeginSample("glDrawElements");
+	//sceRazorCpuPushMarkerWithHud("glDrawElements", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
 
-	// Log the results
-	logv_info("  length = %i", *length);
-	logv_info("  size = %i", *size);
-	logv_info("  type = 0x%x", *type);
-	logv_info("  name = %s", name);
+	glDrawElements(mode, count, type, indices);
+	//sceRazorCpuPopMarker();
 }
 
-// glViewport_fake
-void glViewport_fake(GLint x, GLint y, GLsizei width, GLsizei height) {
-	//logv_info("glViewport(%i, %i, %i, %i) called", x, y, width, height);
-	glViewport(x, y, width, height);
+void glBindBuffer_profiled(GLenum target, GLuint buffer) {
+	// Profiler_BeginSample("glBindBuffer");
+	//sceRazorCpuPushMarkerWithHud("glBindBuffer", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+	glBindBuffer(target, buffer);
+	//sceRazorCpuPopMarker();
 }
 
-//  glVertexAttribPointer_fake
-void glVertexAttribPointer_fake(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid *pointer) {
-	//logv_info("glVertexAttribPointer(%i, %i, %i, %i, %i, %p) called", index, size, type, normalized, stride, pointer);
-	glVertexAttribPointer(index, size, type, normalized, stride, pointer);
+void glBufferSubData_profiled(GLenum target, GLintptr offset, GLsizeiptr size, const void *data) {
+	//Profiler_BeginSample("glBufferSubData");
+	//logv_error("glBufferSubData_profiled (0x%X, 0x%X, 0x%X, %p)", target, offset, size, data);
+	//sceRazorCpuPushMarkerWithHud("glBufferSubData", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+
+	// Optimize both frequent buffer updates: use glMapBufferRange instead of glBufferSubData
+	// Avoids intermediate buffer copy and allocation overhead
+	if (target == GL_ARRAY_BUFFER && offset == 0 && (size == 0x90000 || size == 0x5280)) {
+		// Try glMapBufferRange first (faster - direct write)
+		void *mapped = glMapBufferRange(GL_ARRAY_BUFFER, offset, size,
+			GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+
+		if (mapped) {
+			// Just use optimized memcpy - staging buffer approach is slower
+			// due to uncached memory write overhead
+			//sceRazorCpuPushMarkerWithHud("sceClibMemcpy", SCE_RAZOR_COLOR_GREEN, SCE_RAZOR_MARKER_DISABLE_HUD);
+			sceClibMemcpy(mapped, data, size);
+			//sceRazorCpuPopMarker();
+
+			glUnmapBuffer(GL_ARRAY_BUFFER);
+
+			//logv_error("  -> Used glMapBuffer for buffer (0x%X bytes)", size);
+		} else {
+			// Fallback to glBufferSubData if mapping fails
+			log_error("  -> glMapBuffer failed, using glBufferSubData");
+			glBufferSubData(target, offset, size, data);
+		}
+		//sceRazorCpuPopMarker();
+		return;
+	}
+
+	glBufferSubData(target, offset, size, data);
+	//sceRazorCpuPopMarker();
 }
 
-// glBufferData_fake
-void glBufferData_fake(GLenum target, GLsizeiptr size, const GLvoid *data, GLenum usage) {
-	// logv_info("glBufferData(%i, %i, %p, %i) called", target, size, data, usage);
-    // if (data && size > 0) {
-    //     // Number of floats in the buffer:
-    //     size_t floatCount = size / sizeof(float);
-        
-    //     // Cast to float pointer
-    //     const float* floatData = (const float*) data;
+static GLfloat g_shadowDepthBiasFactor = 0.0f;  // Try: -1, 0, 1
+static GLfloat g_shadowDepthBiasUnits = -4.0f;  // Try: -14, -8, -4, -2, 2, 4, 8, 14
 
-    //     // Print them out. Be mindful of how large 'floatCount' can be!
-    //     logv_info("Buffer contents as floats (count=%zu) Truncated: %s:", floatCount, floatCount > 100 ? "YES" : "NO");
-	// 	// print only the first 100 floats
-	// 	floatCount = floatCount > 100 ? 100 : floatCount;
-    //     for (size_t i = 0; i < floatCount; i++) {
-    //         logv_info("  [%3zu] = %f", i, floatData[i]);
-    //     }
-    // } else {
-    //     logv_info("No valid data to print (data=%p, size=%zd)", data, size);
-    // }
+void glPolygonOffset_logged(GLfloat factor, GLfloat units) {
+	GLfloat originalFactor = factor;
+	GLfloat originalUnits = units;
 
-	glBufferData(target, size, data, usage);
+	if (units <= -3900.0f) {
+		// Shadow rendering (originally -4000.0) - needs special handling
+		factor = g_shadowDepthBiasFactor;
+		units = g_shadowDepthBiasUnits;
+	} if (units <= -255.0f) {
+		factor = 0.0f;
+		units = -5.0f;
+	}
+
+	glPolygonOffset(factor, units);
 }
 
-// glEnableVertexAttribArray_fake
-void glEnableVertexAttribArray_fake(GLuint index) {
-	//logv_info("glEnableVertexAttribArray(%i) called", index);
-	glEnableVertexAttribArray(index);
+//glGetUniformLocation_fake
+GLint glGetUniformLocation_fake(GLuint program, const GLchar *name) {
+	GLint res = glGetUniformLocation(program, name);
+	logv_error("glGetUniformLocation(%u, %s) called, returning %d", program, name, res);
+	return res;
+}
+
+// glBindTexture_fake - simplified for native GXM palettes
+void glBindTexture_fake(GLenum target, GLuint texture) {
+	glBindTexture(target, texture);
+	// No longer need shader uniform management - GXM handles palettes natively
+}
+
+void alSourceQueueBuffers_safe(ALuint source, ALsizei n, const ALuint *buffers) {
+      // Check if we have enough memory before calling
+      void *test = malloc(4);
+      if (!test) {
+          logv_error("alSourceQueueBuffers: Out of memory, skipping queue: %x, %x, %x", source, n, buffers);
+          return;  // Silently fail instead of crashing
+      }
+      free(test);
+
+      alSourceQueueBuffers(source, n, buffers);
+}
+
+// void glShaderSource_fake(GLuint shader, GLsizei count, const GLchar * const *string, const GLint *length) {
+// 	uint32_t threadId = sceKernelGetThreadId();
+// 	logv_error("----------[T%u] glShaderSource: shader=%u, count=%d", threadId, shader, count);
+
+// 	// Write shader to file
+// 	char filename[256];
+// 	snprintf(filename, sizeof(filename), "ux0:data/dump_shaders/shader_%u.glsl", shader);
+
+// 	FILE* file = fopen(filename, "w");
+// 	if (file) {
+// 		fprintf(file, "// Shader ID: %u, Thread: %u, Count: %d\n", shader, threadId, count);
+
+// 		// Write each string in the array
+// 		for (GLsizei i = 0; i < count; i++) {
+// 			if (string[i]) {
+// 				int len = length ? length[i] : strlen(string[i]);
+// 				fprintf(file, "%.*s", len, string[i]);
+// 			}
+// 		}
+// 		fclose(file);
+// 		logv_error("[T%u] Shader %u written to %s", threadId, shader, filename);
+// 	} else {
+// 		logv_error("[T%u] Failed to write shader %u to file", threadId, shader);
+// 	}
+
+// 	glShaderSource(shader, count, string, length);
+// }
+
+void glAttachShader_fake(GLuint program, GLuint shader) {
+	uint32_t threadId = sceKernelGetThreadId();
+	logv_error("[T%u] glAttachShader: program=%u, shader=%u", threadId, program, shader);
+	glAttachShader(program, shader);
 }
 
 so_default_dynlib default_dynlib[] = {
-		// OpenSLES
-		{ "slCreateEngine", (uintptr_t)&slCreateEngine },
-		{ "SL_IID_ENGINE", (uintptr_t)&SL_IID_ENGINE },
-		{ "SL_IID_PLAY", (uintptr_t)&SL_IID_PLAY },
-		{ "SL_IID_BUFFERQUEUE", (uintptr_t)&SL_IID_BUFFERQUEUE },
-		{ "SL_IID_VOLUME", (uintptr_t)&SL_IID_VOLUME },
-		{ "SL_IID_SEEK", (uintptr_t)&SL_IID_SEEK },
-		{ "SL_IID_PLAYBACKRATE", (uintptr_t)&SL_IID_PLAYBACKRATE },
-		
 		// Common C/C++ internals
 		{ "_ZNSt8bad_castD1Ev", (uintptr_t)&_ZNSt8bad_castD1Ev },
 		{ "_ZNSt9exceptionD2Ev", (uintptr_t)&_ZNSt9exceptionD2Ev },
@@ -784,13 +771,13 @@ so_default_dynlib default_dynlib[] = {
 		{ "ANativeWindow_getHeight", (uintptr_t)&ANativeWindow_getHeight },
 		{ "ANativeWindow_getWidth", (uintptr_t)&ANativeWindow_getWidth },
 		{ "ANativeWindow_setBuffersGeometry", (uintptr_t)&ANativeWindow_setBuffersGeometry },
-		{ "ASensorEventQueue_disableSensor", (uintptr_t)&ASensorEventQueue_disableSensor },
-		{ "ASensorEventQueue_enableSensor", (uintptr_t)&ASensorEventQueue_enableSensor },
-		{ "ASensorEventQueue_getEvents", (uintptr_t)&ASensorEventQueue_getEvents },
-		{ "ASensorEventQueue_setEventRate", (uintptr_t)&ASensorEventQueue_setEventRate },
-		{ "ASensorManager_createEventQueue", (uintptr_t)&ASensorManager_createEventQueue },
-		{ "ASensorManager_getDefaultSensor", (uintptr_t)&ASensorManager_getDefaultSensor },
-		{ "ASensorManager_getInstance", (uintptr_t)&ASensorManager_getInstance },
+		{ "ASensorEventQueue_disableSensor", (uintptr_t)&ret0 },
+		{ "ASensorEventQueue_enableSensor", (uintptr_t)&ret0 },
+		{ "ASensorEventQueue_getEvents", (uintptr_t)&ret0 },
+		{ "ASensorEventQueue_setEventRate", (uintptr_t)&ret0 },
+		{ "ASensorManager_createEventQueue", (uintptr_t)&ret0 },
+		{ "ASensorManager_getDefaultSensor", (uintptr_t)&ret0 },
+		{ "ASensorManager_getInstance", (uintptr_t)&ret0 },
 		
 		{ "AStorageManager_new", (uintptr_t)&AStorageManager_new },
 		{ "AStorageManager_getMountedObbPath", (uintptr_t)&AStorageManager_getMountedObbPath },
@@ -929,7 +916,10 @@ so_default_dynlib default_dynlib[] = {
 		{ "fclose", (uintptr_t)&fclose_soloader },
 		{ "fcntl", (uintptr_t)&fcntl_soloader },
 		{ "fopen", (uintptr_t)&fopen_soloader },
+		//{ "fread", (uintptr_t)&fread_soloader },
 		{ "fstat", (uintptr_t)&fstat_soloader },
+		//{ "fseek", (uintptr_t)&fseek_soloader },
+		//{ "ftell", (uintptr_t)&ftell_soloader },
 		{ "fsync", (uintptr_t)&fsync_soloader },
 		{ "ioctl", (uintptr_t)&ioctl_soloader },
 		{ "open", (uintptr_t)&open_soloader },
@@ -950,11 +940,11 @@ so_default_dynlib default_dynlib[] = {
 			{ "fgets", (uintptr_t)&sceLibcBridge_fgets },
 			{ "fputc", (uintptr_t)&sceLibcBridge_fputc },
 			{ "fputs", (uintptr_t)&sceLibcBridge_fputs },
-			{ "fread", (uintptr_t)&sceLibcBridge_fread },
+			{ "fread", (uintptr_t)&fread_soloader },
 			{ "freopen", (uintptr_t)&sceLibcBridge_freopen },
-			{ "fseek", (uintptr_t)&sceLibcBridge_fseek },
+			{ "fseek", (uintptr_t)&fseek_soloader },
 			{ "fsetpos", (uintptr_t)&sceLibcBridge_fsetpos },
-			{ "ftell", (uintptr_t)&sceLibcBridge_ftell },
+			{ "ftell", (uintptr_t)&ftell_soloader },
 			{ "fwrite", (uintptr_t)&sceLibcBridge_fwrite },
 			{ "getc", (uintptr_t)&sceLibcBridge_getc },
 			{ "getwc", (uintptr_t)&sceLibcBridge_getwc },
@@ -1001,7 +991,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "ftello", (uintptr_t)&ftello },
 		{ "ftruncate", (uintptr_t)&ftruncate },
 		{ "getcwd", (uintptr_t)&getcwd },
-		{ "lseek", (uintptr_t)&lseek },
+		{ "lseek", (uintptr_t)&lseek_delegate },
 		//{ "lstat", (uintptr_t)&lstat },
 		{ "mkdir", (uintptr_t)&mkdir },
 		{ "pipe", (uintptr_t)&pseudo_pipe },
@@ -1025,27 +1015,27 @@ so_default_dynlib default_dynlib[] = {
 		{ "vsprintf", (uintptr_t)&vsprintf },
 		{ "vsscanf", (uintptr_t)&vsscanf },
 		{ "vswprintf", (uintptr_t)&vswprintf },
-		{ "printf", (uintptr_t)&sceClibPrintf },
-
 		#ifdef USE_SCELIBC_IO
-			{ "fprintf", (uintptr_t)&sceLibcBridge_fprintf },
-			{ "fscanf", (uintptr_t)&sceLibcBridge_fscanf },
-			{ "sscanf", (uintptr_t)&sceLibcBridge_sscanf },
-			{ "vfprintf", (uintptr_t)&sceLibcBridge_vfprintf },
+		{ "printf", (uintptr_t)&sceClibPrintf },
+		{ "fprintf", (uintptr_t)&sceLibcBridge_fprintf },
+		{ "fscanf", (uintptr_t)&sceLibcBridge_fscanf },
+		{ "sscanf", (uintptr_t)&sceLibcBridge_sscanf },
+		{ "vfprintf", (uintptr_t)&sceLibcBridge_vfprintf },
 		#else
-			{ "fprintf", (uintptr_t)&fprintf },
-			{ "fscanf", (uintptr_t)&fscanf },
-			{ "sscanf", (uintptr_t)&sscanf },
-			{ "vfprintf", (uintptr_t)&vfprintf },
+		{ "printf", (uintptr_t)&printf },
+		{ "fprintf", (uintptr_t)&fprintf },
+		{ "fscanf", (uintptr_t)&fscanf },
+		{ "sscanf", (uintptr_t)&sscanf },
+		{ "vfprintf", (uintptr_t)&vfprintf },
 		#endif
 
 
 		// OpenGL
 		{ "glActiveTexture", (uintptr_t)&glActiveTexture },
 		{ "glAlphaFuncx", (uintptr_t)&glAlphaFuncx },
-		{ "glAttachShader", (uintptr_t)&glAttachShader_wrapper },
+		{ "glAttachShader", (uintptr_t)&glAttachShader },
 		{ "glBindAttribLocation", (uintptr_t)&glBindAttribLocation },
-		{ "glBindBuffer", (uintptr_t)&glBindBuffer },
+		{ "glBindBuffer", (uintptr_t)&glBindBuffer_profiled },
 		{ "glBindFramebuffer", (uintptr_t)&glBindFramebuffer },
 		{ "glBindRenderbuffer", (uintptr_t)&glBindRenderbuffer },
 		{ "glBindTexture", (uintptr_t)&glBindTexture },
@@ -1087,7 +1077,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glDisableClientState", (uintptr_t)&glDisableClientState },
 		{ "glDisableVertexAttribArray", (uintptr_t)&glDisableVertexAttribArray },
 		{ "glDrawArrays", (uintptr_t)&glDrawArrays },
-		{ "glDrawElements", (uintptr_t)&glDrawElements },
+		{ "glDrawElements", (uintptr_t)&glDrawElements_profiled },
 		{ "glEnable", (uintptr_t)&glEnable },
 		{ "glEnableClientState", (uintptr_t)&glEnableClientState },
 		{ "glEnableVertexAttribArray", (uintptr_t)&glEnableVertexAttribArray },
@@ -1111,7 +1101,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glGetShaderInfoLog", (uintptr_t)&glGetShaderInfoLog },
 		{ "glGetShaderiv", (uintptr_t)&glGetShaderiv },
 		{ "glGetString", (uintptr_t)&glGetString },
-		{ "glGetUniformLocation", (uintptr_t)&glGetUniformLocation_fake },
+		{ "glGetUniformLocation", (uintptr_t)&glGetUniformLocation },
 		{ "glHint", (uintptr_t)&glHint },
 		{ "glLightModelxv", (uintptr_t)&glLightModelxv },
 		{ "glLightx", (uintptr_t)&ret0 },
@@ -1125,7 +1115,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "glMatrixMode", (uintptr_t)&glMatrixMode },
 		{ "glNormalPointer", (uintptr_t)&glNormalPointer },
 		{ "glPixelStorei", (uintptr_t)&ret0 },
-		{ "glPolygonOffset", (uintptr_t)&glPolygonOffset },
+		{ "glPolygonOffset", (uintptr_t)&glPolygonOffset_logged },
 		{ "glPopMatrix", (uintptr_t)&glPopMatrix },
 		{ "glPushMatrix", (uintptr_t)&glPushMatrix },
 		{ "glReadPixels", (uintptr_t)&glReadPixels },
@@ -1165,7 +1155,9 @@ so_default_dynlib default_dynlib[] = {
 		{ "glVertexAttrib4f", (uintptr_t)&glVertexAttrib4f },
 		{ "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
 		{ "glVertexPointer", (uintptr_t)&glVertexPointer },
-		{ "glViewport", (uintptr_t)&glViewport_fake },
+		{ "glViewport", (uintptr_t)&glViewport },
+		{ "glDrawArraysInstanced", (uintptr_t)&glDrawArraysInstanced },
+		{ "glDrawElementsInstanced", (uintptr_t)&glDrawElementsInstanced },
 
 		// By Raul
 		{ "glGetShaderPrecisionFormat", (uintptr_t)&ret0 },
@@ -1346,7 +1338,7 @@ so_default_dynlib default_dynlib[] = {
 		// Time
 		{ "clock", (uintptr_t)&clock },
 		//{ "clock_getres", (uintptr_t)&clock_getres },
-		{ "clock_gettime", (uintptr_t)&clock_gettime },
+		{ "clock_gettime", (uintptr_t)&clock_gettime_soloader },
 		{ "difftime", (uintptr_t)&difftime },
 		{ "gettimeofday", (uintptr_t)&gettimeofday },
 		{ "gmtime", (uintptr_t)&gmtime },
@@ -1467,7 +1459,7 @@ so_default_dynlib default_dynlib[] = {
 		{ "alGetBufferi", (uintptr_t)&alGetBufferi },
 		{ "alGetSourcef", (uintptr_t)&alGetSourcef },
 		{ "alSourceUnqueueBuffers", (uintptr_t)&alSourceUnqueueBuffers },
-		{ "alSourceQueueBuffers", (uintptr_t)&alSourceQueueBuffers },
+		{ "alSourceQueueBuffers", (uintptr_t)&alSourceQueueBuffers_safe },
 		{ "alListenerfv", (uintptr_t)&alListenerfv },
 		{ "alListener3f", (uintptr_t)&alListener3f },
 		{ "alDopplerFactor", (uintptr_t)&alDopplerFactor },

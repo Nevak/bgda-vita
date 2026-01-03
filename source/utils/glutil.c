@@ -27,7 +27,7 @@
 
  // Helpers for our handling of shaders
  GLboolean skip_next_compile = GL_FALSE;
- char next_shader_fname[256];
+ //char next_shader_fname[256];
  void load_shader(GLuint shader, const char * string, size_t length);
  
  extern known_shaders_struct known_shaders[256];
@@ -46,233 +46,17 @@
  }
  
  void gl_init() {
-    vglSetSemanticBindingMode(VGL_MODE_POSTPONED);
-    vglInitWithCustomThreshold(0, 960, 544, 18 * 1024 * 1024, 0, 20 * 1024 * 1024, 12 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
- }
- 
- void gl_swap() {
-     vglSwapBuffers(GL_FALSE);
- }
- 
- void glShaderSource_soloader(GLuint shader, GLsizei count,
-                              const GLchar **string, const GLint *_length) {
- #ifdef DEBUG_OPENGL
-     sceClibPrintf("[gl_dbg] glShaderSource<%p>(shader: %i, count: %i, string: %s, length: %p)\n", __builtin_return_address(0), shader, count, *string, _length);
- #endif
-     if (!string) {
-        logv_error("<%p> Shader source string is NULL, count: %i",
-                    __builtin_return_address(0), count);
-         skip_next_compile = GL_TRUE;
-         return;
-     } else if (!*string) {
-        logv_error("<%p> Shader source *string is NULL, count: %i",
-                    __builtin_return_address(0), count);
-         skip_next_compile = GL_TRUE;
-         return;
-     }
- 
-     size_t total_length = 0;
- 
-     for (int i = 0; i < count; ++i) {
-         if (!_length) {
-             total_length += strlen(string[i]);
-         } else {
-             total_length += _length[i];
-         }
-     }
- 
-     char * str = malloc(total_length+1);
-     size_t l = 0;
- 
-     for (int i = 0; i < count; ++i) {
-         if (!_length) {
-             memcpy(str + l, string[i], strlen(string[i]));
-             l += strlen(string[i]);
-         } else {
-             memcpy(str + l, string[i], _length[i]);
-             l += _length[i];
-         }
-     }
-     str[total_length] = '\0';
- 
-     load_shader(shader, str, total_length);
- 
-     free(str);
- }
- 
- void glCompileShader_soloader(GLuint shader) {
- #ifdef DEBUG_OPENGL
-     sceClibPrintf("[gl_dbg] glCompileShader<%p>(shader: %i)\n", __builtin_return_address(0), shader);
- #endif
- 
- #ifndef USE_GXP_SHADERS
-     if (!skip_next_compile) {
-         glCompileShader(shader);
- #ifdef DUMP_COMPILED_SHADERS 
-         void *bin = vglMalloc(32 * 1024);
-         GLsizei len;
-         vglGetShaderBinary(shader, 32 * 1024, &len, bin);
-         logv_debug("[Thread:%d]next_shader_fname saving GLSL shader to %s", sceKernelGetThreadId(), next_shader_fname);
-         file_save(next_shader_fname, bin, len);
-         vglFree(bin);
- #endif
-     }
-     skip_next_compile = GL_FALSE;
- #endif
- }
- 
- #if defined(USE_GLSL_SHADERS) && defined(DUMP_COMPILED_SHADERS)
- void load_shader(GLuint shader, const char * string, size_t length) {
-     char* sha_name = str_sha1sum(string, length);
- 
-     char gxp_path[256];
-     snprintf(gxp_path, sizeof(gxp_path), DATA_PATH"gxp/%s.gxp", sha_name);
- 
-     if (file_exists(gxp_path)) {
-         uint8_t *buffer;
-         size_t size;
- 
-         file_load(gxp_path, &buffer, &size);
- 
-         glShaderBinary(1, &shader, 0, buffer, (int32_t) size);
- 
-         free(buffer);
-         skip_next_compile = GL_TRUE;
-     } else {
-         glShaderSource(shader, 1, &string, &length);
-         strcpy(next_shader_fname, gxp_path);
-     }
- 
-     free(sha_name);
- }
- #elif defined(USE_GLSL_SHADERS)
- void load_shader(GLuint shader, const char * string, size_t length) {
-     glShaderSource(shader, 1, &string, &length);
- } 
- #elif defined(USE_CG_SHADERS) && defined(DUMP_COMPILED_SHADERS)
- void load_shader(GLuint shader, const char * string, size_t length) {
-     char* sha_name = str_sha1sum(string, length);
-     char gxp_path[256];
-     char cg_path[256];
-     snprintf(gxp_path, sizeof(gxp_path), DATA_PATH"gxp/%s.gxp", sha_name);
-     snprintf(cg_path, sizeof(cg_path), DATA_PATH"cg/%s.cg", sha_name);
- 
-    logv_debug("[Thread:%d]USE_CG_SHADERS ProgramId (%d) loading shader %s, %s", sceKernelGetThreadId(), shader, gxp_path, cg_path);
+    vglSetVertexPoolSize(32 * 1024 * 1024);
+    vglSetParamBufferSize(12 * 1024 * 1024);
+    vglWaitVblankStart(GL_FALSE);
+    vglUseTripleBuffering(GL_FALSE);
+    //vglSetSemanticBindingMode(VGL_MODE_POSTPONED);
+    //vglInitWithCustomThreshold(0, 960, 544, 18 * 1024 * 1024, 0, 20 * 1024 * 1024, 0, SCE_GXM_MULTISAMPLE_NONE);
 
-     if (file_exists(gxp_path)) {
-         uint8_t *buffer;
-         size_t size;
- 
-         file_load(gxp_path, &buffer, &size);
- 
-         glShaderBinary(1, &shader, 0, buffer, (int32_t) size);
- 
-         free(buffer);
-         skip_next_compile = GL_TRUE;
-     } else if (file_exists(cg_path)) {
-         char *buffer;
-         size_t size;
- 
-         file_load(cg_path, (uint8_t **) &buffer, &size);
-         //logv_debug("[Thread:%d] calling glShaderSource with source %s", sceKernelGetThreadId(), buffer);
-         glShaderSource(shader, 1, &buffer, &size);
-         strcpy(next_shader_fname, gxp_path);
- 
-         free(buffer);
-         skip_next_compile = GL_FALSE;
-     } else {
-         logv_warn("Encountered an untranslated shader %s, saving GLSL "
-                "and using a dummy shader.", sha_name);
- 
-         char glsl_path[256];
-         snprintf(glsl_path, sizeof(glsl_path), DATA_PATH"glsl/%s.glsl", sha_name);
-         file_mkpath(glsl_path, 0777);
-         //logv_debug("[Thread:%d] untranslated saving GLSL shader to %s", sceKernelGetThreadId(), glsl_path);
-         file_save(glsl_path, (const uint8_t *) string, length);
- 
-         if (strstr(string, "gl_FragColor") || strstr(string, "float4 main(")) {
-             const char *dummy_shader = "float4 main() { return float4(1.0,1.0,1.0,1.0); }";
-             int32_t dummy_shader_len = (int32_t) strlen(dummy_shader);
-             glShaderSource(shader, 1, &dummy_shader, &dummy_shader_len);
-         } else {
-             const char *dummy_shader = "void main(float4 out gl_Position : POSITION ) { gl_Position = float4(1.0,1.0,1.0,1.0); }";
-             int32_t dummy_shader_len = (int32_t) strlen(dummy_shader);
-             glShaderSource(shader, 1, &dummy_shader, &dummy_shader_len);
-         }
- 
-         skip_next_compile = GL_FALSE;
-     }
- 
-     free(sha_name);
+    
+    vglInitWithCustomThreshold(0, SCREEN_W, SCREEN_H, MEMORY_VITAGL_THRESHOLD_MB * 1024 * 1024, 0, 0, 0, SCE_GXM_MULTISAMPLE_NONE);
+    //eglSwapInterval(0, 2);
  }
- #elif defined(USE_CG_SHADERS) || defined(USE_GXP_SHADERS)
- void load_shader(GLuint shader, const char * string, size_t length) {
+ 
 
-    //  char* sha_name;
-    //  if (strncmp(string, "sha:", 4) == 0) {
-    //      sha_name = malloc(41);
-    //      strncpy(sha_name, string+4, 40);
-    //      sha_name[40] = '\0';
-    //      logv_warn("will load faked shader using sha1 \"%s\"", sha_name);
-    //  } else {
-    //      sha_name = str_sha1sum((uint8_t*)string, length);
-    //      strncpy(known_shaders[known_shaders_count - 1].real_name, sha_name, 40);
-    //      known_shaders[known_shaders_count - 1].real_name[40] = '\0';
-    //      logv_warn("saved faked shader sha1 \"%s\" under id %i", sha_name, known_shaders_count - 1);
-    //  }
-     char* sha_name = str_sha1sum(string, length);
-     logv_debug("[Thread:%d] ProgramId (%d) => %s", sceKernelGetThreadId(), shader, sha_name);
-
-     char path[256];
- #ifdef USE_CG_SHADERS
-     snprintf(path, sizeof(path), DATA_PATH"cg/%s.cg", sha_name);
- #else
-     snprintf(path, sizeof(path), DATA_PATH"gxp/%s.gxp", sha_name);
- #endif
  
-     if (file_exists(path)) {
- #ifdef USE_CG_SHADERS
-         char *buffer;
-         size_t size;
- 
-         file_load(path, (uint8_t **) &buffer, &size);
- 
-         glShaderSource(shader, 1, &buffer, &size);
- 
-         free(buffer);
- #else
-         uint8_t *buffer;
-         size_t size;
- 
-         file_load(path, &buffer, &size);
- 
-         glShaderBinary(1, &shader, 0, buffer, (int32_t) size);
- 
-         free(buffer);
- #endif
-     } else {
-        logv_warn("Encountered an untranslated shader %s, saving GLSL "
-                "and using a dummy shader.", path);
- 
-         char glsl_path[256];
-         snprintf(glsl_path, sizeof(glsl_path), DATA_PATH"glsl/%s.glsl", sha_name);
-         file_mkpath(glsl_path, 0777);
-         logv_debug("[Thread:%d]USE_CG_SHADERS untranslated saving GLSL shader to %s", sceKernelGetThreadId(), glsl_path);
-         file_save(glsl_path, (const uint8_t *) string, length);
- 
-         if (strstr(string, "gl_FragColor") || strstr(string, "float4 main(")) {
-             const char *dummy_shader = "float4 main() { return float4(1.0,1.0,1.0,1.0); }";
-             int32_t dummy_shader_len = (int32_t) strlen(dummy_shader);
-             glShaderSource(shader, 1, &dummy_shader, &dummy_shader_len);
-         } else {
-             const char *dummy_shader = "void main(float4 out gl_Position : POSITION ) { gl_Position = float4(1.0,1.0,1.0,1.0); }";
-             int32_t dummy_shader_len = (int32_t) strlen(dummy_shader);
-             glShaderSource(shader, 1, &dummy_shader, &dummy_shader_len);
-         }
-     }
- 
-     free(sha_name);
- }
- #else
- #error "Define one of (USE_GLSL_SHADERS, USE_CG_SHADERS, USE_GXP_SHADERS)"
- #endif

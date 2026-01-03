@@ -16,6 +16,9 @@
 #include "utils/logger.h"
 #include "utils/utils.h"
 #include "utils/settings.h"
+#include "utils/ogg_patch.h"
+#include "utils/vorbis_patch.h"
+#include "utils/ffmpeg_patch.h"
 
 #include "dynlib.h"
 #include "patch.h"
@@ -63,6 +66,7 @@ void soloader_init_all() {
                     "sure that you have %s file exactly at that path.", SO_PATH);
     }
 
+    // 10 KB
     if (so_file_load(&so_mod_libcpufeatues, SO_PATH_LIBCPUFEATURES, LOAD_ADDRESS) < 0)
         fatal_error("Error: could not load %s.", SO_PATH_LIBCPUFEATURES);
     so_relocate(&so_mod_libcpufeatues);
@@ -72,7 +76,9 @@ void soloader_init_all() {
     so_initialize(&so_mod_libcpufeatues);
     logv_info("%s loaded successfully.", SO_PATH_LIBCPUFEATURES);
 
-    if (so_file_load(&so_mod_jbejni, SO_PATH_JBEJNI, LOAD_ADDRESS + 0x100000) < 0)
+    // 38 KB
+    // 0x20000 in decimal is 131072
+    if (so_file_load(&so_mod_jbejni, SO_PATH_JBEJNI, LOAD_ADDRESS + 0x15000) < 0)
         fatal_error("Error: could not load %s.", SO_PATH_JBEJNI);
     so_relocate(&so_mod_jbejni);
     logv_info("Resolving imports for %s", SO_PATH_JBEJNI);
@@ -81,8 +87,8 @@ void soloader_init_all() {
     so_initialize(&so_mod_jbejni);
     logv_info("%s loaded successfully.", SO_PATH_JBEJNI);
 
-
-    if (so_file_load(&so_mod_libcpp, SO_PATH_LIBCPP, LOAD_ADDRESS + 0x200000) < 0)
+    // 592 KB
+    if (so_file_load(&so_mod_libcpp, SO_PATH_LIBCPP, LOAD_ADDRESS + 0x35000) < 0)
         fatal_error("Error: could not load %s.", SO_PATH_LIBCPP);
     so_relocate(&so_mod_libcpp);
     logv_info("Resolving imports for %s", SO_PATH_LIBCPP);
@@ -91,7 +97,8 @@ void soloader_init_all() {
     so_initialize(&so_mod_libcpp);
     logv_info("%s loaded successfully.", SO_PATH_LIBCPP);
 
-    if (so_file_load(&so_mod_libxmv, SO_PATH_LIBXMV, LOAD_ADDRESS + 0x300000) < 0)
+    // 1385 KB
+    if (so_file_load(&so_mod_libxmv, SO_PATH_LIBXMV, LOAD_ADDRESS + 0xE0000) < 0)
         fatal_error("Error: could not load %s.", SO_PATH_LIBXMV);
     so_relocate(&so_mod_libxmv);
     logv_info("Resolving imports for %s", SO_PATH_LIBXMV);
@@ -100,8 +107,8 @@ void soloader_init_all() {
     so_initialize(&so_mod_libxmv);
     logv_info("%s loaded successfully.", SO_PATH_LIBXMV);
 
-
-    if (so_file_load(&so_mod, SO_PATH, LOAD_ADDRESS + 0x5000000) < 0)
+    // 2055 KB
+    if (so_file_load(&so_mod, SO_PATH, LOAD_ADDRESS + 0x400000) < 0)
         fatal_error("Error: could not load %s.", SO_PATH);
 
     settings_load();
@@ -114,6 +121,10 @@ void soloader_init_all() {
     log_info("so_resolve() passed.");
 
     so_patch();
+    //patch_ogg();
+    patch_vorbis();
+    //patch_texture_decom();
+    //patch_ffmpeg();
     log_info("so_patch() passed.");
 
     so_flush_caches(&so_mod);

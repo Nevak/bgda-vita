@@ -15,7 +15,8 @@
 #define SOLOADER_DYNLIB_H
 
 #include <so_util/so_util.h>
+#include <vitaGL.h>
 
 void resolve_imports(so_module* mod);
-
+void glTexImage2D_fake(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels);
 #endif // SOLOADER_DYNLIB_H

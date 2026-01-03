@@ -9,6 +9,7 @@
 
 #include "controls.h"
 
+#include <cstdint>
 #include <falso_jni/FalsoJNI.h>
 #include <psp2/kernel/threadmgr.h>
 #include <pthread.h>
@@ -17,6 +18,7 @@
 #include <psp2/kernel/clib.h>
 #include "../keycodes.h"
 #include "../AInput.h"
+#include "../AFakeNative_Utils.h"
 
 extern "C" {
 	float L_INNER_DEADZONE __attribute__((weak)) = 0.20f;
@@ -43,10 +45,80 @@ extern "C" {
 
 AInputQueue * inputQueue;
 
+// Bitmask constants for trigger buttons
+enum TriggerMask {
+    TRIGGER_L1 = 1 << 0,  // 0x01
+    TRIGGER_R1 = 1 << 1,  // 0x02
+    TRIGGER_L2 = 1 << 2,  // 0x04
+    TRIGGER_R2 = 1 << 3   // 0x08
+};
+
+// Structure to hold joystick state
+struct JoyState {
+    union {
+        struct {
+            float x, y, z, rz;
+            uint8_t hat_x, hat_y;
+            uint8_t trigger_mask;
+            uint8_t padding[3];  // Align to 32 bytes for better cache performance
+        };
+    };
+
+	__attribute__((no_instrument_function, always_inline))
+    // Constructor for easy initialization
+    JoyState(float x = 0, float y = 0, float z = 0, float rz = 0,
+             uint8_t hat_x = 0, uint8_t hat_y = 0, uint8_t triggers = 0)
+        : x(x), y(y), z(z), rz(rz), hat_x(hat_x), hat_y(hat_y), trigger_mask(triggers) {
+        // Zero out padding for consistent comparisons
+        padding[0] = padding[1] = padding[2] = 0;
+    }
+
+	__attribute__((no_instrument_function, always_inline))
+    bool operator==(const JoyState& other) const {
+        return (trigger_mask == other.trigger_mask) &&
+			   (x == other.x) &&
+			   (y == other.y) &&
+			   (z == other.z) &&
+			   (rz == other.rz) &&
+			   (hat_x == other.hat_x) &&
+			   (hat_y == other.hat_y);
+	}
+
+	__attribute__((no_instrument_function, always_inline))
+    bool operator!=(const JoyState& other) const {
+        return (trigger_mask != other.trigger_mask) ||
+			   (x != other.x) ||
+			   (y != other.y) ||
+			   (z != other.z) ||
+			   (rz != other.rz) ||
+			   (hat_x != other.hat_x) ||
+			   (hat_y != other.hat_y);
+	}
+};
+
+// Per-controller state tracking
+struct ControllerState {
+	bool is_available;
+	uint32_t old_buttons;
+	uint32_t current_buttons;
+	uint32_t pressed_buttons;
+	uint32_t released_buttons;
+	JoyState previous_joy_state;
+
+	ControllerState() : is_available(false), old_buttons(0), current_buttons(0),
+	                    pressed_buttons(0), released_buttons(0), previous_joy_state() {}
+};
+
+// Support up to 4 controllers
+static ControllerState controllers[4];
+static int num_controllers = 0;
+
+__attribute__((no_instrument_function, always_inline))
 float lerp(float x1, float y1, float x3, float y3, float x2) {
 	return ((x2-x1)*(y3-y1) / (x3-x1)) + y1;
 }
 
+__attribute__((no_instrument_function, always_inline))
 float coord_normalize(float val, float deadzone_min, float deadzone_max) {
 	float sign = (val < 0) ? -1.0f : 1.0f;
 
@@ -55,12 +127,47 @@ float coord_normalize(float val, float deadzone_min, float deadzone_max) {
 	return lerp(0.f, deadzone_min * sign, 1.0f*sign, deadzone_max*sign, val);
 }
 
+int detectControllers() {
+	num_controllers = 0;
+
+	if (sceCtrlIsMultiControllerSupported()) {
+		SceCtrlPortInfo ctrl_state;
+		sceCtrlGetControllerPortInfo(&ctrl_state);
+
+		for (int i = 1; i < 5; i++) {
+			int controller_idx = i - 1;
+			if (ctrl_state.port[i] != SCE_CTRL_TYPE_UNPAIRED) {
+				controllers[controller_idx].is_available = true;
+				num_controllers++;
+			} else {
+				controllers[controller_idx].is_available = false;
+			}
+			ALOGE("Controller(%d) : 0x%X", i, ctrl_state.port[i]);
+		}
+	} else {
+		controllers[0].is_available = true;
+		num_controllers = 1;
+	}
+
+	if (num_controllers == 0) {
+		ALOGE("No controllers detected, enabling controller 1 by default");
+		controllers[0].is_available = true;
+		num_controllers = 1;
+	}
+
+	return num_controllers;
+}
+
 void controls_init(AInputQueue * queue) {
 	// Enable analog sticks and touchscreen
 	sceCtrlSetSamplingModeExt(SCE_CTRL_MODE_ANALOG_WIDE);
-	sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
+	sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, SCE_TOUCH_SAMPLING_STATE_START);
 
 	inputQueue = queue;
+
+	// Detect available controllers
+	int detected = detectControllers();
+	(void)detected; // Suppress unused warning if logging is disabled
 
 	pthread_t t;
 	pthread_attr_t attr;
@@ -73,7 +180,6 @@ void controls_init(AInputQueue * queue) {
 void * controls_poll(void * arg) {
 	while (1) {
 		pollPad();
-		pollTouch();
 		sceKernelDelayThread(16666);
 	}
 }
@@ -144,11 +250,12 @@ void pollTouch() {
 			// Send touch down event only if finger wasn't already down before
 			if (!finger_down) {
 				ev.source = AINPUT_SOURCE_TOUCHSCREEN;
+				ev.type = AINPUT_EVENT_TYPE_MOTION;
+				ev.deviceId = 0;
 				ev.motion_ptrcount = numPointersDown + 1;
 				ev.motion_x[numPointersDown] = x;
 				ev.motion_y[numPointersDown] = y;
 				ev.motion_ptridx[numPointersDown] = finger_id;
-				ev.type = AINPUT_EVENT_TYPE_MOTION;
 
 				// Get global event state to have up-to-date indices and coordinates,
 				// but send a copy to not send MOVE too early / too often
@@ -243,99 +350,107 @@ static ButtonMapping mapping[] = {
 		{ SCE_CTRL_SQUARE,	AKEYCODE_BUTTON_X },
 		{ SCE_CTRL_TRIANGLE,  AKEYCODE_BUTTON_Y },
 		{ SCE_CTRL_L1,		AKEYCODE_BUTTON_L1 },
+		//{ SCE_CTRL_L2,		AKEYCODE_BUTTON_L2 },
 		{ SCE_CTRL_R1,		AKEYCODE_BUTTON_R1 },
+		//{ SCE_CTRL_R2,		AKEYCODE_BUTTON_R2 },
 		{ SCE_CTRL_START,	 AKEYCODE_BUTTON_START },
 		{ SCE_CTRL_SELECT,	AKEYCODE_BUTTON_SELECT },
 };
 
-uint32_t old_buttons = 0, current_buttons = 0, pressed_buttons = 0, released_buttons = 0;
-float lx = 0, ly = 0, rx = 0, ry = 0, lastLx = 0, lastLy = 0, lastRx = 0, lastRy = 0;
+void sendJoyEvent(const JoyState& state, int deviceId) {
+	inputEvent stickInputEvent;
+	stickInputEvent.source = AINPUT_SOURCE_JOYSTICK;
+	stickInputEvent.type = AINPUT_EVENT_TYPE_MOTION;
+	stickInputEvent.deviceId = deviceId;
+	stickInputEvent.motion_ptrcount = 1;
+	stickInputEvent.motion_x[0] = state.x;
+	stickInputEvent.motion_y[0] = state.y;
+	stickInputEvent.motion_z[0] = state.z;
+	stickInputEvent.motion_rz[0] = state.rz;
+	stickInputEvent.motion_hat_x[0] = 0;
+	stickInputEvent.motion_hat_y[0] = 0;
 
-inputEvent stickInputEvent;
-int sticksDown = 0;
-float x_old = 0.0f, y_old = 0.0f, z_old = 0.0f, rz_old = 0.0f, hat_x_old = 0.0f, hat_y_old = 0.0f;
-bool ltPressed_old = false, rtPressed_old = false;
+	bool ltPressed = (state.trigger_mask & TRIGGER_L2) != 0;
+	bool rtPressed = (state.trigger_mask & TRIGGER_R2) != 0;
+	//bool lbPressed = (state.trigger_mask & TRIGGER_L1) != 0;
+	//bool rbPressed = (state.trigger_mask & TRIGGER_R1) != 0;
 
-void sendJoyEvent(float x, float y, float z, float rz, float hat_x, float hat_y, bool ltPressed, bool rtPressed) {
-	if (x != x_old || y != y_old || z != z_old || rz != rz_old || hat_x != hat_x_old || hat_y != hat_y_old || ltPressed != ltPressed_old || rtPressed != rtPressed_old) {
-		stickInputEvent.source = AINPUT_SOURCE_JOYSTICK;
-		stickInputEvent.motion_ptrcount = sticksDown + 1;
-		stickInputEvent.motion_x[0] = x;
-		stickInputEvent.motion_y[0] = y;
-		stickInputEvent.motion_z[0] = z;
-		stickInputEvent.motion_rz[0] = rz;
-		stickInputEvent.motion_hat_x[0] = hat_x;
-		stickInputEvent.motion_hat_y[0] = hat_y;
-		stickInputEvent.motion_lt[0] = ltPressed ? 1.0 : 0.0;
-		stickInputEvent.motion_rt[0] = rtPressed ? 1.0 : 0.0;
-		stickInputEvent.motion_ptridx[0] = 0;
-		stickInputEvent.type = AINPUT_EVENT_TYPE_MOTION;
+	stickInputEvent.motion_lt[0] = (/*lbPressed ||*/ ltPressed) ? 1.0f : 0.0f;
+	stickInputEvent.motion_rt[0] = (/*rbPressed ||*/ rtPressed) ? 1.0f : 0.0f;
 
-		stickInputEvent.motion_action = AMOTION_EVENT_ACTION_MOVE;
-		AInputEvent* aie = AInputEvent_create(&stickInputEvent);
-		AInputQueue_enqueueEvent(inputQueue, aie);
-
-		x_old = x;
-		y_old = y;
-		z_old = z;
-		rz_old = rz;
-		hat_x_old = hat_x;
-		hat_y_old = hat_y;
-		ltPressed_old = ltPressed;
-		rtPressed_old = rtPressed;
-	}
+	stickInputEvent.motion_ptridx[0] = 0;
+	stickInputEvent.motion_action = AMOTION_EVENT_ACTION_MOVE;
+	
+	AInputEvent* aie = AInputEvent_create(&stickInputEvent);
+	AInputQueue_enqueueEvent(inputQueue, aie);
 }
 
+__attribute__((no_instrument_function, always_inline))
 void pollPad() {
-	SceCtrlData pad;
-	sceCtrlPeekBufferPositiveExt2(0, &pad, 1);
+	// Loop through all potential controllers
+	for (int i = 0; i < 4; i++) {
+		if (!controllers[i].is_available)
+			continue;
 
-	old_buttons = current_buttons;
-	current_buttons = pad.buttons;
-	pressed_buttons = current_buttons & ~old_buttons;
-	released_buttons = ~current_buttons & old_buttons;
+		// Map logical controller index to hardware port
+		// Port 0 is used for single controller compatibility
+		// Ports 1-4 are used when multi-controller is enabled
+		int port = (num_controllers == 1) ? 0 : (i + 1);
 
-	for (auto & i : mapping) {
-		if (pressed_buttons & i.sce_button) {
-			inputEvent e;
-			e.source = AINPUT_SOURCE_GAMEPAD;
-			e.keycode = i.android_button;
-			e.action = AKEY_EVENT_ACTION_DOWN;
-			e.type = AINPUT_EVENT_TYPE_KEY;
+		SceCtrlData pad;
+		sceCtrlPeekBufferPositiveExt2(port, &pad, 1);
 
-			AInputEvent* aie = AInputEvent_create(&e);
-			AInputQueue_enqueueEvent(inputQueue, aie);
-		} else if (released_buttons & i.sce_button) {
-			inputEvent e;
-			e.source = AINPUT_SOURCE_GAMEPAD;
-			e.keycode = i.android_button;
-			e.action = AKEY_EVENT_ACTION_UP;
-			e.type = AINPUT_EVENT_TYPE_KEY;
+		// Update button state for this controller
+		controllers[i].old_buttons = controllers[i].current_buttons;
+		controllers[i].current_buttons = pad.buttons;
+		controllers[i].pressed_buttons = controllers[i].current_buttons & ~controllers[i].old_buttons;
+		controllers[i].released_buttons = ~controllers[i].current_buttons & controllers[i].old_buttons;
 
-			AInputEvent *aie = AInputEvent_create(&e);
-			AInputQueue_enqueueEvent(inputQueue, aie);
+		// Send button events
+		for (auto & btn : mapping) {
+			if (controllers[i].pressed_buttons & btn.sce_button) {
+				inputEvent e;
+				e.source = AINPUT_SOURCE_GAMEPAD;
+				e.type = AINPUT_EVENT_TYPE_KEY;
+				e.deviceId = i;
+				e.keycode = btn.android_button;
+				e.action = AKEY_EVENT_ACTION_DOWN;
+
+				AInputEvent* aie = AInputEvent_create(&e);
+				AInputQueue_enqueueEvent(inputQueue, aie);
+			} else if (controllers[i].released_buttons & btn.sce_button) {
+				inputEvent e;
+				e.source = AINPUT_SOURCE_GAMEPAD;
+				e.type = AINPUT_EVENT_TYPE_KEY;
+				e.deviceId = i;
+				e.keycode = btn.android_button;
+				e.action = AKEY_EVENT_ACTION_UP;
+
+				AInputEvent *aie = AInputEvent_create(&e);
+				AInputQueue_enqueueEvent(inputQueue, aie);
+			}
+		}
+
+		// Apply deadzones to analog sticks
+		float lx = coord_normalize(((float)pad.lx - 128.0f) / 128.0f, L_INNER_DEADZONE, L_OUTER_DEADZONE);
+		float ly = coord_normalize(((float)pad.ly - 128.0f) / 128.0f, L_INNER_DEADZONE, L_OUTER_DEADZONE);
+		float rx = coord_normalize(((float)pad.rx - 128.0f) / 128.0f, R_INNER_DEADZONE, R_OUTER_DEADZONE);
+		float ry = coord_normalize(((float)pad.ry - 128.0f) / 128.0f, R_INNER_DEADZONE, R_OUTER_DEADZONE);
+
+		// Build trigger bitmask
+		uint8_t trigger_mask = 0;
+		if (controllers[i].current_buttons & SCE_CTRL_L1) trigger_mask |= TRIGGER_L1;
+		if (controllers[i].current_buttons & SCE_CTRL_R1) trigger_mask |= TRIGGER_R1;
+		if (controllers[i].current_buttons & SCE_CTRL_L2) trigger_mask |= TRIGGER_L2;
+		if (controllers[i].current_buttons & SCE_CTRL_R2) trigger_mask |= TRIGGER_R2;
+
+		// Create joystick state and send event if changed
+		JoyState joy_state(lx, ly, rx, ry, 0, 0, trigger_mask);
+		if (joy_state != controllers[i].previous_joy_state) {
+			sendJoyEvent(joy_state, i);
+
+			// Update previous state
+			controllers[i].previous_joy_state = joy_state;
 		}
 	}
-	
-	lastLx = lx;
-	lastLy = ly;
-	lastRx = rx;
-	lastRy = ry;
-
-	lx = coord_normalize(((float)pad.lx - 128.0f) / 128.0f, L_INNER_DEADZONE, L_OUTER_DEADZONE);
-	ly = coord_normalize(((float)pad.ly - 128.0f) / 128.0f, L_INNER_DEADZONE, L_OUTER_DEADZONE);
-	rx = coord_normalize(((float)pad.rx - 128.0f) / 128.0f, R_INNER_DEADZONE, R_OUTER_DEADZONE);
-	ry = coord_normalize(((float)pad.ry - 128.0f) / 128.0f, R_INNER_DEADZONE, R_OUTER_DEADZONE);
-
-	stickInputEvent.motion_action = AMOTION_EVENT_ACTION_MOVE;
-	stickInputEvent.type = AINPUT_EVENT_TYPE_MOTION;
-
-	sendJoyEvent(lx,
-				 ly,
-				 rx,
-				 ry,
-				 0,
-				 0,
-				 current_buttons & SCE_CTRL_L1,
-				 current_buttons & SCE_CTRL_R1);
 }

@@ -15,6 +15,7 @@
 
 #include <psp2/io/stat.h>
 #include <psp2/ctrl.h>
+#include <psp2/kernel/threadmgr.h>
 
 #include <assert.h>
 #include <dirent.h>
@@ -29,6 +30,10 @@
 
 #include <falso_jni/FalsoJNI.h>
 #include <sha1/sha1.h>
+
+#ifdef USE_SCELIBC_IO
+#include <libc_bridge/libc_bridge.h>
+#endif
 
 #pragma ide diagnostic ignored "OCUnusedGlobalDeclarationInspection"
 #pragma ide diagnostic ignored "bugprone-reserved-identifier"
@@ -261,13 +266,13 @@ bool is_dir(const char * path) {
 
 
 
-int ret0(void) {
-    return 0;
-}
+// int ret0(void) {
+//     return 0;
+// }
 
-int ret1(void) {
-    return 1;
-}
+// int ret1(void) {
+//     return 1;
+// }
 
 int retminus1(void) {
     return -1;

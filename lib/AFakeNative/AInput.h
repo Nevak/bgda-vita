@@ -593,11 +593,12 @@ struct AInputEvent;
 typedef struct AInputEvent AInputEvent;
 
 /**
- * [Non-Standard]: Real undrelyinh structure for AInputEvent, can be used for creating AInputEvent
+ * [Non-Standard]: Real undrelying structure for AInputEvent, can be used for creating AInputEvent
  */
 typedef struct inputEvent {
     int source; // one of AINPUT_SOURCE_* enum
     int type; // one of AINPUT_EVENT_TYPE_* enum
+    int deviceId; // device ID (0-3 for controllers)
 
     //key event only
     int action; // one of AKEY_EVENT_ACTION_* enum
@@ -629,6 +630,9 @@ int32_t AInputEvent_getType(const AInputEvent* event);
 
 /** Get the input event source. */
 int32_t AInputEvent_getSource(const AInputEvent *event);
+
+/** Get the device id associated with the input event. */
+int32_t AInputEvent_getDeviceId(const AInputEvent* event);
 
 /** Get the key event action. */
 int32_t AKeyEvent_getAction(const AInputEvent *key_event);

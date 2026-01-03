@@ -120,7 +120,9 @@ struct internal_ALooper {
 
 void rebuildEpollLocked(internal_ALooper * self);
 
-extern "C" void __destr_fn(void *parm)
+extern "C"
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
+ void __destr_fn(void *parm)
 {
     if (parm) free(parm);
 }
@@ -138,6 +140,7 @@ ALooper* ALooper_forThread() {
     return (ALooper*) pthread_getspecific(key);
 }
 
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 ALooper* ALooper_prepare(int opts) {
     ALooper * ret = ALooper_forThread();
     if (ret != nullptr) return ret;
@@ -293,6 +296,7 @@ void rebuildEpollLocked(internal_ALooper * self) {
     }                   \
     internal_ALooper * self = (internal_ALooper *) __self;
 
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 int pollInner (int timeoutMillis) {
     LOOPER_GET_SELF
 
@@ -464,6 +468,7 @@ int pollInner (int timeoutMillis) {
     return result;
 }
 
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 int ALooper_pollOnce(int timeoutMillis, int* outFd, int* outEvents, void** outData) {
     LOOPER_GET_SELF
 
@@ -502,7 +507,7 @@ int ALooper_pollOnce(int timeoutMillis, int* outFd, int* outEvents, void** outDa
     }
 
 }
-
+__attribute__((__no_instrument_function__, __no_profile_instrument_function__))
 int ALooper_pollAll(int timeoutMillis, int* outFd, int* outEvents, void** outData) {
     LOOPER_GET_SELF
 

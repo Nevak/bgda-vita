@@ -36,25 +36,28 @@
 #endif
 
 typedef struct __attribute__((__packed__)) stat64_bionic {
-    unsigned long long st_dev;
-    unsigned char __pad0[4];
-    unsigned long st_ino;
-    unsigned int st_mode;
-    unsigned int st_nlink;
-    unsigned long st_uid;
-    unsigned long st_gid;
-    unsigned long long st_rdev;
-    unsigned char __pad3[4];
-    unsigned long st_size;
-    unsigned long st_blksize;
-    unsigned long st_blocks;
-    unsigned long st_atime;
-    unsigned long st_atime_nsec;
-    unsigned long st_mtime;
-    unsigned long st_mtime_nsec;
-    unsigned long st_ctime;
-    unsigned long st_ctime_nsec;
-    unsigned long long __pad4;
+    unsigned long long st_dev;  // 0
+    unsigned int __pad1;        // 8
+    unsigned long st_ino;       // 12
+    unsigned int st_mode;       // 16
+    unsigned int st_nlink;      // 20
+    unsigned int st_uid;        // 24 
+    unsigned int st_gid;        // 28
+    unsigned long long st_rdev; // 32
+    unsigned int __pad2;        // 40
+    unsigned long __unused4;    // 44
+    unsigned long __unused5;    // 48
+    unsigned long __unused6;    // 52
+    unsigned long __unused7;    // 56
+    long st_size;               // 60
+    long st_blksize;            // 64
+    long st_blocks;             // 68
+    unsigned long st_atime;     // 72
+    unsigned long st_atime_nsec;// 76
+    unsigned long st_mtime;     // 80
+    unsigned long st_mtime_nsec;// 84
+    unsigned long st_ctime;     // 88
+    unsigned long st_ctime_nsec;// 92
 } stat64_bionic;
 
 typedef struct __attribute__((__packed__)) dirent64_bionic {
@@ -65,7 +68,7 @@ typedef struct __attribute__((__packed__)) dirent64_bionic {
     char d_name[256]; // 256 bytes // offset 0x13
 } dirent64_bionic;
 
-int open_soloader(char *fname, int flags);
+int open_soloader(char *fname, int flags, ...);
 FILE *fopen_soloader(char *fname, char *mode);
 DIR* opendir_soloader(char* name);
 
@@ -82,5 +85,10 @@ int closedir_soloader(DIR* dir);
 int fcntl_soloader(int fd, int cmd, ...);
 
 int fsync_soloader(int fd);
+ssize_t read_soloader(int fd, void *buf, size_t count);
+size_t fread_soloader(void *p, size_t size, size_t num, FILE *f);
 
+//fstat_hook
+int fseek_soloader(FILE *f, int dist, int off);
+long ftell_soloader(FILE *f);
 #endif // SOLOADER_IO_H

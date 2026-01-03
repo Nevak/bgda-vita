@@ -26,6 +26,7 @@
 
 #include "FalsoJNI_ImplBridge.h"
 #include "FalsoJNI_Logger.h"
+#include "converter.h"
 
 // Objects to be passed to client applications:
 JavaVM jvm;
@@ -201,9 +202,9 @@ void DeleteGlobalRef(JNIEnv* env, jobject obj) {
     // call free(), except for dynamically allocated arrays. We provide
     // a separate "destructor" for those.
 
-    if (jda_free(obj) == JNI_FALSE) {
-        // Reserved fake identifiers
-        if ((int)obj != 0x42424242 && (int)obj != 0x69696969) {
+    // Reserved fake identifiers
+    if ((int)obj != 0x42424242 && (int)obj != 0x69696969) {
+        if (jda_free(obj) == JNI_FALSE) {
             if (obj) free(obj);
         }
     }
@@ -290,24 +291,7 @@ jmethodID GetMethodID(JNIEnv* env, jclass clazz, const char* _name, const char* 
     ret = getMethodIdByName(name);
 
     if (ret != NULL) {
-        if (name == NULL) {
-            fjni_log_err("Cannot find method ID for class NULL");
-        }
-        if (sig == NULL) {
-            fjni_log_err("Cannot find method ID for signature NULL");
-        }
-        if (ret == NULL) {
-            fjni_log_err("Cannot find method ID for method name ret is null");
-        }
-        if (env == NULL) {
-            fjni_log_err("Cannot find method ID for env is null");
-        }
-        if (clazz == NULL) {
-            fjni_logv_err("Cannot find method ID for clazz \"%s\" is null", name);
-        }
-        else {
-            fjni_logv_dbg("[JNI] GetMethodID(env, 0x%x, \"%s\", \"%s\"): %i", (int)clazz, name, sig, (int)ret);        
-        }
+        fjni_logv_dbg("[JNI] GetMethodID(env, 0x%x, \"%s\", \"%s\"): %i", (int)clazz, name, sig, (int)ret);
     } else {
         fjni_logv_err("[JNI] GetMethodID(env, 0x%x, \"%s\", \"%s\"): not found", (int)clazz, name, sig, (int)ret);
     }
@@ -1185,107 +1169,201 @@ void SetStaticDoubleField(JNIEnv* env, jclass clazz, jfieldID fieldID, jdouble v
 }
 
 jstring NewString(JNIEnv* env, const jchar* chars, jsize char_count) {
-    fjni_logv_dbg("[JNI] NewString(env, \"%s\", %i)", (char*)chars, char_count);
-
     // abort()s here replicate Dalvik behavior.
     if (char_count < 0) {
-        fjni_logv_err("Fatal: char_count < 0: %d! Aborting.", char_count);
+        fjni_logv_err("[JNI] NewString(env, %p, %i): Fatal: char_count < 0! Aborting.", chars, char_count);
         abort();
     }
 
     if (chars == NULL && char_count > 0) {
-        fjni_log_err("Fatal: chars == null && char_count > 0");
+        fjni_logv_err("[JNI] NewString(env, %p, %i): Fatal: chars == null && char_count > 0", chars, char_count);
         abort();
     }
 
-    char* newStr = malloc(char_count+1);
-    strncpy(newStr, (const char*)chars, char_count);
-    return newStr;
+    JavaString * res = malloc(sizeof(JavaString));
+    if (res == NULL) {
+        fjni_logv_err("[JNI] NewString(env, %p, %i): Fatal: malloc failed", chars, char_count);
+        return NULL;
+    }
+
+    res->utf8 = NULL;
+    res->utf16 = jda_alloc(char_count, FIELD_TYPE_CHAR);
+    if (res->utf16 == NULL) {
+        fjni_logv_err("[JNI] NewString(env, %p, %i): Fatal: jda_alloc failed", chars, char_count);
+        return NULL;
+    }
+
+    memcpy(res->utf16->array, chars, char_count * sizeof(jchar));
+
+    // Performing extraneous conversion on debug builds to show the string in the console output
+#if FALSOJNI_DEBUGLEVEL <= FALSOJNI_DEBUG_ALL
+    if (jstr_utf16_to_utf8(res) == JNI_FALSE) {
+        fjni_logv_err("[JNI] NewString(env, %p, %i): debug utf16 conversion failed", chars, char_count);
+    } else {
+        fjni_logv_dbg("[JNI] NewString(env, \"%s\", %i)", (char *)res->utf8->array, char_count);
+    }
+#endif
+
+    return res;
 }
 
 jsize GetStringLength(JNIEnv* env, jstring string) {
-    fjni_logv_dbg("[JNI] GetStringLength(env, 0x%x/\"%s\")", (int)string, (char*)string);
-    return (jsize)strlen(string);
+    JavaString * str = string;
+
+    // Performing extraneous conversion on debug builds to show the string in the console output
+#if FALSOJNI_DEBUGLEVEL <= FALSOJNI_DEBUG_ALL
+    if (jstr_utf16_to_utf8(str) == JNI_FALSE) {
+        fjni_logv_err("[JNI] GetStringLength(env, %p): debug utf16 conversion failed", string);
+    } else {
+        fjni_logv_dbg("[JNI] GetStringLength(env, \"%s\")", (char *)str->utf8->array);
+    }
+#endif
+
+    return str->utf16->len;
 }
 
 const jchar * GetStringChars(JNIEnv* env, jstring string, jboolean *isCopy) {
-    fjni_logv_dbg("[JNI] GetStringChars(env, 0x%x/\"%s\", *isCopy)", string, string);
-
     if (!string) {
-        fjni_log_err("String is null.");
+        fjni_logv_err("[JNI] GetStringChars(env, %p, *isCopy): string is null", string);
         return NULL;
     }
+
+    JavaString * str = string;
 
     if (isCopy != NULL) {
         *isCopy = JNI_TRUE;
     }
 
-    return (const jchar *)strdup((const char*)string);
+    jchar * ret = malloc(str->utf16->len * sizeof(jchar));
+    if (ret == NULL) {
+        fjni_logv_err("[JNI] GetStringChars(env, %p, *isCopy): malloc failed", string);
+        return NULL;
+    }
+
+    memcpy(ret, str->utf16->array, str->utf16->len * sizeof(jchar));
+
+    // Performing extraneous conversion on debug builds to show the string in the console output
+#if FALSOJNI_DEBUGLEVEL <= FALSOJNI_DEBUG_ALL
+    if (jstr_utf16_to_utf8(str) == JNI_FALSE) {
+        fjni_logv_err("[JNI] GetStringChars(env, %p, *isCopy): debug utf16 conversion failed", string);
+    } else {
+        fjni_logv_dbg("[JNI] GetStringChars(env, \"%s\", *isCopy)", (char *)str->utf8->array);
+    }
+#endif
+
+    return ret;
 }
 
 void ReleaseStringChars(JNIEnv* env, jstring string, const jchar *chars) {
-    fjni_logv_dbg("[JNI] ReleaseStringChars(env, 0x%x/\"%s\", 0x%x)", string, string, chars);
-
-    if (!chars) {
-        fjni_log_err("Chars is null");
+    if (chars == NULL) {
+        fjni_logv_err("[JNI] ReleaseStringChars(env, %p, %p): chars is null", string, chars);
         return;
     }
 
-    free((char*)chars);
+    // Performing extraneous conversion on debug builds to show the string in the console output
+#if FALSOJNI_DEBUGLEVEL <= FALSOJNI_DEBUG_ALL
+    JavaString * str = string;
+    if (jstr_utf16_to_utf8(str) == JNI_FALSE) {
+        fjni_logv_err("[JNI] ReleaseStringChars(env, %p, %p): debug utf16 conversion failed", string, chars);
+    } else {
+        fjni_logv_dbg("[JNI] ReleaseStringChars(env, \"%s\", %p)", (char *)str->utf8->array, chars);
+    }
+#endif
+
+    free((jchar *)chars);
 }
 
 jstring NewStringUTF(JNIEnv* env, const char* bytes) {
     fjni_logv_dbg("[JNI] NewStringUTF(env, \"%s\")", bytes);
 
-    char* newStr;
-    if (bytes == NULL) {
-        /* this shouldn't happen; throw NPE? */
-        newStr = NULL;
-    } else {
-        newStr = strdup(bytes);
-        if (newStr == NULL) {
-            /* assume memory failure */
-            fjni_log_err("native heap string alloc failed! aborting.");
-            abort();
-        }
+    int len = strlen(bytes) + 1; // with null terminator
+
+    JavaString * res = malloc(sizeof(JavaString)*2);
+    if (res == NULL) {
+        fjni_logv_err("[JNI] NewStringUTF(env, \"%s\"): Fatal: malloc failed", bytes);
+        return NULL;
     }
 
-    return newStr;
+    res->utf8 = jda_alloc(len, FIELD_TYPE_BYTE);
+    if (res->utf8 == NULL) {
+        fjni_logv_err("[JNI] NewStringUTF(env, \"%s\"): Fatal: jda_alloc failed", bytes);
+        free(res);
+        return NULL;
+    }
+
+    res->utf16 = jda_alloc(len - 1, FIELD_TYPE_CHAR);
+
+    if (res->utf16 == NULL) {
+        fjni_logv_err("[JNI] NewStringUTF(env, \"%s\"): Fatal: jda_alloc failed", bytes);
+        free(res);
+        return NULL;
+    }
+
+    memcpy(res->utf8->array, bytes, res->utf8->len);
+
+    if (jstr_utf8_to_utf16(res) == JNI_FALSE) {
+        fjni_logv_err("[JNI] NewStringUTF(env, \"%s\"): utf16 conversion failed", bytes);
+        jda_free(res->utf8);
+        jda_free(res->utf16);
+        free(res);
+        return NULL;
+    }
+
+    return res;
 }
 
 jsize GetStringUTFLength(JNIEnv* env, jstring string) {
-    fjni_logv_dbg("[JNI] GetStringUTFLength(env, \"%s\")", string);
-
-    if (string != NULL) {
-        return (jsize)strlen(string);
+    if (!string) {
+        fjni_logv_err("[JNI] GetStringUTFLength(env, %p): string is null", string);
     }
 
-    return 0;
+    JavaString * str = string;
+
+    // Performing extraneous conversion on debug builds to show the string in the console output
+#if FALSOJNI_DEBUGLEVEL <= FALSOJNI_DEBUG_ALL
+    if (jstr_utf16_to_utf8(str) == JNI_FALSE) {
+        fjni_logv_err("[JNI] GetStringUTFLength(env, %p): debug utf16 conversion failed", string);
+    } else {
+        fjni_logv_dbg("[JNI] GetStringUTFLength(env, \"%s\")", str->utf8->array);
+    }
+#endif
+
+    return str->utf16->len;
 }
 
 const char* GetStringUTFChars(JNIEnv* env, jstring string, jboolean* isCopy) {
-    fjni_logv_dbg("[JNI] GetStringUTFChars(env, \"%s\", *isCopy)", string);
-
-    char* newStr;
-    if (string == NULL) {
-        /* this shouldn't happen; throw NPE? */
-        newStr = NULL;
-    } else {
-        if (isCopy != NULL)
-            *isCopy = JNI_TRUE;
-        newStr = strdup(string);
-        if (newStr == NULL) {
-            /* assume memory failure */
-            fjni_log_err("native heap string alloc failed! aborting.");
-            abort();
-        }
+    if (!string) {
+        fjni_logv_err("[JNI] GetStringUTFChars(env, %p, *isCopy): string is null", string);
+        return NULL;
     }
 
-    return newStr;
+    JavaString * str = string;
+
+    if (isCopy != NULL) {
+        *isCopy = JNI_TRUE;
+    }
+
+    char * ret = malloc(str->utf16->len + 1);
+    if (ret == NULL) {
+        fjni_logv_err("[JNI] GetStringUTFChars(env, %p, *isCopy): malloc failed", string);
+        return NULL;
+    }
+
+    if (jstr_utf16_to_utf8(str) == JNI_FALSE) {
+        fjni_logv_err("[JNI] GetStringUTFChars(env, %p, *isCopy): utf16 conversion failed", string);
+        free(ret);
+        return NULL;
+    }
+
+    memcpy(ret, str->utf8->array, str->utf8->len);
+
+    fjni_logv_dbg("[JNI] GetStringUTFChars(env, \"%s\", *isCopy)", (char *)str->utf8->array);
+
+    return ret;
 }
 
 void ReleaseStringUTFChars(JNIEnv* env, jstring string, char* chars) {
-    fjni_logv_dbg("[JNI] ReleaseStringUTFChars(env, 0x%x, \"%s\")", (int)string, chars);
+    fjni_logv_dbg("[JNI] ReleaseStringUTFChars(env, %p, \"%s\")", string, chars);
     if (chars) {
         free(chars);
     }
@@ -1318,7 +1396,7 @@ jobjectArray NewObjectArray(JNIEnv* env, jsize length, jclass elementClass, jobj
 }
 
 jobject GetObjectArrayElement(JNIEnv* env, jobjectArray array, jsize index) {
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] GetObjectArrayElement(env, 0x%x, idx:%i): Could not find the array", array, index);
         return NULL;
@@ -1335,7 +1413,7 @@ jobject GetObjectArrayElement(JNIEnv* env, jobjectArray array, jsize index) {
 }
 
 void SetObjectArrayElement(JNIEnv* env, jobjectArray array, jsize index, jobject value) {
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] SetObjectArrayElement(env, 0x%x, idx:%i, val:0x%x): Could not find the array", array, index, value);
         return;
@@ -1441,7 +1519,7 @@ jdoubleArray NewDoubleArray(JNIEnv* env, jsize length) {
 }
 
 jboolean* GetBooleanArrayElements(JNIEnv* env, jbooleanArray array, jboolean* isCopy) {
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] GetBooleanArrayElements(env, 0x%x, 0x%x): Could not find the array", array, isCopy);
         return NULL;
@@ -1453,7 +1531,7 @@ jboolean* GetBooleanArrayElements(JNIEnv* env, jbooleanArray array, jboolean* is
 }
 
 jbyte* GetByteArrayElements(JNIEnv* env, jbyteArray array, jboolean* isCopy) {
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] GetByteArrayElements(env, 0x%x, 0x%x): Could not find the array", array, isCopy);
         return NULL;
@@ -1465,7 +1543,7 @@ jbyte* GetByteArrayElements(JNIEnv* env, jbyteArray array, jboolean* isCopy) {
 }
 
 jchar* GetCharArrayElements(JNIEnv* env, jcharArray array, jboolean* isCopy) {
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] GetCharArrayElements(env, 0x%x, 0x%x): Could not find the array", array, isCopy);
         return NULL;
@@ -1477,7 +1555,7 @@ jchar* GetCharArrayElements(JNIEnv* env, jcharArray array, jboolean* isCopy) {
 }
 
 jshort* GetShortArrayElements(JNIEnv* env, jshortArray array, jboolean* isCopy) {
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] GetShortArrayElements(env, 0x%x, 0x%x): Could not find the array", array, isCopy);
         return NULL;
@@ -1489,7 +1567,7 @@ jshort* GetShortArrayElements(JNIEnv* env, jshortArray array, jboolean* isCopy) 
 }
 
 jint* GetIntArrayElements(JNIEnv* env, jintArray array, jboolean* isCopy) {
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] GetIntArrayElements(env, 0x%x, 0x%x): Could not find the array", array, isCopy);
         return NULL;
@@ -1501,7 +1579,7 @@ jint* GetIntArrayElements(JNIEnv* env, jintArray array, jboolean* isCopy) {
 }
 
 jlong* GetLongArrayElements(JNIEnv* env, jlongArray array, jboolean* isCopy) {
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] GetLongArrayElements(env, 0x%x, 0x%x): Could not find the array", array, isCopy);
         return NULL;
@@ -1513,7 +1591,7 @@ jlong* GetLongArrayElements(JNIEnv* env, jlongArray array, jboolean* isCopy) {
 }
 
 jfloat* GetFloatArrayElements(JNIEnv* env, jfloatArray array, jboolean* isCopy) {
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] GetFloatArrayElements(env, 0x%x, 0x%x): Could not find the array", array, isCopy);
         return NULL;
@@ -1525,7 +1603,7 @@ jfloat* GetFloatArrayElements(JNIEnv* env, jfloatArray array, jboolean* isCopy) 
 }
 
 jdouble* GetDoubleArrayElements(JNIEnv* env, jdoubleArray array, jboolean* isCopy) {
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] GetDoubleArrayElements(env, 0x%x, 0x%x): Could not find the array", array, isCopy);
         return NULL;
@@ -1644,49 +1722,51 @@ jint GetJavaVM(JNIEnv* env, JavaVM** vm) {
 }
 
 void GetStringRegion(JNIEnv* env, jstring str, jsize start, jsize len, jchar* buf) {
-    fjni_logv_dbg("[JNI] GetStringRegion(env, 0x%x, start:%i, len:%i, 0x%x)", (int)str, start, len, (int)buf);
+    fjni_logv_dbg("[JNI] GetStringRegion(env, %p, start:%i, len:%i, %p)", str, start, len, buf);
 
-    if (str == NULL) {
-        fjni_log_err("str is NULL");
+    if (str == NULL || buf == NULL) {
+        fjni_logv_err("[JNI] GetStringRegion(env, %p, start:%i, len:%i, %p): string or buf is null", str, start, len, buf);
         return;
     }
 
-    if ((start + len) > strlen(str)) {
-        fjni_log_err("StringIndexOutOfBoundsException");
+    JavaString * string = str;
+
+    if ((start + len) > string->utf16->len) {
+        fjni_logv_err("[JNI] GetStringRegion(env, %p, start:%i, len:%i, %p): StringIndexOutOfBoundsException", str, start, len, buf);
         return;
     }
 
-    if (buf == NULL) {
-        buf = malloc(len+1);
-    }
-
-    strncpy((char*)buf, (const char*)str + start, len);
+    memcpy(buf, string->utf16 + (start * sizeof(jchar)), len * sizeof(jchar));
 }
 
 void GetStringUTFRegion(JNIEnv* env, jstring str, jsize start, jsize len, char* buf) {
-    fjni_logv_dbg("[JNI] GetStringUTFRegion(env, 0x%x, start:%i, len:%i, 0x%x)", (int)str, start, len, (int)buf);
+    fjni_logv_dbg("[JNI] GetStringUTFRegion(env, %p, start:%i, len:%i, %p)", str, start, len, buf);
 
-    if (str == NULL) {
-        fjni_log_err("str is NULL");
+    if (str == NULL || buf == NULL) {
+        fjni_logv_err("[JNI] GetStringUTFRegion(env, %p, start:%i, len:%i, %p): string or buf is null", str, start, len, buf);
         return;
     }
 
-    if ((start + len) > strlen(str)) {
-        fjni_log_err("StringIndexOutOfBoundsException");
+    JavaString * string = str;
+
+    if ((start + len) > string->utf16->len) {
+        fjni_logv_err("[JNI] GetStringUTFRegion(env, %p, start:%i, len:%i, %p): StringIndexOutOfBoundsException", str, start, len, buf);
         return;
     }
 
-    if (buf == NULL) {
-        buf = malloc(len+1);
+    if (jstr_utf16_to_utf8(str) == JNI_FALSE) {
+        fjni_logv_err("[JNI] GetStringUTFRegion(env, %p, start:%i, len:%i, %p): utf16 conversion failed", str, start, len, buf);
+        return;
     }
 
-    strncpy(buf, (const char*)str + start, len);
+    memcpy(buf, string->utf8 + start, len);
+    buf[len] = '\0';
 }
 
 void* GetPrimitiveArrayCritical(JNIEnv* env, jarray array, jboolean* isCopy) {
     if (isCopy) *isCopy = JNI_FALSE;
 
-    JavaDynArray * jda = jda_find((void *) array);
+    JavaDynArray * jda = (JavaDynArray *) array;
     if (!jda) {
         fjni_logv_err("[JNI] GetPrimitiveArrayCritical(env, 0x%x, 0x%x): Array not found.", (int)array, (int)isCopy);
         return NULL;
@@ -1702,29 +1782,24 @@ void ReleasePrimitiveArrayCritical(JNIEnv* env, jarray array, void* carray, jint
 }
 
 const jchar* GetStringCritical(JNIEnv* env, jstring string, jboolean* isCopy) {
-    fjni_logv_dbg("[JNI] GetStringCritical(env, 0x%x/\"%s\", *isCopy)", string, string);
+    fjni_logv_dbg("[JNI] GetStringCritical(env, %p, *isCopy)", string);
 
     if (!string) {
-        fjni_log_err("String is null.");
+        fjni_logv_err("[JNI] GetStringCritical(env, %p, *isCopy): string is null", string);
         return NULL;
     }
 
     if (isCopy != NULL) {
-        *isCopy = JNI_TRUE;
+        *isCopy = JNI_FALSE;
     }
 
-    return (const jchar *)strdup((const char*)string);
+    return ((JavaString *)string)->utf16->array;
 }
 
 void ReleaseStringCritical(JNIEnv* env, jstring string, const jchar* carray) {
-    fjni_logv_dbg("[JNI] ReleaseStringCritical(env, 0x%x/\"%s\", 0x%x)", string, string, carray);
+    fjni_logv_dbg("[JNI] ReleaseStringCritical(env, %p, %p)", string, carray);
 
-    if (!carray) {
-        fjni_log_err("carray is null");
-        return;
-    }
-
-    free((char*)carray);
+    // We never issue copies in GetStringCritical => do nothing here
 }
 
 jweak NewWeakGlobalRef(JNIEnv* env, jobject obj) {

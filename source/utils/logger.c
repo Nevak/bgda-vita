@@ -11,6 +11,7 @@
 
 #include <psp2/kernel/clib.h>
 #include <psp2/kernel/threadmgr.h>
+#include <stdatomic.h>
 
 #define COLOR_RED     "\x1B[31m"
 #define COLOR_ORANGE  "\x1B[33m"
@@ -19,24 +20,39 @@
 #define COLOR_END     "\033[0m"
 
 static SceKernelLwMutexWork _log_mutex;
-static volatile short int _log_mutex_inited = 0;
+static atomic_int _log_mutex_inited = 0;
 
 static char buffer_a[2048];
 static char buffer_b[2048];
 
+// Thread-safe lazy initialization of the log mutex
+static inline void log_mutex_init_once(void) {
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&_log_mutex_inited, &expected, 1)) {
+        // We won the race, initialize the mutex
+        int ret = sceKernelCreateLwMutex(&_log_mutex, "log_lock", 0, 0, NULL);
+        if (ret < 0) {
+            sceClibPrintf("Error: failed to create log mutex: 0x%x\n", ret);
+            atomic_store(&_log_mutex_inited, 0); // Reset on failure
+            return;
+        }
+        atomic_store(&_log_mutex_inited, 2); // Mark as fully initialized
+    } else {
+        // Another thread is initializing, wait for it to complete
+        while (atomic_load(&_log_mutex_inited) == 1) {
+            sceKernelDelayThread(100); // Wait 0.1ms
+        }
+    }
+}
+
 #define LOG_LOCK \
-    if (!_log_mutex_inited) { \
-        int ret = sceKernelCreateLwMutex(&_log_mutex, "log_lock", 0, 0, NULL); \
-        if (ret < 0) { \
-            sceClibPrintf("Error: failed to create log mutex: 0x%x\n", ret); \
-            return; \
-        } \
-        _log_mutex_inited = 1; \
-    } \
-    sceKernelLockLwMutex(&_log_mutex, 1, NULL);
+    log_mutex_init_once(); \
+    if (atomic_load(&_log_mutex_inited) == 2) { \
+        sceKernelLockLwMutex(&_log_mutex, 1, NULL); \
+    }
 
 #define LOG_UNLOCK \
-    if (_log_mutex_inited) { \
+    if (atomic_load(&_log_mutex_inited) == 2) { \
         sceKernelUnlockLwMutex(&_log_mutex, 1); \
     }
 
