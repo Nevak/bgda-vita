@@ -56,9 +56,12 @@ In order to properly install the game, you'll have to follow these steps precise
   - Inside ux0:/data/bgda/assets/res:
     <p align="center"><img src="./screenshots/res.png"></p>
 
+## Build Instructions (For Developers)
+- Coming soon.
+
 ## Credits
 - [TheFlow](https://github.com/TheOfficialFlow) for the original .so loader.
-- [Rinnegatamante](https://github.com/Rinnegatamante) for VitaGL, his Android ports and answering all my questions.
+- [Rinnegatamante](https://github.com/Rinnegatamante) for VitaGL, his Android ports, answering all my questions and making changes needed for the game to VitaGL.
 - [gl33ntwine](https://github.com/v-atamanenko) for the awesome Android subsystem reimplementation [FalsoNDK](https://github.com/v-atamanenko/FalsoNDK) and [FalsoJNI](https://github.com/v-atamanenko/FalsoJNI).
 - [withLogic] for the help testing.
 
