@@ -229,6 +229,9 @@ jobject getLocale(jmethodID id, va_list args) {
 	case SCE_SYSTEM_PARAM_LANG_GERMAN:
 		strcpy(arr, "de");
 		break;
+	case SCE_SYSTEM_PARAM_LANG_ITALIAN:
+		strcpy(arr, "it");
+		break;
 	default:
 		strcpy(arr, "en");
 		break;
@@ -259,6 +262,9 @@ jobject getISO3Language(jmethodID id, va_list args) {
 			break;
 		case SCE_SYSTEM_PARAM_LANG_GERMAN:
 			strcpy(arr, "deu");
+			break;
+		case SCE_SYSTEM_PARAM_LANG_ITALIAN:
+			strcpy(arr, "ita");
 			break;
 		default:
 			printf("default\n");

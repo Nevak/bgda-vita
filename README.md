@@ -23,7 +23,7 @@ By doing so, it's basically as if we emulate a minimalist Android environment in
 
 ## Notes
 - If performance drops in some levels or the game slows down, locking to 30FPS can help. This is done in the game settings menu by enabling Battery Saving.
-- The game will set the language to your Vita's system language. It has been mostly tested in Spanish and English, but other versions such as Italian, French, German or Japanese might have issues with audio/texts or even crashes. If you find any problems, feel free to open an Issue.
+- The game will set the language to your Vita's system language. It has been mostly tested in Spanish and English, but other versions such as Italian, French or German might have issues with audio/texts or even crashes. If you find any problems, feel free to open an Issue.
   
 ## Setup Instructions (For End Users)
 In order to properly install the game, you'll have to follow these steps precisely:

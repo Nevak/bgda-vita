@@ -274,7 +274,7 @@ dialog_dir* snd_get_dialog_dir()
 	// Second pass: fix lengths by calculating from next entry's start
 	entry = res;
 	for (int i = 0; i < count; i++) {
-		logv_debug("entry[%d]: name=%s, startAt=0x%X, len=0x%X (original)", i, entry->name, entry->startAt, entry->len);
+		//logv_debug("entry[%d]: name=%s, startAt=0x%X, len=0x%X (original)", i, entry->name, entry->startAt, entry->len);
 		if (entry->len == 0) {
 		 	int calculatedLen;
 			
@@ -290,7 +290,7 @@ dialog_dir* snd_get_dialog_dir()
 		 	// Fix the len field
 		 	entry->len = calculatedLen;
 		
-		 	logv_debug("entry[%d]: name=%s, startAt=0x%X, len=0x%X (fixed)", i, entry->name, entry->startAt, entry->len);
+		 	//logv_debug("entry[%d]: name=%s, startAt=0x%X, len=0x%X (fixed)", i, entry->name, entry->startAt, entry->len);
 		 }
 		entry++;
 	}
