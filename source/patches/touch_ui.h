@@ -27,7 +27,7 @@ void patch_touch_ui() {
 	if (virtualControlsRender_addr == 0) {
 		log_error("virtualControlsRender not found\n");
 	} else {
-		logv_error("virtualControlsRender found at %p\n", virtualControlsRender_addr);
+		logv_debug("virtualControlsRender found at %p\n", virtualControlsRender_addr);
 		virtualControlsRender_hook = hook_addr(virtualControlsRender_addr, (uintptr_t)&virtualControlsRender);
 	}
 
@@ -35,7 +35,7 @@ void patch_touch_ui() {
 	if (frontEndDoControllerScreenInput_addr == 0) {
 		log_error("frontEndDoControllerScreenInput not found\n");
 	} else {
-		logv_error("frontEndDoControllerScreenInput found at %p\n", frontEndDoControllerScreenInput_addr);
+		logv_debug("frontEndDoControllerScreenInput found at %p\n", frontEndDoControllerScreenInput_addr);
 		frontEndDoControllerScreenInput_hook = hook_addr(frontEndDoControllerScreenInput_addr, (uintptr_t)&frontEndDoControllerScreenInput);
 	}
 
@@ -43,7 +43,7 @@ void patch_touch_ui() {
 	if (usingTouchscreen_addr == 0) {
 		log_error("usingTouchscreen not found\n");
 	} else {
-		logv_error("usingTouchscreen found at %p\n", usingTouchscreen_addr);
+		logv_debug("usingTouchscreen found at %p\n", usingTouchscreen_addr);
 		usingTouchscreen_hook = hook_addr(usingTouchscreen_addr, (uintptr_t)&usingTouchscreen);
 	}
 
@@ -51,7 +51,7 @@ void patch_touch_ui() {
 	if (renderTouchIcons_addr == 0) {
 		log_error("renderTouchIcons not found\n");
 	} else {
-		logv_error("renderTouchIcons found at %p\n", renderTouchIcons_addr);
+		logv_debug("renderTouchIcons found at %p\n", renderTouchIcons_addr);
 		renderTouchIcons_hook = hook_addr(renderTouchIcons_addr, (uintptr_t)&renderTouchIcons);
 	}
 

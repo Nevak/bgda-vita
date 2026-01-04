@@ -247,12 +247,12 @@ int main() {
 
 		int num_detected = detectControllers();
 		int res = sceCtrlIsMultiControllerSupported();
-		logv_error("sceCtrlIsMultiControllerSupported = %d", res);
-		logv_error("Detected %d controller(s)", num_detected);
+		logv_debug("sceCtrlIsMultiControllerSupported = %d", res);
+		logv_debug("Detected %d controller(s)", num_detected);
 
 		for (int i = 0; i < num_detected; i++) {
 			inputDeviceAdded(&jni, (void *)0x42424242, i, 2);
-			logv_error("Registered controller %d", i);
+			logv_debug("Registered controller %d", i);
 		}
 	}
 

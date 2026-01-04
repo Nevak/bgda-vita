@@ -125,7 +125,7 @@ int cdDirectoryLookup(const char *path, int *param_2, int *size) {
             *size = 0x1B3D00;
         }
 
-        logv_error("cdDirectoryLookup: HARDCODED! %s", path);
+        //logv_error("cdDirectoryLookup: HARDCODED! %s", path);
 
         returnVal = 1;
     }

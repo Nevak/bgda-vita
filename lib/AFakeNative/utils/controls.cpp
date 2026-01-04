@@ -142,7 +142,7 @@ int detectControllers() {
 			} else {
 				controllers[controller_idx].is_available = false;
 			}
-			ALOGE("Controller(%d) : 0x%X", i, ctrl_state.port[i]);
+			ALOGD("Controller(%d) : 0x%X", i, ctrl_state.port[i]);
 		}
 	} else {
 		controllers[0].is_available = true;
@@ -150,7 +150,7 @@ int detectControllers() {
 	}
 
 	if (num_controllers == 0) {
-		ALOGE("No controllers detected, enabling controller 1 by default");
+		ALOGD("No controllers detected, enabling controller 1 by default");
 		controllers[0].is_available = true;
 		num_controllers = 1;
 	}
@@ -396,9 +396,25 @@ void pollPad() {
 		// Port 0 is used for single controller compatibility
 		// Ports 1-4 are used when multi-controller is enabled
 		int port = (num_controllers == 1) ? 0 : (i + 1);
-
 		SceCtrlData pad;
 		sceCtrlPeekBufferPositiveExt2(port, &pad, 1);
+
+		if (num_controllers == 1) {
+			// Rearpad support for L2/R2/L3/R3 emulation
+			SceTouchData touch;
+			sceTouchPeek(SCE_TOUCH_PORT_BACK, &touch, 1);
+			for (int j = 0; j < touch.reportNum; j++) {
+				int x = touch.report[j].x;
+				int y = touch.report[j].y;
+				if (x > 960) {
+					if (y > 544) pad.buttons |= SCE_CTRL_R3;
+					else         pad.buttons |= SCE_CTRL_R2;
+				} else {
+					if (y > 544) pad.buttons |= SCE_CTRL_L3;
+					else         pad.buttons |= SCE_CTRL_L2;
+				}
+			}
+		}
 
 		// Update button state for this controller
 		controllers[i].old_buttons = controllers[i].current_buttons;

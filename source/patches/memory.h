@@ -8,7 +8,7 @@ so_hook memInit_hook;
 // It was hardcoded to 0x4000000 (64MB) but it seems to work fine with less (32MB). Found by trial and error.
 // Maybe it can be reduced even more.
 void memInit(void *param_1, int param_2) {
-	logv_error("memInit(%p, %d)\n", param_1, param_2);
+	logv_debug("memInit(%p, %d)", param_1, param_2);
 	// free the original memory
 	free(param_1);
 
