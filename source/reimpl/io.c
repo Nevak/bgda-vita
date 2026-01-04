@@ -87,7 +87,7 @@ int open_soloader(char *_fname, int flags, ...) {
     char real_fname[256];
     mode_t mode = 0666;
 
-    if (psarc_exists && !strncmp(_fname, "ux0:data/bgda/assets//res/", 26) || !strncmp(_fname, "ux0:data/bgda/assets/res/", 25)) {
+    if (psarc_exists && (!strncmp(_fname, "ux0:data/bgda/assets//res/", 26) || !strncmp(_fname, "ux0:data/bgda/assets/res/", 25))) {
         // real name is whatever is after the prefix "ux0:data/bgda/assets//res/", so strip that
         // for example ux0:data/bgda/assets/res/add_texture.lmp should be /res/add_texture.lmp
         int offset = 21;
