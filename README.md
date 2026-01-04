@@ -9,6 +9,13 @@ The port works by loading the official Android ARMv7 executables in memory, reso
 By doing so, it's basically as if we emulate a minimalist Android environment in which we run natively the executable as is.
 
 # Changelog
+### v1.03
+- Support for L2/R2 button emulation using rear touch panel
+- Disabled logs in VitaGL options
+
+### v1.02
+- Fixed Italian language not being set correctly
+
 ### v1.01
 - Fixes for typo in live area game title
 
