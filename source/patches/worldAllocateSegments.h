@@ -31,7 +31,6 @@ extern uintptr_t machHostOpen_addr;
 extern uintptr_t machHostRead_addr;
 extern uintptr_t machHostSeek_addr;
 extern uintptr_t machHostClose_addr;
-extern uintptr_t lowestPowerof2NotLessThan_addr;
 extern uintptr_t D3DDevice_CreatePalette2_addr;
 extern uintptr_t D3DPalette_Lock2_addr;
 extern uintptr_t D3DDevice_CreateTexture2_addr;

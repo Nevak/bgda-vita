@@ -734,7 +734,6 @@ uintptr_t machHostOpen_addr;
 uintptr_t machHostRead_addr;
 uintptr_t machHostSeek_addr;
 uintptr_t machHostClose_addr;
-uintptr_t lowestPowerof2NotLessThan_addr;
 uintptr_t D3DDevice_CreatePalette2_addr;
 uintptr_t D3DPalette_Lock2_addr;
 uintptr_t D3DDevice_CreateTexture2_addr;
@@ -829,6 +828,20 @@ so_hook clear_hook;
 so_hook createTexture2_hook;
 
 
+so_hook coreStartLoadingScreen_hook;
+void coreStartLoadingScreen()
+{
+    SO_CONTINUE(void *, coreStartLoadingScreen_hook);
+
+    pthread_t* thread = (pthread_t *)(*(LOC(0x0054cdfc)) + 0x10); // gLoadingScreenThread + offset to pthread_t
+
+    // Detach the loading screen thread to prevent resource leaks (thread stack) every time a loading screen is started.
+	// The original code does not detach it and it was leaking around 512 KB of memory per loading screen, eventually freezing the game.
+    int r = pthread_detach(*thread);
+    if (r != 0) {
+        logv_error("coreStartLoadingScreen: pthread_detach failed: %d, errno=%s", r, strerror(errno));
+    }
+}
 
 void so_patch(void) {
 
@@ -871,6 +884,14 @@ void so_patch(void) {
 	renderDelayedShadows_hook = hook_addr(LOC(0x0013d578), (uintptr_t)&renderDelayedShadows);
 	ProcessAndUploadTexture_hook = hook_addr(LOC(0x0021225c), (uintptr_t)&ProcessAndUploadTexture);
 	XGSetTextureHeader_hook = hook_addr(LOC(0x0020fca4), (uintptr_t)&XGSetTextureHeader);
+
+    uintptr_t coreStartLoadingScreen_addr = (uintptr_t)so_symbol(&so_mod, "_Z22coreStartLoadingScreenv");
+    if (coreStartLoadingScreen_addr == 0) {
+        log_error("coreStartLoadingScreen not found\n");
+    } else {
+        logv_debug("coreStartLoadingScreen found at %p\n", coreStartLoadingScreen_addr);
+        coreStartLoadingScreen_hook = hook_addr(coreStartLoadingScreen_addr, (uintptr_t)&coreStartLoadingScreen);
+    }
 
 	// _Z17writeConfigDirectv
 	uintptr_t writeConfigDirect_addr = (uintptr_t)so_symbol(&so_mod, "_Z17writeConfigDirectv");

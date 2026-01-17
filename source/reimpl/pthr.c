@@ -1,13 +1,8 @@
 /*
- * reimpl/pthr.c
- *
- * Wrapper for vitasdk/newlib pthread functions to work with
- * Android's pthread struct which is different
- *
  * Copyright (C) 2021      Andy Nguyen
  * Copyright (C) 2022      Rinnegatamante
  * Copyright (C) 2022      GrapheneCt
- * Copyright (C) 2022-2023 Volodymyr Atamanenko
+ * Copyright (C) 2022-2024 Volodymyr Atamanenko
  *
  * This software may be modified and distributed under the terms
  * of the MIT license. See the LICENSE file for details.
@@ -24,10 +19,12 @@
 #include "utils/utils.h"
 #include "utils/logger.h"
 
-#define  BIONIC_PTHREAD_COND_INITIALIZER              0
-#define  BIONIC_PTHREAD_MUTEX_INITIALIZER             0
-#define  BIONIC_PTHREAD_RECURSIVE_MUTEX_INITIALIZER   0x4000
-#define  BIONIC_PTHREAD_ERRORCHECK_MUTEX_INITIALIZER  0x8000
+#define PTHR_MAX_OBJECTS 1024
+
+#define BIONIC_PTHREAD_COND_INITIALIZER              0
+#define BIONIC_PTHREAD_MUTEX_INITIALIZER             0
+#define BIONIC_PTHREAD_RECURSIVE_MUTEX_INITIALIZER   0x4000
+#define BIONIC_PTHREAD_ERRORCHECK_MUTEX_INITIALIZER  0x8000
 
 enum {
     BIONIC_PTHREAD_MUTEX_NORMAL = 0,
@@ -42,7 +39,7 @@ enum {
 
 #define PTHR_INLINE static inline __attribute__((always_inline))
 
-void * initializedObjects[512] = {0};
+void * initializedObjects[PTHR_MAX_OBJECTS] = {0};
 static SceKernelLwMutexWork pthr_mutex;
 static volatile short int pthr_mutex_inited = 0;
 
@@ -64,7 +61,7 @@ static volatile short int pthr_mutex_inited = 0;
 
 int isObjectInitialized(const void * mut) {
     PTHR_LOCK
-    for (int i = 0; i < 512; ++i) {
+    for (int i = 0; i < PTHR_MAX_OBJECTS; ++i) {
         if (initializedObjects[i] == mut) {
             PTHR_UNLOCK
             return 1;
@@ -76,7 +73,7 @@ int isObjectInitialized(const void * mut) {
 
 int rememberObject(void * mut) {
     PTHR_LOCK
-    for (int i = 0; i < 512; ++i) {
+    for (int i = 0; i < PTHR_MAX_OBJECTS; ++i) {
         if (initializedObjects[i] == 0) {
             initializedObjects[i] = mut;
             PTHR_UNLOCK
@@ -89,7 +86,7 @@ int rememberObject(void * mut) {
 
 int forgetObject(const void * mut) {
     PTHR_LOCK
-    for (int i = 0; i < 512; ++i) {
+    for (int i = 0; i < PTHR_MAX_OBJECTS; ++i) {
         if (initializedObjects[i] == mut) {
             initializedObjects[i] = 0;
             PTHR_UNLOCK
@@ -342,6 +339,7 @@ int pthread_attr_setdetachstate_soloader(pthread_attr_t_bionic *attr, int state)
 {
     if (!attr) return -1;
     _attr_t_static_init(attr);
+    state = !state; // pthread-embedded has JOINABLE/DETACHED swapped compared to BIONIC...
     return pthread_attr_setdetachstate(attr->real_ptr, state);
 }
 

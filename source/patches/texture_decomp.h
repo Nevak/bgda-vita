@@ -11,24 +11,6 @@ typedef void (*D3DDevice_SetVertexShaderConstantFastFn)(int reg, uint32_t pConst
 
 #define ENABLE_NPOT_TEXTURES
 
-so_hook lowestPowerof2NotLessThan_hook;
-int lowestPowerof2NotLessThan(int dimension) {
-#ifndef ENABLE_NPOT_TEXTURES
-	return SO_CONTINUE(int, lowestPowerof2NotLessThan_hook, dimension);
-#endif
-
-
-	uint32_t caller = (uint32_t)__builtin_return_address(0);
-	if (caller != 0x98521dec && caller != 0x98521dcc) {
-	 	return SO_CONTINUE(int, lowestPowerof2NotLessThan_hook, dimension);
-	}
-
-    int alignment = 32;
-    int aligned = (dimension + (alignment - 1)) & ~(alignment - 1);
-    if (aligned < alignment) 
-		aligned = alignment;
-    return aligned;
-}
 
 so_hook D3DDevice_SetVertexShaderConstantNotInline_hook;
 void D3DDevice_SetVertexShaderConstantNotInline_patched(int reg, uint32_t pConstantData, uint32_t ConstantCount) {
