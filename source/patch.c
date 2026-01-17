@@ -839,7 +839,7 @@ void coreStartLoadingScreen()
 	// The original code does not detach it and it was leaking around 512 KB of memory per loading screen, eventually freezing the game.
     int r = pthread_detach(*thread);
     if (r != 0) {
-        logv_error("coreStartLoadingScreen: pthread_detach failed: %d, errno=%s", r, strerror(errno));
+        logv_error("coreStartLoadingScreen: pthread_detach failed: %d", r);
     }
 }
 
