@@ -382,7 +382,11 @@ void patch_vorbis(void)
 {
 	//ov_read_hook = hook_addr(so_symbol(&so_mod, "ov_read"), (uintptr_t)ov_read_profiled);
 	//lump_find_resource_hook = hook_addr(so_symbol(&so_mod, "_Z16lumpFindResourcePKcS0_"), (uintptr_t)lump_find_resource);
-	snd_get_dialog_dir_hook = hook_addr(so_symbol(&so_mod, "_Z16SND_GetDialogDirv"), (uintptr_t)snd_get_dialog_dir);
+	
+	// Disable this for now. It was meant to fix some background audio loops not playing,
+	// but it's crashing the game in the final cinematic video. Will revisit
+	//snd_get_dialog_dir_hook = hook_addr(so_symbol(&so_mod, "_Z16SND_GetDialogDirv"), (uintptr_t)snd_get_dialog_dir);
+	
 	//lump_query_hook = hook_addr(so_symbol(&so_mod, "_Z9lumpQueryPKc"), (uintptr_t)lump_query);
 	snd_get_dialog_filename_hook = hook_addr(so_symbol(&so_mod, "_Z21SND_GetDialogFilenameb"), (uintptr_t)snd_get_dialog_filename);
 	//snd_start_stream_hook = hook_addr(so_symbol(&so_mod, "_Z15SND_StartStreamiPKciii"), (uintptr_t)snd_start_stream);
