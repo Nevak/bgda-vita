@@ -104,14 +104,6 @@ void ProcessAndUploadTexture
         // Now set the palette data directly for this texture
         SceGxmTexture* gxmTex = vglGetGxmTexture(GL_TEXTURE_2D);
 
-        // Free existing palette if there is one (in case texture is being re-uploaded)
-        void* oldPalette = sceGxmTextureGetPalette(gxmTex);
-        if (oldPalette) {
-            logv_error("Freeing old palette: %p (width=%u, height=%u)", oldPalette, width, height);
-            gpu_free_palette(oldPalette);
-            sceGxmTextureSetPalette(gxmTex, NULL);  // Clear the pointer to avoid use-after-free
-        }
-
         void* paletteData = gpu_alloc_palette((uint32_t*)palette, 256, 4);
         sceGxmTextureSetPalette(gxmTex, paletteData);
 
@@ -239,30 +231,6 @@ void D3DDevice_TextureStageState_SetToGL(D3DDevice_TextureStageState* this, uint
     #ifdef PROFILER_ENABLED
     sceRazorCpuPopMarker();
     #endif
-}
-
-so_hook D3DDevice_UnregisterTextureCommand_hook;
-void D3DDevice_UnregisterTextureCommand(void *this, RegisteredBaseTextureData *textureData, int *param_2) {
-    //logv_error("[UnregisterTextureCommand] textureData=%p, glTexId=%u", textureData, textureData ? textureData->glTextureId : 0);
-
-    if (textureData && textureData->glTextureId != 0) {
-        // Free the palette if this is a paletted texture
-        // NOTE: We bind the texture but DON'T restore the old binding
-        // TextureDeleted() will handle unbinding properly
-        glBindTexture(GL_TEXTURE_2D, textureData->glTextureId);
-
-        SceGxmTexture* gxmTex = vglGetGxmTexture(GL_TEXTURE_2D);
-        if (gxmTex) {
-            void* paletteData = sceGxmTextureGetPalette(gxmTex);
-            if (paletteData) {
-                //logv_error("[UnregisterTextureCommand] Freeing palette: %p", paletteData);
-                gpu_free_palette(paletteData);
-                sceGxmTextureSetPalette(gxmTex, NULL);  // Clear palette pointer to prevent vitaGL from accessing freed memory
-            }
-        }
-    }
-
-    SO_CONTINUE(void *, D3DDevice_UnregisterTextureCommand_hook, this, textureData, param_2);
 }
 
 #endif

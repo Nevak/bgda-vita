@@ -1,0 +1,80 @@
+diff --git forkSrcPrefix/source/textures.c forkDstPrefix/source/textures.c
+index 273b30f64dc80498cd47a14fce36ae752bc01cf0..3db75aaf896a071dbbb58c9e0b2eb667dd39166f 100644
+--- forkSrcPrefix/source/textures.c
++++ forkDstPrefix/source/textures.c
+@@ -613,7 +613,11 @@ static inline __attribute__((always_inline)) void _glTexImage2D_FlatIMPL(texture
+ 		switch (type) {
+ 		case GL_UNSIGNED_BYTE:
+ 			data_bpp = 1;
+-			if (internalFormat == GL_LUMINANCE || internalFormat == GL_SLUMINANCE || internalFormat == GL_SLUMINANCE8)
++			if (internalFormat == GL_LUMINANCE 
++				|| internalFormat == GL_SLUMINANCE
++				|| internalFormat == GL_SLUMINANCE8
++				// Hack for BGDA textures: added this condition to force fast path
++				|| internalFormat == GL_COLOR_INDEX8_EXT)
+ 				fast_store = GL_TRUE;
+ 			else
+ 				read_cb = readL;
+@@ -825,7 +829,8 @@ static inline __attribute__((always_inline)) void _glTexImage2D_FlatIMPL(texture
+ 		break;
+ 	case GL_COLOR_INDEX8_EXT:
+ 		tex->write_cb = writeR; // TODO: This is a hack
+-		tex_format = SCE_GXM_TEXTURE_FORMAT_P8_ABGR;
++		// Hack specific for BGDA texture format
++		tex_format = SCE_GXM_TEXTURE_FORMAT_P8_ARGB;
+ 		break;
+ 	case GL_SLUMINANCE:
+ 	case GL_SLUMINANCE8:
+@@ -1770,7 +1775,16 @@ void glDeleteTextures(GLsizei n, const GLuint *gl_textures) {
+ 						texture_slots[i].dirty = GL_TRUE;
+ 					}
+ 				else
++				{
+ 					gpu_free_texture(&texture_slots[i]);
++					SceGxmTexture* gxmTex = &texture_slots[i].gxm_tex;
++					void* paletteData = sceGxmTextureGetPalette(gxmTex);
++					if (paletteData)
++					{
++						vgl_free(paletteData);
++						texture_slots[i].palette_data = NULL;
++					}					
++				}
+ 			}
+ #ifndef SKIP_ERROR_HANDLING
+ 			else if (texture_slots[i].status == TEX_UNUSED) {
+diff --git forkSrcPrefix/source/lookup.c forkDstPrefix/source/lookup.c
+index 1eb28a3bd59efc2496b27899b54918f124e22b92..aaab45ad68896b8f53d4cb1b7da268a18aaa9c19 100644
+--- forkSrcPrefix/source/lookup.c
++++ forkDstPrefix/source/lookup.c
+@@ -440,6 +440,7 @@ static const struct {
+ 	{"vglUseVramForUSSE", (void *)vglUseVramForUSSE},
+ 	{"vglUseExtraMem", (void *)vglUseExtraMem},
+ 	{"vglWaitVblankStart", (void *)vglWaitVblankStart},
++	{"vglSetTexPalette", (void*)vglSetTexPalette}
+ #endif
+ 	// *egl
+ 	{"eglBindAPI", (void *)eglBindAPI},
+@@ -469,10 +470,22 @@ void *vglGetProcAddress(const char *name) {
+ 	const int len = strlen(name);
+ 	char tmpname[len + 1];
+ 	vgl_fast_memcpy(tmpname, name, len + 1);
+-	if (!strcmp(tmpname + len - 3, "EXT") || !strcmp(tmpname + len - 3, "ARB") || !strcmp(tmpname + len - 3, "OES")) {
++	if (!strcmp(tmpname + len - 3, "EXT") 
++	|| !strcmp(tmpname + len - 3, "ARB") 
++	|| !strcmp(tmpname + len - 3, "OES")) {
+ 		tmpname[len - 3] = 0;
+ 	}
+ 
++	// strip NV extension
++	if (!strcmp(tmpname + len - 2, "NV")) {
++		tmpname[len - 2] = 0;
++	}
++
++	// strip QCOM extension
++	if (!strcmp(tmpname + len - 4, "QCOM")) {
++		tmpname[len - 4] = 0;
++	}
++
+ 	// search for stripped name
+ 	for (size_t i = 0; i < vgl_numproc; ++i) {
+ 		if (!strcmp(tmpname, vgl_proctable[i].name)) {
