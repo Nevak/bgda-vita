@@ -9,6 +9,11 @@ The port works by loading the official Android ARMv7 executables in memory, reso
 By doing so, it's basically as if we emulate a minimalist Android environment in which we run natively the executable as is.
 
 # Changelog
+### v1.04
+- Fixed crashes/freezes right before the loading screen when entering a new level. This happened after playing for a while and changing levels a few times due to a memory leak from the loading screen thread.
+- Fixed crash during the ending cutscene after defeating the final boss.
+- Enabled 2x antialias as the impact in performance seems negligible.
+
 ### v1.03
 - Support for L2/R2 button emulation using rear touch panel
 - Disabled logs in VitaGL options
