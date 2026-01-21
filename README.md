@@ -72,7 +72,47 @@ In order to properly install the game, you'll have to follow these steps precise
     <p align="center"><img src="./screenshots/res.png"></p>
 
 ## Build Instructions (For Developers)
-- Coming soon.
+
+### Prerequisites
+
+In order to build the loader, you'll need the following:
+
+- A **softfp** version of the Vita SDK:
+  - [vitasdk-softfp](https://github.com/vitasdk-softfp)
+  - It is recommended to read the section about keeping **softfp** and **hardfp** versions seperate.
+
+- A patched and softfp-compiled version of **vitaGL**:
+  - https://github.com/Rinnegatamante/vitaGL
+
+### Building vitaGL (softfp + patch)
+
+This project requires vitaGL to be built with the **softfp ABI**.
+
+1. Clone vitaGL:
+   ```bash
+   git clone https://github.com/Rinnegatamante/vitaGL.git
+   cd vitaGL
+   ```
+
+2. Apply the patch provided in this repository:
+    ```bash
+    git apply /path/to/this/repo/vitaGL.patch
+    ```
+
+3. Build and install vitaGL using softfp:
+    ```bash
+    make SOFTFP_ABI=1 NO_DEBUG=1 HAVE_GLSL_SUPPORT=1 install
+    ```
+Make sure this build uses the softfp Vita SDK and not your hardfp installation.
+
+**Building the Loader**
+
+After all these requirements are met, you can compile the loader with the following commands:
+
+```bash
+mkdir build && cd build
+cmake .. && make
+```
 
 ## Credits
 - [TheFlow](https://github.com/TheOfficialFlow) for the original .so loader.
