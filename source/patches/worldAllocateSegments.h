@@ -596,7 +596,7 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
                     goto skip_downsample;
                 }
 
-                logv_error("    Downsampling %dx%d -> %dx%d (scale %.2fx, aspect %.3f -> %.3f)",
+                logv_debug("    Downsampling %dx%d -> %dx%d (scale %.2fx, aspect %.3f -> %.3f)",
                            width, height, new_width, new_height, scale,
                            (float)width/(float)height, (float)new_width/(float)new_height);
 
@@ -635,7 +635,7 @@ void worldAllocateSegments(_worldHeader *worldHeader) {
                 height = new_height;
                 total_pixels = new_total_pixels;
 
-                logv_error("    Downsampling complete: final dimensions %dx%d", width, height);
+                logv_debug("    Downsampling complete: final dimensions %dx%d", width, height);
 
             skip_downsample:;
             }
