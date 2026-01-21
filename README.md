@@ -9,6 +9,9 @@ The port works by loading the official Android ARMv7 executables in memory, reso
 By doing so, it's basically as if we emulate a minimalist Android environment in which we run natively the executable as is.
 
 # Changelog
+### v1.05
+- Fixed glitched textures when playing for a prolonged period of time. Caused by leaked texture slots in previous version of VitaGL. See the [commit](https://github.com/Rinnegatamante/vitaGL/commit/8950bfa970b7e8a47454a5cdf89e28be638b22fe) that fixed it.
+
 ### v1.04
 - Fixed crashes/freezes right before the loading screen when entering a new level. This happened after playing for a while and changing levels a few times due to a memory leak from the loading screen thread.
 - Fixed crash during the ending cutscene after defeating the final boss.

@@ -1,5 +1,5 @@
 diff --git forkSrcPrefix/source/textures.c forkDstPrefix/source/textures.c
-index 273b30f64dc80498cd47a14fce36ae752bc01cf0..3db75aaf896a071dbbb58c9e0b2eb667dd39166f 100644
+index fb38b639380a2091689e4d83446c1da8e7a07a0a..aad24a9a29a287841bb77988ec4cc90d798b2d8f 100644
 --- forkSrcPrefix/source/textures.c
 +++ forkDstPrefix/source/textures.c
 @@ -613,7 +613,11 @@ static inline __attribute__((always_inline)) void _glTexImage2D_FlatIMPL(texture
@@ -25,28 +25,28 @@ index 273b30f64dc80498cd47a14fce36ae752bc01cf0..3db75aaf896a071dbbb58c9e0b2eb667
  		break;
  	case GL_SLUMINANCE:
  	case GL_SLUMINANCE8:
-@@ -1770,7 +1775,16 @@ void glDeleteTextures(GLsizei n, const GLuint *gl_textures) {
+@@ -1771,7 +1776,16 @@ void glDeleteTextures(GLsizei n, const GLuint *gl_textures) {
  						texture_slots[i].dirty = GL_TRUE;
  					}
  				else
 +				{
- 					gpu_free_texture(&texture_slots[i]);
 +					SceGxmTexture* gxmTex = &texture_slots[i].gxm_tex;
 +					void* paletteData = sceGxmTextureGetPalette(gxmTex);
 +					if (paletteData)
 +					{
 +						vgl_free(paletteData);
 +						texture_slots[i].palette_data = NULL;
-+					}					
++					}
+ 					gpu_free_texture(&texture_slots[i]);
 +				}
- 			}
- #ifndef SKIP_ERROR_HANDLING
- 			else if (texture_slots[i].status == TEX_UNUSED) {
+ 				break;
+ 			case TEX_UNINITIALIZED:
+ 				texture_slots[i].status = TEX_UNUSED;
 diff --git forkSrcPrefix/source/lookup.c forkDstPrefix/source/lookup.c
-index 1eb28a3bd59efc2496b27899b54918f124e22b92..aaab45ad68896b8f53d4cb1b7da268a18aaa9c19 100644
+index 1264dd2a2039eac593d132b07836e0407a9a5fce..797f1f3ae9adbe447a3e86d5cc033556764b53a4 100644
 --- forkSrcPrefix/source/lookup.c
 +++ forkDstPrefix/source/lookup.c
-@@ -440,6 +440,7 @@ static const struct {
+@@ -441,6 +441,7 @@ static const struct {
  	{"vglUseVramForUSSE", (void *)vglUseVramForUSSE},
  	{"vglUseExtraMem", (void *)vglUseExtraMem},
  	{"vglWaitVblankStart", (void *)vglWaitVblankStart},
@@ -54,7 +54,7 @@ index 1eb28a3bd59efc2496b27899b54918f124e22b92..aaab45ad68896b8f53d4cb1b7da268a1
  #endif
  	// *egl
  	{"eglBindAPI", (void *)eglBindAPI},
-@@ -469,10 +470,22 @@ void *vglGetProcAddress(const char *name) {
+@@ -470,10 +471,22 @@ void *vglGetProcAddress(const char *name) {
  	const int len = strlen(name);
  	char tmpname[len + 1];
  	vgl_fast_memcpy(tmpname, name, len + 1);
