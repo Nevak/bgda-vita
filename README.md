@@ -73,46 +73,99 @@ In order to properly install the game, you'll have to follow these steps precise
 
 ## Build Instructions (For Developers)
 
-### Prerequisites
+This project is built using **VitaSDK (SoftFP)** via Docker.
 
-In order to build the loader, you'll need the following:
+## Requirements
+- Docker/podman
+- Git
 
-- A **softfp** version of the Vita SDK:
-  - [vitasdk-softfp](https://github.com/vitasdk-softfp)
-  - It is recommended to read the section about keeping **softfp** and **hardfp** versions seperate.
+## Build Instructions
 
-- A patched and softfp-compiled version of **vitaGL**:
-  - https://github.com/Rinnegatamante/vitaGL
+### 1. Create a working directory
 
-### Building vitaGL (softfp + patch)
-
-This project requires vitaGL to be built with the **softfp ABI**.
-
-1. Clone vitaGL:
-   ```bash
-   git clone https://github.com/Rinnegatamante/vitaGL.git
-   cd vitaGL
-   ```
-
-2. Apply the patch provided in this repository:
-    ```bash
-    git apply /path/to/this/repo/vitaGL.patch
-    ```
-
-3. Build and install vitaGL using softfp:
-    ```bash
-    make SOFTFP_ABI=1 NO_DEBUG=1 HAVE_GLSL_SUPPORT=1 install
-    ```
-Make sure this build uses the softfp Vita SDK and not your hardfp installation.
-
-**Building the Loader**
-
-After all these requirements are met, you can compile the loader with the following commands:
+Create a directory on your host machine that will be mounted into the container:
 
 ```bash
-mkdir build && cd build
-cmake .. && make
+mkdir vita-dev
 ```
+
+> **Windows example:** `E:\vita-dev`
+
+---
+
+### 2. Pull the VitaSDK Docker image
+
+```bash
+docker pull vitasdk/vitasdk-softfp:latest
+```
+
+---
+
+### 3. Start the Docker container (first time only)
+
+```bash
+docker run -it \
+  --name vita-dev-sdk \
+  --platform linux/amd64 \
+  --volume "E:\vita-dev:/vita-dev" \
+  vitasdk/vitasdk-softfp:latest \
+  /bin/bash
+```
+
+> Adjust the host path (`E:\vita-dev`) to match your setup.
+
+---
+
+### 4. Re-enter the container (subsequent sessions)
+
+After the container has been created, use:
+
+```bash
+docker exec -it vita-dev-sdk /bin/bash
+```
+
+Do **not** use `docker run` again.
+
+---
+
+### 5. Clone the repository
+
+Inside the container:
+
+```bash
+cd /vita-dev
+```
+
+If cloning for the first time:
+
+```bash
+git clone --recursive <your-repo-url>
+```
+
+If already cloned:
+
+```bash
+git submodule update --init --recursive
+```
+
+> This project relies on submodules pinned to specific commits.
+
+---
+
+### 6. Build and run
+
+From the project root:
+
+```bash
+extras/scripts/build_and_run.sh
+```
+
+---
+
+## Notes
+- All build steps must be performed **inside the Docker container**
+- The project uses a **SoftFP VitaSDK toolchain**
+- Ensure submodules are initialized recursively before building
 
 ## Credits
 - [TheFlow](https://github.com/TheOfficialFlow) for the original .so loader.
