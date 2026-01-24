@@ -139,7 +139,7 @@ cd /vita-dev
 If cloning for the first time:
 
 ```bash
-git clone --recursive <your-repo-url>
+git clone --recursive https://github.com/Nevak/bgda-vita.git
 ```
 
 If already cloned:
