@@ -1,0 +1,45 @@
+name: Build (bgda-vita w/ VitaSDK SoftFP)
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Pull VitaSDK SoftFP Docker image
+        run: docker pull vitasdk/vitasdk-softfp:latest
+
+      - name: Build in VitaSDK container
+        run: |
+          docker run --platform linux/amd64 --rm \
+            -v "$GITHUB_WORKSPACE:/vita-dev/bgda-vita" \
+            -w /vita-dev/bgda-vita \
+            vitasdk/vitasdk-softfp:latest \
+            /bin/bash -c "
+              set -e
+              git config --global --add safe.directory '*'
+              git submodule update --init --recursive
+              chmod +x extras/scripts/build_and_run.sh
+              extras/scripts/build_and_run.sh
+            "
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vita-build
+          path: |
+            build/*.vpk
+            build/*.velf
+          if-no-files-found: error
