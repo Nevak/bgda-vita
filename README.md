@@ -75,7 +75,100 @@ In order to properly install the game, you'll have to follow these steps precise
     <p align="center"><img src="./screenshots/res.png"></p>
 
 ## Build Instructions (For Developers)
-- Coming soon.
+
+This project is built using **VitaSDK (SoftFP)** via Docker.
+
+## Requirements
+- Docker/podman
+- Git
+
+## Build Instructions
+
+### 1. Create a working directory
+
+Create a directory on your host machine that will be mounted into the container:
+
+```bash
+mkdir vita-dev
+```
+
+> **Windows example:** `E:\vita-dev`
+
+---
+
+### 2. Pull the VitaSDK Docker image
+
+```bash
+docker pull vitasdk/vitasdk-softfp:latest
+```
+
+---
+
+### 3. Start the Docker container (first time only)
+
+```bash
+docker run -it \
+  --name vita-dev-sdk \
+  --platform linux/amd64 \
+  --volume "E:\vita-dev:/vita-dev" \
+  vitasdk/vitasdk-softfp:latest \
+  /bin/bash
+```
+
+> Adjust the host path (`E:\vita-dev`) to match your setup.
+
+---
+
+### 4. Re-enter the container (subsequent sessions)
+
+After the container has been created, use:
+
+```bash
+docker exec -it vita-dev-sdk /bin/bash
+```
+
+Do **not** use `docker run` again.
+
+---
+
+### 5. Clone the repository
+
+Inside the container:
+
+```bash
+cd /vita-dev
+```
+
+If cloning for the first time:
+
+```bash
+git clone --recursive https://github.com/Nevak/bgda-vita.git
+```
+
+If already cloned:
+
+```bash
+git submodule update --init --recursive
+```
+
+> This project relies on submodules pinned to specific commits.
+
+---
+
+### 6. Build and run
+
+From the project root:
+
+```bash
+extras/scripts/build_and_run.sh
+```
+
+---
+
+## Notes
+- All build steps must be performed **inside the Docker container**
+- The project uses a **SoftFP VitaSDK toolchain**
+- Ensure submodules are initialized recursively before building
 
 ## Credits
 - [TheFlow](https://github.com/TheOfficialFlow) for the original .so loader.
