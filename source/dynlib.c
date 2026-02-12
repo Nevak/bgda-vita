@@ -376,25 +376,7 @@ void renderDelayedShadows(void) {
 	g_in_shadow_rendering = 0;
 }
 
-// D3DDevice_CreateTexture2 wrapper - reduce shadow texture resolution
-void* D3DDevice_CreateTexture2(uint32_t width, uint32_t height, uint32_t levels, uint32_t usage,
-                                uint32_t pool, uint32_t format, uint32_t type) {
-	uint32_t optimized_width = width;
-	uint32_t optimized_height = height;
 
-	#if SHADOW_TEXTURE_SCALE > 1
-	// Detect shadow texture creation (512x128, format 6)
-	if (g_in_shadow_rendering && width == 0x200 && height == 0x80 && format == 6) {
-		optimized_width = width / SHADOW_TEXTURE_SCALE;
-		optimized_height = height / SHADOW_TEXTURE_SCALE;
-		// logv_info("Shadow texture: Reduced from %dx%d to %dx%d (scale=%d)",
-		// 	width, height, optimized_width, optimized_height, SHADOW_TEXTURE_SCALE);
-	}
-	#endif
-
-	return SO_CONTINUE(void*, createTexture2_hook, optimized_width, optimized_height,
-		levels, usage, pool, format, type);
-}
 
 void glGenTextures_profiled(GLsizei n, GLuint *textures) {
 	logv_error("glGenTextures(%i, %p) called", n, textures);

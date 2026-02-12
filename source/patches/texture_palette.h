@@ -64,7 +64,7 @@ void ProcessAndUploadTexture
                int isCompressed, uint width, uint height, uint level, uint sourcePitch, int paddingFlag,
                uint8_t *palette, uint allocateNewTexture, int keepSwizzled, ushort *alphaRange)
 {
-	uint64_t timeStart = sceKernelGetProcessTimeWide();
+	//uint64_t timeStart = sceKernelGetProcessTimeWide();
 
 	if (level != 1)
     {
@@ -107,28 +107,37 @@ void ProcessAndUploadTexture
         void* paletteData = gpu_alloc_palette((uint32_t*)palette, 256, 4);
         sceGxmTextureSetPalette(gxmTex, paletteData);
 
-        uint64_t timeEnd = sceKernelGetProcessTimeWide();
-        float elapsedMs = (timeEnd - timeStart) / 1000.0f;
-        g_ProcessAndUploadTextureMs += elapsedMs;
+        //uint64_t timeEnd = sceKernelGetProcessTimeWide();
+        //float elapsedMs = (timeEnd - timeStart) / 1000.0f;
+        //g_ProcessAndUploadTextureMs += elapsedMs;
 
         return;
 	}
 
     // Check for format 0x12 (video texture - BGRA format on Android)
-    if (formatToSwitchParam == 0x12 && !palette) {
+    if (formatToSwitchParam == 0x12 && !palette && (width == 640 || width == 840) && height > 0) {
+        //logv_error("Processing video texture with custom BGRA upload (w=%d, h=%d, pitch=%d)", width, height, sourcePitch);
         #ifdef PROFILER_ENABLED
         sceRazorCpuPushMarkerWithHud("Upload as BGRA texture", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
         #endif 
 
-        // Upload as BGRA texture directly
-        glTexImage2D(glTarget, 0, GL_BGRA,
-                     width, height, 0,
-                     GL_BGRA, GL_UNSIGNED_BYTE, sourceTextureData);
+        SceGxmTexture* gxmTex = vglGetGxmTexture(GL_TEXTURE_2D);
 
-        uint64_t timeEnd = sceKernelGetProcessTimeWide();
-        float elapsedMs = (timeEnd - timeStart) / 1000.0f;
-        g_ProcessAndUploadTextureMs += elapsedMs;
+        // just to account for padding and 16-byte alignment
+        int hackedW = width == 640 ? 672 : 880;
+       
+        int ret = sceGxmTextureInitLinear(gxmTex, 
+            sourceTextureData, 
+            SCE_GXM_TEXTURE_FORMAT_YUV420P3_CSC0, 
+            hackedW, height, 0);
         
+        sceGxmTextureSetMinFilter(gxmTex, SCE_GXM_TEXTURE_FILTER_LINEAR);
+        sceGxmTextureSetMagFilter(gxmTex, SCE_GXM_TEXTURE_FILTER_LINEAR);
+					
+        // // logv_debug("sceGxmTextureInitLinear returned %d", r);
+        // int gxm_width = sceGxmTextureGetWidth(gxmTex);
+        // int gxm_stride = sceGxmTextureGetStride(gxmTex);
+        // logv_info("GXM texture: width=%d, stride=%d", gxm_width, gxm_stride);
         #ifdef PROFILER_ENABLED
         sceRazorCpuPopMarker();
         #endif

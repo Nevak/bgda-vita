@@ -94,6 +94,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   source/utils/logger.c
 			   source/utils/settings.c
 			   source/utils/utils.c
+			   source/patches/xmv_vita.c
 			   #source/remap_section.c
 			   #source/utils/trophies.c
 			   lib/falso_jni/FalsoJNI.c
