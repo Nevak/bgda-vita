@@ -891,13 +891,13 @@ void so_patch(void) {
 	}
 
 	//_ZN3JBE3Mem4FreeEPv
-	uintptr_t memFree_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE3Mem4FreeEPv");
-	if (memFree_addr == 0) {
-		log_error("Mem::Free not found\n");
-	} else {
-		logv_debug("Mem::Free found at %p\n", memFree_addr);
-		mem_free_hook = hook_addr(memFree_addr, (uintptr_t)&mem_free_patched);
-	}
+	// uintptr_t memFree_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE3Mem4FreeEPv");
+	// if (memFree_addr == 0) {
+	// 	log_error("Mem::Free not found\n");
+	// } else {
+	// 	logv_debug("Mem::Free found at %p\n", memFree_addr);
+	// 	mem_free_hook = hook_addr(memFree_addr, (uintptr_t)&mem_free_patched);
+	// }
 
 
 	D3DDevice_SetTexture_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetTexture"), (uintptr_t)&D3DDevice_SetTexture);
@@ -984,7 +984,7 @@ void so_patch(void) {
 
 	// Apply shadow resolution coordinate patches for 256x64 textures
 	//patch_shadow_resolution();
-	
+
 	patch_xmv();
 
 	uintptr_t D3DDevice_SelectVertexShader_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SelectVertexShader");

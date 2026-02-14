@@ -20,7 +20,7 @@ set(VITA_VERSION "01.05")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
-set(PSVITAIP "192.168.1.17" CACHE STRING "PSVita IP (for FTP access)") #China
+set(PSVITAIP "192.168.110.15" CACHE STRING "PSVita IP (for FTP access)") #China
 #set(PSVITAIP "192.168.110.38" CACHE STRING "PSVita IP (for FTP access)") #China devkit
 set(PARSECOREPATH "/vita-dev/vita-parse-core/main.py" CACHE STRING "vita-parse-core main.py")
 
@@ -92,6 +92,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 			   source/utils/glutil.c
 			   source/utils/init.c
 			   source/utils/logger.c
+			   source/utils/ptch.c
 			   source/utils/settings.c
 			   source/utils/utils.c
 			   source/patches/xmv_vita.c
@@ -181,6 +182,15 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 endif()
 
 vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR UNCOMPRESSED GEN_EXPORTS exports.txt)
+
+# Collect all .ptch files from extras/patches/ directory
+file(GLOB PATCH_FILES "${CMAKE_SOURCE_DIR}/extras/patches/*.ptch")
+set(VPK_PATCH_FILES "")
+foreach(PATCH_FILE ${PATCH_FILES})
+    get_filename_component(PATCH_NAME ${PATCH_FILE} NAME)
+    list(APPEND VPK_PATCH_FILES FILE ${PATCH_FILE} patches/${PATCH_NAME})
+endforeach()
+
 vita_create_vpk(${VITA_VPKNAME}.vpk ${VITA_TITLEID} eboot.bin
 				VERSION ${VITA_VERSION}
 				NAME ${VITA_APP_NAME}
@@ -195,6 +205,7 @@ vita_create_vpk(${VITA_VPKNAME}.vpk ${VITA_TITLEID} eboot.bin
 				${CMAKE_SOURCE_DIR}/extras/livearea/bg0.png sce_sys/livearea/contents/bg0.png
 				${CMAKE_SOURCE_DIR}/extras/livearea/template.xml sce_sys/livearea/contents/template.xml
 				${CMAKE_SOURCE_DIR}/extras/livearea/TROPHY.TRP sce_sys/trophy/BGDA00001_00/TROPHY.TRP
+				${VPK_PATCH_FILES}
 				)
 
 add_custom_target(send

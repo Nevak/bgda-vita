@@ -629,6 +629,20 @@ void glAttachShader_fake(GLuint program, GLuint shader) {
 	glAttachShader(program, shader);
 }
 
+void free_hooked(void *ptr)
+{
+	vgl_free(ptr);
+	// if (ptr >= (void*)0x60000000 && ptr < (void*)0x80000000)
+	// {
+	// 	logv_error("Mem::Free called on GPU memory address %p, skipping free to prevent potential crash", ptr);
+	// 	vgl_free(ptr);
+	// }
+	// else
+	// {
+	// 	free(ptr);
+	// }
+}
+
 so_default_dynlib default_dynlib[] = {
 		// Common C/C++ internals
 		{ "_ZNSt8bad_castD1Ev", (uintptr_t)&_ZNSt8bad_castD1Ev },
@@ -878,7 +892,7 @@ so_default_dynlib default_dynlib[] = {
 
 		// Memory
 		{ "calloc", (uintptr_t)&calloc },
-		{ "free", (uintptr_t)&free },
+		{ "free", (uintptr_t)&free_hooked },
 		{ "malloc", (uintptr_t)&malloc },
 		{ "memalign", (uintptr_t)&memalign },
 		{ "memcmp", (uintptr_t)&memcmp },
