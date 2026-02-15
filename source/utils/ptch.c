@@ -48,6 +48,28 @@ static const char *get_filename(const char *path) {
 }
 
 /**
+ * Create a backup of a file if one doesn't already exist.
+ * Backup is created with a .backup suffix.
+ */
+static bool ptch_backup_file(const char *file_path) {
+    char backup_path[520];
+    snprintf(backup_path, sizeof(backup_path), "%s.backup", file_path);
+
+    if (file_exists(backup_path)) {
+        logv_debug("ptch: Backup already exists: %s", backup_path);
+        return true;
+    }
+
+    if (!file_copy(file_path, backup_path)) {
+        logv_error("ptch: Failed to create backup: %s", backup_path);
+        return false;
+    }
+
+    logv_info("ptch: Created backup: %s", backup_path);
+    return true;
+}
+
+/**
  * Check if a patch has already been applied by looking up its SHA1 in .applied file.
  */
 static bool ptch_is_applied(const char *patch_path) {
@@ -195,6 +217,11 @@ bool ptch_apply(const char *patch_path) {
         logv_error("ptch: Target file size mismatch: expected %llu, got %zu",
                    (unsigned long long)header->output_size, target_size);
         goto cleanup;
+    }
+
+    // Create backup before patching (only if backup doesn't exist)
+    if (!ptch_backup_file(full_target_path)) {
+        logv_warn("ptch: Continuing without backup for %s", full_target_path);
     }
 
     // Apply each record
