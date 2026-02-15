@@ -9,6 +9,13 @@ The port works by loading the official Android ARMv7 executables in memory, reso
 By doing so, it's basically as if we emulate a minimalist Android environment in which we run natively the executable as is.
 
 # Changelog
+### v1.06
+- Substantially improved video playback performance by passing YUV data directly to GXM, avoiding CPU color space conversion.
+- Added playstation button icons and PS Vita diagram in control settings screen. Notes: 
+  - This works by automatically patching the original game files when the game starts. The game creates automatic backups of files before applying patches (e.g., `config.lmp.backup`). Backups are only created once and won't be overwritten.
+  - This was achieved in part thanks to the cool [BGDA Explorer tool for PS2 by Bryce Barbara](https://github.com/bigianb/bgda-explorer). The tool was adapted to work with the Xbox texture format and modified to support importing new textures. I will share the modified fork of BGDA Explorer in the future.
+
+
 ### v1.05
 - Fixed glitched textures when playing for a prolonged period of time. Caused by leaked texture slots in previous version of VitaGL. See the [commit](https://github.com/Rinnegatamante/vitaGL/commit/8950bfa970b7e8a47454a5cdf89e28be638b22fe) that fixed it.
 
@@ -31,7 +38,7 @@ By doing so, it's basically as if we emulate a minimalist Android environment in
 - Initial release.
 
 ## Known Issues
-- Low framerate during video playing, including main menu due to CPU video decoding.
+- ~~Low framerate during video playing, including main menu due to CPU video decoding.~~ Greatly improved in v1.06.
 - Slight framerate spikes every few seconds in some levels due to vorbis audio decoding in main thread.
 - Missing real-time shadows from characters and enemies. Temporarily disabled for performance.
 - Achievements not working yet.
