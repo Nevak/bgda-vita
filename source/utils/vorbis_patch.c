@@ -14,8 +14,6 @@
 #include "logger.h"
 #include "utils/macros.h"
 #include "utils/oggstream_types.h"
-#include <vorbis/codec.h>
-#include <vorbis/vorbisfile.h>
 #include <fcntl.h>      // For file access modes (O_RDONLY)
 #ifdef PROFILER_ENABLED
 #include <utils/prof.h>
@@ -341,19 +339,19 @@ uint64_t ov_pcm_total_local(void* pf, long x)
     return res;
 }
 
-// typedef struct
-// {
-//   int version;
-//   int channels;
-//   long rate;
+typedef struct
+{
+  int version;
+  int channels;
+  long rate;
   
-//   long bitrate_upper;
-//   long bitrate_nominal;
-//   long bitrate_lower;
-//   long bitrate_window;
+  long bitrate_upper;
+  long bitrate_nominal;
+  long bitrate_lower;
+  long bitrate_window;
 
-//   void *codec_setup;
-// }vorbis_info;
+  void *codec_setup;
+}vorbis_info;
 
 so_hook ov_info_hook;
 vorbis_info *ov_info_local(void *vf, int link)
@@ -380,148 +378,8 @@ void light_vu0_stopped_processing()
 	SO_CONTINUE(void*, light_vu0_stopped_processing_hook);
 }
 
-// ==========================================================================
-// Half-rate mode wrappers - reduces CPU by ~50% with some quality loss
-// ==========================================================================
-#define VORBIS_HALFRATE_ENABLED 1
-
-#if VORBIS_HALFRATE_ENABLED
-int ov_open_callbacks_halfrate(void *datasource, OggVorbis_File *vf,
-                                const char *initial, long ibytes, ov_callbacks callbacks) {
-    int ret = ov_open_callbacks(datasource, vf, initial, ibytes, callbacks);
-    if (ret == 0) {
-        // Enable half-rate decoding - halves MDCT size, nearly halves CPU
-        vorbis_info *vi = ov_info(vf, -1);
-        if (vi && vorbis_synthesis_halfrate(vi, 1) == 0) {
-            logv_debug("ov_open_callbacks: halfrate enabled (rate=%ld->%ld)", vi->rate, vi->rate/2);
-        }
-    }
-    return ret;
-}
-
-int ov_open_halfrate(FILE *f, OggVorbis_File *vf, const char *initial, long ibytes) {
-    int ret = ov_open(f, vf, initial, ibytes);
-    if (ret == 0) {
-        vorbis_info *vi = ov_info(vf, -1);
-        if (vi && vorbis_synthesis_halfrate(vi, 1) == 0) {
-            logv_debug("ov_open: halfrate enabled (rate=%ld->%ld)", vi->rate, vi->rate/2);
-        }
-    }
-    return ret;
-}
-
-int ov_fopen_halfrate(const char *path, OggVorbis_File *vf) {
-    int ret = ov_fopen(path, vf);
-    if (ret == 0) {
-        vorbis_info *vi = ov_info(vf, -1);
-        if (vi && vorbis_synthesis_halfrate(vi, 1) == 0) {
-            logv_debug("ov_fopen: halfrate enabled for %s", path);
-        }
-    }
-    return ret;
-}
-
-int ov_test_open_halfrate(OggVorbis_File *vf) {
-    int ret = ov_test_open(vf);
-    if (ret == 0) {
-        vorbis_info *vi = ov_info(vf, -1);
-        if (vi && vorbis_synthesis_halfrate(vi, 1) == 0) {
-            log_debug("ov_test_open: halfrate enabled");
-        }
-    }
-    return ret;
-}
-#endif
-
-#define USE_VITASDK_VORBIS 1
-void patch_vorbis(void)
+void patch_vorbis(void) 
 {
-	#if USE_VITASDK_VORBIS
-	// ==========================================================================
-	// Direct Vitasdk Vorbis Redirect
-	// Hook all vorbis symbols directly to vitasdk's implementations
-	// ==========================================================================
-#if VORBIS_HALFRATE_ENABLED
-	log_error("patch_vorbis: Installing vitasdk vorbis hooks (HALFRATE MODE - 50%% CPU, lower quality)...");
-#else
-	log_error("patch_vorbis: Installing direct vitasdk vorbis symbol hooks...");
-#endif
-
-	// --- vorbisfile API ---
-	hook_addr(so_symbol(&so_mod, "ov_clear"), (uintptr_t)ov_clear);
-#if VORBIS_HALFRATE_ENABLED
-	// Use halfrate wrappers - ~50% CPU reduction with quality tradeoff
-	hook_addr(so_symbol(&so_mod, "ov_open"), (uintptr_t)ov_open_halfrate);
-	hook_addr(so_symbol(&so_mod, "ov_open_callbacks"), (uintptr_t)ov_open_callbacks_halfrate);
-	hook_addr(so_symbol(&so_mod, "ov_fopen"), (uintptr_t)ov_fopen_halfrate);
-	hook_addr(so_symbol(&so_mod, "ov_test_open"), (uintptr_t)ov_test_open_halfrate);
-#else
-	hook_addr(so_symbol(&so_mod, "ov_open"), (uintptr_t)ov_open);
-	hook_addr(so_symbol(&so_mod, "ov_open_callbacks"), (uintptr_t)ov_open_callbacks);
-	hook_addr(so_symbol(&so_mod, "ov_fopen"), (uintptr_t)ov_fopen);
-	hook_addr(so_symbol(&so_mod, "ov_test_open"), (uintptr_t)ov_test_open);
-#endif
-	hook_addr(so_symbol(&so_mod, "ov_test"), (uintptr_t)ov_test);
-	hook_addr(so_symbol(&so_mod, "ov_test_callbacks"), (uintptr_t)ov_test_callbacks);
-	hook_addr(so_symbol(&so_mod, "ov_bitrate"), (uintptr_t)ov_bitrate);
-	hook_addr(so_symbol(&so_mod, "ov_bitrate_instant"), (uintptr_t)ov_bitrate_instant);
-	hook_addr(so_symbol(&so_mod, "ov_streams"), (uintptr_t)ov_streams);
-	hook_addr(so_symbol(&so_mod, "ov_seekable"), (uintptr_t)ov_seekable);
-	hook_addr(so_symbol(&so_mod, "ov_serialnumber"), (uintptr_t)ov_serialnumber);
-	hook_addr(so_symbol(&so_mod, "ov_raw_total"), (uintptr_t)ov_raw_total);
-	hook_addr(so_symbol(&so_mod, "ov_pcm_total"), (uintptr_t)ov_pcm_total);
-	hook_addr(so_symbol(&so_mod, "ov_time_total"), (uintptr_t)ov_time_total);
-	hook_addr(so_symbol(&so_mod, "ov_raw_seek"), (uintptr_t)ov_raw_seek);
-	hook_addr(so_symbol(&so_mod, "ov_pcm_seek"), (uintptr_t)ov_pcm_seek);
-	hook_addr(so_symbol(&so_mod, "ov_pcm_seek_page"), (uintptr_t)ov_pcm_seek_page);
-	hook_addr(so_symbol(&so_mod, "ov_time_seek"), (uintptr_t)ov_time_seek);
-	hook_addr(so_symbol(&so_mod, "ov_time_seek_page"), (uintptr_t)ov_time_seek_page);
-	hook_addr(so_symbol(&so_mod, "ov_raw_seek_lap"), (uintptr_t)ov_raw_seek_lap);
-	hook_addr(so_symbol(&so_mod, "ov_pcm_seek_lap"), (uintptr_t)ov_pcm_seek_lap);
-	hook_addr(so_symbol(&so_mod, "ov_pcm_seek_page_lap"), (uintptr_t)ov_pcm_seek_page_lap);
-	hook_addr(so_symbol(&so_mod, "ov_time_seek_lap"), (uintptr_t)ov_time_seek_lap);
-	hook_addr(so_symbol(&so_mod, "ov_time_seek_page_lap"), (uintptr_t)ov_time_seek_page_lap);
-	hook_addr(so_symbol(&so_mod, "ov_raw_tell"), (uintptr_t)ov_raw_tell);
-	hook_addr(so_symbol(&so_mod, "ov_pcm_tell"), (uintptr_t)ov_pcm_tell);
-	hook_addr(so_symbol(&so_mod, "ov_time_tell"), (uintptr_t)ov_time_tell);
-	hook_addr(so_symbol(&so_mod, "ov_info"), (uintptr_t)ov_info);
-	hook_addr(so_symbol(&so_mod, "ov_comment"), (uintptr_t)ov_comment);
-	hook_addr(so_symbol(&so_mod, "ov_read"), (uintptr_t)ov_read);
-	hook_addr(so_symbol(&so_mod, "ov_read_float"), (uintptr_t)ov_read_float);
-	hook_addr(so_symbol(&so_mod, "ov_crosslap"), (uintptr_t)ov_crosslap);
-	hook_addr(so_symbol(&so_mod, "ov_halfrate"), (uintptr_t)ov_halfrate);
-	hook_addr(so_symbol(&so_mod, "ov_halfrate_p"), (uintptr_t)ov_halfrate_p);
-
-	// --- vorbis codec API ---
-	hook_addr(so_symbol(&so_mod, "vorbis_info_init"), (uintptr_t)vorbis_info_init);
-	hook_addr(so_symbol(&so_mod, "vorbis_info_clear"), (uintptr_t)vorbis_info_clear);
-	hook_addr(so_symbol(&so_mod, "vorbis_info_blocksize"), (uintptr_t)vorbis_info_blocksize);
-	hook_addr(so_symbol(&so_mod, "vorbis_comment_init"), (uintptr_t)vorbis_comment_init);
-	hook_addr(so_symbol(&so_mod, "vorbis_comment_add"), (uintptr_t)vorbis_comment_add);
-	hook_addr(so_symbol(&so_mod, "vorbis_comment_add_tag"), (uintptr_t)vorbis_comment_add_tag);
-	hook_addr(so_symbol(&so_mod, "vorbis_comment_query"), (uintptr_t)vorbis_comment_query);
-	hook_addr(so_symbol(&so_mod, "vorbis_comment_query_count"), (uintptr_t)vorbis_comment_query_count);
-	hook_addr(so_symbol(&so_mod, "vorbis_comment_clear"), (uintptr_t)vorbis_comment_clear);
-	hook_addr(so_symbol(&so_mod, "vorbis_block_init"), (uintptr_t)vorbis_block_init);
-	hook_addr(so_symbol(&so_mod, "vorbis_block_clear"), (uintptr_t)vorbis_block_clear);
-	hook_addr(so_symbol(&so_mod, "vorbis_dsp_clear"), (uintptr_t)vorbis_dsp_clear);
-	hook_addr(so_symbol(&so_mod, "vorbis_granule_time"), (uintptr_t)vorbis_granule_time);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_idheader"), (uintptr_t)vorbis_synthesis_idheader);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_headerin"), (uintptr_t)vorbis_synthesis_headerin);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_init"), (uintptr_t)vorbis_synthesis_init);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_restart"), (uintptr_t)vorbis_synthesis_restart);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis"), (uintptr_t)vorbis_synthesis);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_trackonly"), (uintptr_t)vorbis_synthesis_trackonly);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_blockin"), (uintptr_t)vorbis_synthesis_blockin);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_pcmout"), (uintptr_t)vorbis_synthesis_pcmout);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_lapout"), (uintptr_t)vorbis_synthesis_lapout);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_read"), (uintptr_t)vorbis_synthesis_read);
-	hook_addr(so_symbol(&so_mod, "vorbis_packet_blocksize"), (uintptr_t)vorbis_packet_blocksize);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_halfrate"), (uintptr_t)vorbis_synthesis_halfrate);
-	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_halfrate_p"), (uintptr_t)vorbis_synthesis_halfrate_p);
-
-	log_error("patch_vorbis: Vitasdk vorbis hooks installed!");
-#endif
 	//ov_read_hook = hook_addr(so_symbol(&so_mod, "ov_read"), (uintptr_t)ov_read_profiled);
 	//lump_find_resource_hook = hook_addr(so_symbol(&so_mod, "_Z16lumpFindResourcePKcS0_"), (uintptr_t)lump_find_resource);
 	
