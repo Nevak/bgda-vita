@@ -137,9 +137,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 					  stdc++
 					  SceLibKernel_stub
 					  #sndfile
-                      #vorbis
-                      #vorbisfile
-					  #ogg
+                      vorbisfile
+                      vorbis
+					  ogg
 					  #FLAC
 					  #vorbisidec
 					  openal

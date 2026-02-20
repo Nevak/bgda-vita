@@ -14,7 +14,10 @@
 #include "logger.h"
 #include "utils/macros.h"
 #include "utils/oggstream_types.h"
+#include <vorbis/codec.h>
+#include <vorbis/vorbisfile.h>
 #include <fcntl.h>      // For file access modes (O_RDONLY)
+//#include <vorbis/prof.h>
 #ifdef PROFILER_ENABLED
 #include <utils/prof.h>
 #include <libperf.h>
@@ -77,9 +80,9 @@ long ov_read_profiled(void *vf, char *buffer, int length,
 // Hook for SND_Frame - reports ov_read stats per frame
 so_hook snd_frame_hook;
 void snd_frame_profiled(void) {
-	return;
+	//return;
 
-	g_sndFrameNumber++;
+	//g_sndFrameNumber++;
 
 	// // Report stats if ov_read was called this frame
 	// if (g_ovReadCallCount > 0) {
@@ -105,7 +108,25 @@ void snd_frame_profiled(void) {
 
 	// Call original SND_Frame
 	//sceRazorCpuPushMarkerWithHud("SND_Frame", SCE_RAZOR_COLOR_RED, SCE_RAZOR_MARKER_DISABLE_HUD);
+	//Vorbis_Profiler_Reset();
+
+	// store current time
+	uint64_t startTime = sceKernelGetProcessTimeLow();
 	SO_CONTINUE(void*, snd_frame_hook);
+
+
+	// calculate elapsed time
+	uint64_t endTime = sceKernelGetProcessTimeLow();
+
+	// print elapsed time in milliseconds
+	float elapsedMs = (endTime - startTime) / 1000.0f;
+	// print only if elapsed time is greater than 1 ms to reduce log spam
+	if (elapsedMs > 1.0f) {
+		logv_error("SND_Frame #%d: %.1f ms", g_sndFrameNumber, elapsedMs);
+	}
+
+	//Vorbis_Profiler_PrintSamples(0,0);
+	//log_error("=========================================");
 	//sceRazorCpuPopMarker();
 }
 
@@ -316,21 +337,6 @@ int create_file_a(char * file_name, int flags)
 	return res;
 }
 
-so_hook x_get_language_hook;
-uint32_t x_get_language()
-{
-	uint32_t res = SO_CONTINUE(void*, x_get_language_hook);
-	logv_error("x_get_language ret=0x%X", res);
-	return res;
-}
-
-so_hook ov_raw_seek_hook;
-int ov_raw_seek_local(void *vf, long pos)
-{
-    int res = SO_CONTINUE(int, ov_raw_seek_hook, vf, pos);
-    return res;
-}
-
 so_hook ov_pcm_total_hook;
 uint64_t ov_pcm_total_local(void* pf, long x)
 {
@@ -338,20 +344,6 @@ uint64_t ov_pcm_total_local(void* pf, long x)
     logv_error("ov_pcm_total called(%p, %d)=%ld", pf, x, res);
     return res;
 }
-
-typedef struct
-{
-  int version;
-  int channels;
-  long rate;
-  
-  long bitrate_upper;
-  long bitrate_nominal;
-  long bitrate_lower;
-  long bitrate_window;
-
-  void *codec_setup;
-}vorbis_info;
 
 so_hook ov_info_hook;
 vorbis_info *ov_info_local(void *vf, int link)
@@ -369,17 +361,81 @@ vorbis_info *ov_info_local(void *vf, int link)
     return res;
 }
 
-// _Z25lightVU0StoppedProcessingv
-so_hook light_vu0_stopped_processing_hook;
-void light_vu0_stopped_processing()
+#define USE_VITASDK_VORBIS 1
+void patch_vorbis(void)
 {
-	log_error("lightVU0StoppedProcessing called!");
+#if USE_VITASDK_VORBIS
 
-	SO_CONTINUE(void*, light_vu0_stopped_processing_hook);
-}
+	log_error("patch_vorbis: Installing direct vitasdk vorbis symbol hooks...");
 
-void patch_vorbis(void) 
-{
+	// --- vorbisfile API ---
+	hook_addr(so_symbol(&so_mod, "ov_clear"), (uintptr_t)ov_clear);
+
+	hook_addr(so_symbol(&so_mod, "ov_open"), (uintptr_t)ov_open);
+	hook_addr(so_symbol(&so_mod, "ov_open_callbacks"), (uintptr_t)ov_open_callbacks);
+	hook_addr(so_symbol(&so_mod, "ov_fopen"), (uintptr_t)ov_fopen);
+	hook_addr(so_symbol(&so_mod, "ov_test_open"), (uintptr_t)ov_test_open);
+	hook_addr(so_symbol(&so_mod, "ov_test"), (uintptr_t)ov_test);
+	hook_addr(so_symbol(&so_mod, "ov_test_callbacks"), (uintptr_t)ov_test_callbacks);
+	hook_addr(so_symbol(&so_mod, "ov_bitrate"), (uintptr_t)ov_bitrate);
+	hook_addr(so_symbol(&so_mod, "ov_bitrate_instant"), (uintptr_t)ov_bitrate_instant);
+	hook_addr(so_symbol(&so_mod, "ov_streams"), (uintptr_t)ov_streams);
+	hook_addr(so_symbol(&so_mod, "ov_seekable"), (uintptr_t)ov_seekable);
+	hook_addr(so_symbol(&so_mod, "ov_serialnumber"), (uintptr_t)ov_serialnumber);
+	hook_addr(so_symbol(&so_mod, "ov_raw_total"), (uintptr_t)ov_raw_total);
+	hook_addr(so_symbol(&so_mod, "ov_pcm_total"), (uintptr_t)ov_pcm_total);
+	hook_addr(so_symbol(&so_mod, "ov_time_total"), (uintptr_t)ov_time_total);
+	hook_addr(so_symbol(&so_mod, "ov_raw_seek"), (uintptr_t)ov_raw_seek);
+	hook_addr(so_symbol(&so_mod, "ov_pcm_seek"), (uintptr_t)ov_pcm_seek);
+	hook_addr(so_symbol(&so_mod, "ov_pcm_seek_page"), (uintptr_t)ov_pcm_seek_page);
+	hook_addr(so_symbol(&so_mod, "ov_time_seek"), (uintptr_t)ov_time_seek);
+	hook_addr(so_symbol(&so_mod, "ov_time_seek_page"), (uintptr_t)ov_time_seek_page);
+	hook_addr(so_symbol(&so_mod, "ov_raw_seek_lap"), (uintptr_t)ov_raw_seek_lap);
+	hook_addr(so_symbol(&so_mod, "ov_pcm_seek_lap"), (uintptr_t)ov_pcm_seek_lap);
+	hook_addr(so_symbol(&so_mod, "ov_pcm_seek_page_lap"), (uintptr_t)ov_pcm_seek_page_lap);
+	hook_addr(so_symbol(&so_mod, "ov_time_seek_lap"), (uintptr_t)ov_time_seek_lap);
+	hook_addr(so_symbol(&so_mod, "ov_time_seek_page_lap"), (uintptr_t)ov_time_seek_page_lap);
+	hook_addr(so_symbol(&so_mod, "ov_raw_tell"), (uintptr_t)ov_raw_tell);
+	hook_addr(so_symbol(&so_mod, "ov_pcm_tell"), (uintptr_t)ov_pcm_tell);
+	hook_addr(so_symbol(&so_mod, "ov_time_tell"), (uintptr_t)ov_time_tell);
+	hook_addr(so_symbol(&so_mod, "ov_info"), (uintptr_t)ov_info);
+	hook_addr(so_symbol(&so_mod, "ov_comment"), (uintptr_t)ov_comment);
+	hook_addr(so_symbol(&so_mod, "ov_read"), (uintptr_t)ov_read);
+	hook_addr(so_symbol(&so_mod, "ov_read_float"), (uintptr_t)ov_read_float);
+	hook_addr(so_symbol(&so_mod, "ov_crosslap"), (uintptr_t)ov_crosslap);
+	hook_addr(so_symbol(&so_mod, "ov_halfrate"), (uintptr_t)ov_halfrate);
+	hook_addr(so_symbol(&so_mod, "ov_halfrate_p"), (uintptr_t)ov_halfrate_p);
+
+	// --- vorbis codec API ---
+	hook_addr(so_symbol(&so_mod, "vorbis_info_init"), (uintptr_t)vorbis_info_init);
+	hook_addr(so_symbol(&so_mod, "vorbis_info_clear"), (uintptr_t)vorbis_info_clear);
+	hook_addr(so_symbol(&so_mod, "vorbis_info_blocksize"), (uintptr_t)vorbis_info_blocksize);
+	hook_addr(so_symbol(&so_mod, "vorbis_comment_init"), (uintptr_t)vorbis_comment_init);
+	hook_addr(so_symbol(&so_mod, "vorbis_comment_add"), (uintptr_t)vorbis_comment_add);
+	hook_addr(so_symbol(&so_mod, "vorbis_comment_add_tag"), (uintptr_t)vorbis_comment_add_tag);
+	hook_addr(so_symbol(&so_mod, "vorbis_comment_query"), (uintptr_t)vorbis_comment_query);
+	hook_addr(so_symbol(&so_mod, "vorbis_comment_query_count"), (uintptr_t)vorbis_comment_query_count);
+	hook_addr(so_symbol(&so_mod, "vorbis_comment_clear"), (uintptr_t)vorbis_comment_clear);
+	hook_addr(so_symbol(&so_mod, "vorbis_block_init"), (uintptr_t)vorbis_block_init);
+	hook_addr(so_symbol(&so_mod, "vorbis_block_clear"), (uintptr_t)vorbis_block_clear);
+	hook_addr(so_symbol(&so_mod, "vorbis_dsp_clear"), (uintptr_t)vorbis_dsp_clear);
+	hook_addr(so_symbol(&so_mod, "vorbis_granule_time"), (uintptr_t)vorbis_granule_time);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_idheader"), (uintptr_t)vorbis_synthesis_idheader);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_headerin"), (uintptr_t)vorbis_synthesis_headerin);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_init"), (uintptr_t)vorbis_synthesis_init);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_restart"), (uintptr_t)vorbis_synthesis_restart);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis"), (uintptr_t)vorbis_synthesis);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_trackonly"), (uintptr_t)vorbis_synthesis_trackonly);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_blockin"), (uintptr_t)vorbis_synthesis_blockin);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_pcmout"), (uintptr_t)vorbis_synthesis_pcmout);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_lapout"), (uintptr_t)vorbis_synthesis_lapout);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_read"), (uintptr_t)vorbis_synthesis_read);
+	hook_addr(so_symbol(&so_mod, "vorbis_packet_blocksize"), (uintptr_t)vorbis_packet_blocksize);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_halfrate"), (uintptr_t)vorbis_synthesis_halfrate);
+	hook_addr(so_symbol(&so_mod, "vorbis_synthesis_halfrate_p"), (uintptr_t)vorbis_synthesis_halfrate_p);
+
+	log_error("patch_vorbis: Vitasdk vorbis hooks installed!");
+#endif
 	//ov_read_hook = hook_addr(so_symbol(&so_mod, "ov_read"), (uintptr_t)ov_read_profiled);
 	//lump_find_resource_hook = hook_addr(so_symbol(&so_mod, "_Z16lumpFindResourcePKcS0_"), (uintptr_t)lump_find_resource);
 	
@@ -394,9 +450,6 @@ void patch_vorbis(void)
 
 	//ov_pcm_total_hook = hook_addr(so_symbol(&so_mod, "ov_pcm_total"), (uintptr_t)ov_pcm_total_local);
     //ov_info_hook = hook_addr(so_symbol(&so_mod, "ov_info"), (uintptr_t)ov_info_local);
-
-	
-   // ov_raw_seek_hook = hook_addr(so_symbol(&so_mod, "ov_raw_seek"), (uintptr_t)ov_raw_seek_local);
 
 	//ogg_stream_hook = hook_addr(so_symbol(&so_mod, "_ZN9OggStreamC2EPKcRiS2_i"), (uintptr_t)ogg_stream_patched);
 
@@ -417,5 +470,4 @@ void patch_vorbis(void)
 
 	// Hook SND_Frame to report ov_read stats per frame
 	//snd_frame_hook = hook_addr(so_symbol(&so_mod, "_Z9SND_Framev"), (uintptr_t)&snd_frame_profiled);
-	//light_vu0_stopped_processing_hook = hook_addr(so_symbol(&so_mod, "_Z25lightVU0StoppedProcessingv"), (uintptr_t)&light_vu0_stopped_processing);
 }
