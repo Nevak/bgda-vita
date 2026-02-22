@@ -9,6 +9,14 @@ The port works by loading the official Android ARMv7 executables in memory, reso
 By doing so, it's basically as if we emulate a minimalist Android environment in which we run natively the executable as is.
 
 # Changelog
+### v1.06
+- Substantially improved video playback performance by passing YUV data directly to GXM, avoiding CPU color space conversion.
+- Added playstation button icons and PS Vita diagram in control settings screen. Notes:
+  - This works by automatically patching the original game files when the game starts. The game creates automatic backups of files before applying patches (e.g., `config.lmp.backup`). Backups are only created once and won't be overwritten. The patching code was written with the help of AI tools.
+  - This was achieved in part thanks to the cool [BGDA Explorer tool for PS2 by Bryce Barbara](https://github.com/bigianb/bgda-explorer). The tool was adapted to work with the Xbox texture format and modified to support importing new textures. I will share the modified fork of BGDA Explorer in the future.
+- Moved Vorbis audio decoding to a background thread on CPU core 2, eliminating periodic framerate spikes. Uses a [custom fork of libvorbis](https://github.com/Nevak/vorbis-vita/tree/rulas) with a lock-free ring buffer that pre-fills decoded PCM data so `ov_read()` returns instantly via memcpy. Included as a submodule at `lib/libvorbis` and built automatically by the build script. Note: The code for this custom fork was written with the help of AI tools, by creating tests to ensure the original libvorbis and the threaded version behave exactly the same for this game's use case.
+
+
 ### v1.05
 - Fixed glitched textures when playing for a prolonged period of time. Caused by leaked texture slots in previous version of VitaGL. See the [commit](https://github.com/Rinnegatamante/vitaGL/commit/8950bfa970b7e8a47454a5cdf89e28be638b22fe) that fixed it.
 
@@ -31,8 +39,8 @@ By doing so, it's basically as if we emulate a minimalist Android environment in
 - Initial release.
 
 ## Known Issues
-- Low framerate during video playing, including main menu due to CPU video decoding.
-- Slight framerate spikes every few seconds in some levels due to vorbis audio decoding in main thread.
+- ~~Low framerate during video playing, including main menu due to CPU video decoding.~~ Greatly improved in v1.06.
+- ~~Slight framerate spikes every few seconds in some levels due to vorbis audio decoding in main thread.~~ Fixed in v1.06 with threaded Vorbis decoding.
 - Missing real-time shadows from characters and enemies. Temporarily disabled for performance.
 - Achievements not working yet.
 - Some levels with lots of vegetation and water have performance issues. Ex: the Rotting Bog.

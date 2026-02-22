@@ -35,6 +35,7 @@
 #include "patches/usprintf.h"
 #include "patches/write_render_command.h"
 #include "patches/memory.h"
+#include "patches/xmv_vita.h"
 
 #ifdef PROFILER_ENABLED
 #include <utils/prof.h>
@@ -112,7 +113,7 @@ int compare_strings(const void *a, const void *b) {
 
 so_hook cdDirectoryLookup_hook;
 int cdDirectoryLookup(const char *path, int *param_2, int *size) {
-	logv_debug("->cdDirectoryLookup (%s, 0x%X, 0x%X)", path, param_2, size);
+	//logv_debug("->cdDirectoryLookup (%s, 0x%X, 0x%X)", path, param_2, size);
 	uint64_t timeNow = sceKernelGetProcessTimeWide();
     int returnVal=0;
 	
@@ -843,9 +844,25 @@ void coreStartLoadingScreen()
     }
 }
 
+so_hook mem_free_hook;
+void mem_free_patched(void* ptr) {
+	//logv_error("Mem::Free(%p)", ptr);
+	// if address is in GPU memory range, skip the free to prevent GPU sync object corruption and use-after-free crashes
+	if (ptr >= (void*)0x60000000 && ptr < (void*)0x80000000)
+	{
+		logv_error("Mem::Free called on GPU memory address %p, skipping free to prevent potential crash", ptr);
+		vgl_free(ptr);
+	}
+	else
+	{
+		SO_CONTINUE(void*, mem_free_hook, ptr);
+	}
+}
+
 void so_patch(void) {
 
     patch_memory();
+	//vorbis_async_init_hooks();
 	//mach_frameEnd_hook = hook_addr(LOC(0x00181d04), (uintptr_t)&machFrameEnd);
 
 	lockLoadingMutex_addr = LOC(0x0018364c);
@@ -862,7 +879,7 @@ void so_patch(void) {
 	D3DTexture_UnlockRect_addr = LOC(0x00215380);
 
 	worldAllocateSegments_hook = hook_addr(LOC(0x00131aec), (uintptr_t)&worldAllocateSegments);
-
+	
     // This fixes some weird texts in spanish AND prevents buffer overflow in runDialog
 	uintptr_t usprintf_addr = (uintptr_t)so_symbol(&so_mod, "_Z8usprintfPtPKtfffffff");
 	if (usprintf_addr == 0) {
@@ -872,6 +889,16 @@ void so_patch(void) {
 		usprintf_hook = hook_addr(usprintf_addr, (uintptr_t)&usprintf_patched);
 		//log_debug("usprintf hooked with bounds-checked version\n");
 	}
+
+	//_ZN3JBE3Mem4FreeEPv
+	// uintptr_t memFree_addr = (uintptr_t)so_symbol(&so_mod, "_ZN3JBE3Mem4FreeEPv");
+	// if (memFree_addr == 0) {
+	// 	log_error("Mem::Free not found\n");
+	// } else {
+	// 	logv_debug("Mem::Free found at %p\n", memFree_addr);
+	// 	mem_free_hook = hook_addr(memFree_addr, (uintptr_t)&mem_free_patched);
+	// }
+
 
 	D3DDevice_SetTexture_hook = hook_addr((uintptr_t)so_symbol(&so_mod, "D3DDevice_SetTexture"), (uintptr_t)&D3DDevice_SetTexture);
 	D3DDevice_SetVertexShaderConstantNotInline_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SetVertexShaderConstantNotInline");
@@ -952,9 +979,19 @@ void so_patch(void) {
 	clear_hook = hook_addr(LOC(0x001e19c0), (uintptr_t)&D3DDevice_Clear);
 
 	// Hook D3DDevice_CreateTexture2 to reduce shadow texture resolution
-	extern void* D3DDevice_CreateTexture2(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
+	//extern void* D3DDevice_CreateTexture2(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 	createTexture2_hook = hook_addr(LOC(0x00215bb0), (uintptr_t)&D3DDevice_CreateTexture2);
 
 	// Apply shadow resolution coordinate patches for 256x64 textures
 	//patch_shadow_resolution();
+
+	patch_xmv();
+
+	uintptr_t D3DDevice_SelectVertexShader_addr = (uintptr_t)so_symbol(&so_mod, "D3DDevice_SelectVertexShader");
+	if (D3DDevice_SelectVertexShader_addr) {
+		logv_debug("D3DDevice_SelectVertexShader found at %p, installing hook...", D3DDevice_SelectVertexShader_addr);
+		D3DDevice_SelectVertexShader_hook = hook_addr(D3DDevice_SelectVertexShader_addr, (uintptr_t)&D3DDevice_SelectVertexShader);
+	} else {
+		log_error("D3DDevice_SelectVertexShader not found, cannot install hook");
+	}
 }
