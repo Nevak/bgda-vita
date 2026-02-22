@@ -20,6 +20,7 @@
 #include "utils/vorbis_patch.h"
 #include "utils/ffmpeg_patch.h"
 #include "utils/ptch.h"
+#include "patches/shader_patch.h"
 
 #include "dynlib.h"
 #include "patch.h"
@@ -53,6 +54,9 @@ void soloader_init_all() {
     } else if (patches_applied < 0) {
         log_error("Failed to apply binary patches");
     }
+
+    // Apply shader patches (flat.xvu UV scaling for video textures)
+    patch_flat_shader();
 
     // Set default overclock values
     scePowerSetArmClockFrequency(444);
